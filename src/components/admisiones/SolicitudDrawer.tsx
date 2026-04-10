@@ -1,5 +1,5 @@
-import React from 'react';
-import { X, Phone, Mail, MapPin, CheckCircle, Trash2 } from 'lucide-react';
+import { X, Phone, Mail, MapPin, CheckCircle, Trash2, Stethoscope } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import { EstadoSolicitud } from '../../types';
 import type { SolicitudIngreso } from '../../types';
 import EstadoSolicitudChip from './EstadoSolicitudChip';
@@ -20,6 +20,7 @@ const SolicitudDrawer: React.FC<SolicitudDrawerProps> = ({
   onApprove,
   onReject
 }) => {
+  const navigate = useNavigate();
   if (!solicitud) return null;
 
   return (
@@ -129,6 +130,17 @@ const SolicitudDrawer: React.FC<SolicitudDrawerProps> = ({
         <div style={{ padding: '1.5rem', borderTop: '1px solid #e2e8f0', display: 'flex', gap: '1rem' }}>
           {solicitud.estado === EstadoSolicitud.PENDIENTE && (
             <>
+              {solicitud.paciente?.estado === 'PROSPECTO' && (
+                <button 
+                  onClick={() => {
+                    onClose();
+                    navigate(`/admisiones/valoracion-medica/${solicitud.pacienteId}`);
+                  }}
+                  style={{ flex: 1, padding: '0.75rem', borderRadius: '12px', border: '1px solid #3b82f6', color: '#1e40af', backgroundColor: '#eff6ff', fontWeight: 'bold', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem' }}
+                >
+                  <Stethoscope size={18} /> Valoración Médica
+                </button>
+              )}
               <button 
                 onClick={() => onReject?.(solicitud.id)}
                 style={{ flex: 1, padding: '0.75rem', borderRadius: '12px', border: '1px solid #fecaca', color: '#dc2626', backgroundColor: '#fef2f2', fontWeight: 'bold', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem' }}

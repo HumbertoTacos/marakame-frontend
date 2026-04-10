@@ -18,6 +18,7 @@ import NuevaSolicitudPage from './pages/admisiones/NuevaSolicitudPage';
 import AsignarCamaPage from './pages/admisiones/AsignarCamaPage';
 import AreasPage from './pages/admisiones/AreasPage';
 import PrimerContactoPage from './pages/admisiones/PrimerContactoPage';
+import ValoracionMedicaPage from './pages/admisiones/ValoracionMedicaPage';
 
 function App() {
   return (
@@ -32,7 +33,7 @@ function App() {
           
           {/* Módulo de Admisiones - Restringido */}
           <Route path="admisiones" element={
-            <ProtectedRoute allowedRoles={['ADMISIONES', 'ADMIN_GENERAL']}>
+            <ProtectedRoute allowedRoles={['ADMISIONES', 'ADMIN_GENERAL', 'AREA_MEDICA', 'PSICOLOGIA']}>
               <Outlet />
             </ProtectedRoute>
           }>
@@ -41,6 +42,7 @@ function App() {
             <Route path="asignar-cama/:id" element={<AsignarCamaPage />} />
             <Route path="areas" element={<AreasPage />} />
             <Route path="primer-contacto" element={<PrimerContactoPage />} />
+            <Route path="valoracion-medica/:id" element={<ValoracionMedicaPage />} />
             <Route path="ingreso" element={<Ingreso />} />
             <Route path="estudio" element={<EstudioSocioeconomicoForm pacienteId={1} />} />
           </Route>

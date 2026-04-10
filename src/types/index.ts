@@ -236,6 +236,7 @@ export interface Paciente {
   fechaEgresoPrevista?: string;
   totalDiasTratamiento?: number;
   cama?: Cama;
+  sustancias?: string[];
   createdAt?: string;
 }
 

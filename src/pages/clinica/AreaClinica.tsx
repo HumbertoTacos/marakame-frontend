@@ -3,33 +3,57 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { 
   Apple, BrainCircuit, Activity, Search, Save, 
   FileText, User, ChevronRight, Thermometer, Droplets, 
-  Heart, Wind, Weight, ClipboardCheck
+  Heart, Wind, Weight, ClipboardCheck, Stethoscope, Clock, Users, Calendar
 } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import apiClient from '../../services/api';
 import { useAuthStore } from '../../stores/authStore';
 import type { Paciente, Expediente, NotaEvolucion, SignoVital } from '../../types';
 
+// Componente para calcular edad
+const calcularEdad = (fechaNacimiento: string) => {
+  const hoy = new Date();
+  const cumple = new Date(fechaNacimiento);
+  let edad = hoy.getFullYear() - cumple.getFullYear();
+  const m = hoy.getMonth() - cumple.getMonth();
+  if (m < 0 || (m === 0 && hoy.getDate() < cumple.getDate())) {
+    edad--;
+  }
+  return edad;
+};
+
 export function AreaClinica() {
   const { usuario } = useAuthStore();
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
+  
+  // Estados de navegación interna
+  const [currentView, setCurrentView] = useState<'INBOX' | 'INTERNADOS'>('INBOX');
   const [pacienteId, setPacienteId] = useState<number | null>(null);
   const [activeTab, setActiveTab] = useState<'NOTAS' | 'SIGNOS' | 'NUTRICION' | 'PSICOLOGIA'>('NOTAS');
   
+  // Estados de formulario
   const [nuevaNota, setNuevaNota] = useState('');
   const [tipoNota, setTipoNota] = useState('MEDICA');
   const [showAddVital, setShowAddVital] = useState(false);
 
-  // 1. Cargar pacientes internados
-  const { data: pacientes, isLoading: isLoadingPacientes } = useQuery<Paciente[]>({
+  // 1. Cargar prospectos (Cola de Valoración)
+  const { data: prospectos, isLoading: isLoadingProspectos } = useQuery<Paciente[]>({
+    queryKey: ['prospectos_pendientes'],
+    queryFn: () => apiClient.get('/pacientes?estado=PROSPECTO').then(res => res.data.data)
+  });
+
+  // 2. Cargar pacientes internados (Seguimiento)
+  const { data: pacientesInternados, isLoading: isLoadingInternados } = useQuery<Paciente[]>({
     queryKey: ['pacientes_internados'],
     queryFn: () => apiClient.get('/pacientes?estado=INTERNADO').then(res => res.data.data)
   });
 
-  // 2. Cargar expediente detallado
+  // 3. Cargar expediente detallado (para pacientes internados)
   const { data: expediente, isLoading: isLoadingExpediente } = useQuery<Expediente>({
     queryKey: ['expediente', pacienteId],
     queryFn: () => apiClient.get(`/expedientes/paciente/${pacienteId}`).then(res => res.data.data),
-    enabled: !!pacienteId
+    enabled: !!pacienteId && currentView === 'INTERNADOS'
   });
 
   const saveNota = useMutation({
@@ -73,342 +97,296 @@ export function AreaClinica() {
   };
 
   return (
-    <div style={{ display: 'flex', gap: '2.5rem', height: 'calc(100vh - 160px)', alignItems: 'stretch' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', height: 'calc(100vh - 120px)', gap: '1.5rem' }}>
       
-      {/* SIDEBAR: Lista de Pacientes Premium */}
-      <div style={{ 
-        width: '350px', 
-        background: 'var(--glass-bg)', 
-        backdropFilter: 'blur(10px)',
-        borderRadius: 'var(--radius-lg)', 
-        boxShadow: 'var(--shadow)',
-        border: '1px solid var(--glass-border)',
-        display: 'flex', 
-        flexDirection: 'column' 
-      }}>
-        <div style={{ padding: '2rem', borderBottom: '1px solid var(--glass-border)' }}>
-          <h2 style={{ fontSize: '20px', fontWeight: '800', color: 'var(--text-h)', display: 'flex', alignItems: 'center', margin: 0 }}>
-            <div style={{ background: '#fee2e2', color: '#ef4444', padding: '0.5rem', borderRadius: '10px', marginRight: '0.75rem', display: 'flex' }}>
-              <Activity size={20} />
-            </div>
-            Pacientes 
-          </h2>
-          <div style={{ marginTop: '1.5rem', position: 'relative' }}>
-            <Search size={16} color="#94a3b8" style={{ position: 'absolute', top: '50%', left: '1rem', transform: 'translateY(-50%)' }} />
-            <input 
-              type="text" 
-              placeholder="Buscar..." 
-              style={{ 
-                width: '100%', 
-                padding: '0.75rem 1rem 0.75rem 2.8rem', 
-                borderRadius: '12px', 
-                border: '1px solid #e2e8f0',
-                backgroundColor: 'rgba(255,255,255,0.5)',
-                outline: 'none',
-                fontSize: '14px'
-              }} 
-            />
+      {/* HEADER DASHBOARD CLINICO */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', backgroundColor: 'white', padding: '1.5rem 2.5rem', borderRadius: '24px', border: '1px solid #e2e8f0', boxShadow: 'var(--shadow)' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+          <div style={{ p: '0.75rem', backgroundColor: '#3b82f6', color: 'white', borderRadius: '16px' }}>
+            <Activity size={32} />
+          </div>
+          <div>
+            <h1 style={{ fontSize: '24px', fontWeight: '900', color: '#1e293b', margin: 0 }}>Área Clínica</h1>
+            <p style={{ color: '#64748b', fontSize: '14px', margin: 0, fontWeight: '600' }}>Panel del Médico • {usuario?.nombre}</p>
           </div>
         </div>
 
-        <div style={{ overflowY: 'auto', flex: 1, padding: '1rem' }} className="custom-scrollbar">
-          {isLoadingPacientes ? (
-            <div style={{ textAlign: 'center', padding: '2rem', color: '#94a3b8' }}>Cargando pacientes...</div>
-          ) : (
-            pacientes?.map((pac) => (
-              <div 
-                key={pac.id} 
-                onClick={() => setPacienteId(pac.id)}
-                style={{ 
-                  padding: '1.25rem', 
-                  marginBottom: '0.5rem',
-                  cursor: 'pointer', 
-                  backgroundColor: pacienteId === pac.id ? 'white' : 'transparent',
-                  borderRadius: '16px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'space-between',
-                  transition: 'all 0.2s ease',
-                  boxShadow: pacienteId === pac.id ? '0 10px 15px -3px rgba(0,0,0,0.05)' : 'none',
-                  border: pacienteId === pac.id ? '1px solid var(--border)' : '1px solid transparent'
-                }}
-              >
-                <div>
-                  <p style={{ fontWeight: '700', color: 'var(--text-h)', margin: 0, fontSize: '15px' }}>{pac.nombre} {pac.apellidoPaterno}</p>
-                  <p style={{ fontSize: '12px', color: '#94a3b8', margin: 0, marginTop: '0.25rem', fontWeight: '600' }}>
-                    Cama {pac.cama?.numero || 'S/A'} • {pac.cama?.area || 'Sin Áreas'}
-                  </p>
-                </div>
-                {pacienteId === pac.id && <ChevronRight size={18} color="var(--primary)" />}
-              </div>
-            ))
-          )}
+        <div style={{ display: 'flex', backgroundColor: '#f1f5f9', padding: '0.4rem', borderRadius: '14px', gap: '0.25rem' }}>
+          <button 
+            onClick={() => setCurrentView('INBOX')}
+            style={{ 
+              padding: '0.75rem 1.5rem', 
+              borderRadius: '11px', 
+              border: 'none', 
+              cursor: 'pointer', 
+              fontWeight: '700', 
+              fontSize: '14px',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.5rem',
+              backgroundColor: currentView === 'INBOX' ? 'white' : 'transparent',
+              color: currentView === 'INBOX' ? '#3b82f6' : '#64748b',
+              boxShadow: currentView === 'INBOX' ? '0 4px 6px -1px rgba(0,0,0,0.1)' : 'none',
+              transition: 'all 0.2s'
+            }}
+          >
+           <Clock size={16} /> Bandeja de Entrada ({prospectos?.length || 0})
+          </button>
+          <button 
+            onClick={() => setCurrentView('INTERNADOS')}
+            style={{ 
+              padding: '0.75rem 1.5rem', 
+              borderRadius: '11px', 
+              border: 'none', 
+              cursor: 'pointer', 
+              fontWeight: '700', 
+              fontSize: '14px',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.5rem',
+              backgroundColor: currentView === 'INTERNADOS' ? 'white' : 'transparent',
+              color: currentView === 'INTERNADOS' ? '#3b82f6' : '#64748b',
+              boxShadow: currentView === 'INTERNADOS' ? '0 4px 6px -1px rgba(0,0,0,0.1)' : 'none',
+              transition: 'all 0.2s'
+            }}
+          >
+            <Users size={16} /> Seguimiento Internos
+          </button>
         </div>
       </div>
 
-      {/* ÁREA PRINCIPAL: Expediente Premium */}
-      <div style={{ 
-        flex: 1, 
-        backgroundColor: 'white', 
-        borderRadius: 'var(--radius-xl)', 
-        boxShadow: 'var(--shadow-lg)', 
-        display: 'flex', 
-        flexDirection: 'column', 
-        overflow: 'hidden',
-        border: '1px solid var(--border)'
-      }}>
-        
-        {!pacienteId ? (
-          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', color: '#94a3b8', padding: '4rem', textAlign: 'center' }}>
-            <div style={{ background: '#f8fafc', padding: '2rem', borderRadius: '50%', marginBottom: '1.5rem' }}>
-              <User size={64} color="#cbd5e1" />
+      {/* VISTA: BANDEJA DE ENTRADA (PROSPECTOS) */}
+      {currentView === 'INBOX' && (
+        <div style={{ backgroundColor: 'white', borderRadius: '32px', border: '1px solid #e2e8f0', flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', boxShadow: 'var(--shadow-lg)' }}>
+          <div style={{ padding: '2rem 2.5rem', borderBottom: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div>
+              <h2 style={{ fontSize: '20px', fontWeight: '900', color: '#1e293b', margin: 0 }}>Cola de Valoración Médica</h2>
+              <p style={{ color: '#64748b', fontSize: '14px', margin: 0 }}>Prospectos registrados pendientes de evaluación clínica inicial.</p>
             </div>
-            <h2 style={{ color: 'var(--text-h)', fontWeight: '800' }}>Área Clínica Central</h2>
-            <p style={{ maxWidth: '400px', fontSize: '15px', lineHeight: '1.6' }}>
-              Seleccione un paciente del panel lateral para gestionar su historial médico, signos vitales y evolución en tiempo real.
-            </p>
           </div>
-        ) : isLoadingExpediente ? (
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%' }}>
-            <p>Cargando expediente clínico...</p>
+
+          <div style={{ flex: 1, overflowY: 'auto', padding: '1rem' }}>
+            <table style={{ width: '100%', borderCollapse: 'separate', borderSpacing: '0 0.75rem' }}>
+              <thead>
+                <tr style={{ color: '#94a3b8', fontSize: '12px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                  <th style={{ textAlign: 'left', padding: '0 1.5rem', fontWeight: '800' }}>Paciente</th>
+                  <th style={{ textAlign: 'left', padding: '0 1.5rem', fontWeight: '800' }}>Edad / Sexo</th>
+                  <th style={{ textAlign: 'left', padding: '0 1.5rem', fontWeight: '800' }}>Sustancia de Impacto</th>
+                  <th style={{ textAlign: 'left', padding: '0 1.5rem', fontWeight: '800' }}>Fecha Contacto</th>
+                  <th style={{ textAlign: 'center', padding: '0 1.5rem', fontWeight: '800' }}>Acción</th>
+                </tr>
+              </thead>
+              <tbody>
+                {isLoadingProspectos ? (
+                  <tr><td colSpan={5} style={{ textAlign: 'center', padding: '4rem', color: '#64748b' }}>Cargando prospectos...</td></tr>
+                ) : prospectos?.length === 0 ? (
+                  <tr><td colSpan={5} style={{ textAlign: 'center', padding: '4rem', color: '#64748b' }}>No hay prospectos pendientes de valoración.</td></tr>
+                ) : (
+                  prospectos?.map((prospecto) => (
+                    <tr key={prospecto.id} style={{ backgroundColor: '#f8fafc', borderRadius: '16px', transition: 'all 0.2s' }}>
+                      <td style={{ padding: '1.25rem 1.5rem', borderRadius: '16px 0 0 16px' }}>
+                        <div style={{ fontWeight: '700', color: '#1e293b' }}>{prospecto.nombre} {prospecto.apellidoPaterno}</div>
+                        <div style={{ fontSize: '12px', color: '#64748b' }}>Folio: PC-{prospecto.id}</div>
+                      </td>
+                      <td style={{ padding: '1.25rem 1.5rem' }}>
+                        <div style={{ fontWeight: '600', color: '#475569' }}>{calcularEdad(prospecto.fechaNacimiento.toString())} años</div>
+                        <div style={{ fontSize: '12px', color: '#94a3b8' }}>{prospecto.sexo === 'M' ? 'Masculino' : 'Femenina'}</div>
+                      </td>
+                      <td style={{ padding: '1.25rem 1.5rem' }}>
+                        <div style={{ fontSize: '13px', color: '#334155', fontWeight: '600', maxWidth: '200px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          {prospecto.sustancias && prospecto.sustancias.length > 0 
+                            ? prospecto.sustancias.join(', ')
+                            : 'No especificada'}
+                        </div>
+                      </td>
+                      <td style={{ padding: '1.25rem 1.5rem' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', color: '#64748b', fontSize: '13px', fontWeight: '600' }}>
+                          <Calendar size={14} /> {new Date(prospecto.createdAt).toLocaleDateString()}
+                        </div>
+                      </td>
+                      <td style={{ padding: '1.25rem 1.5rem', textAlign: 'center', borderRadius: '0 16px 16px 0' }}>
+                        <button 
+                          onClick={() => navigate(`/admisiones/valoracion-medica/${prospecto.id}`)}
+                          style={{ 
+                            padding: '0.6rem 1.25rem', 
+                            backgroundColor: '#3b82f6', 
+                            color: 'white', 
+                            border: 'none', 
+                            borderRadius: '10px', 
+                            fontWeight: '700', 
+                            fontSize: '13px', 
+                            cursor: 'pointer',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '0.5rem',
+                            margin: '0 auto',
+                            boxShadow: '0 4px 6px -1px rgba(59,130,246,0.3)'
+                          }}
+                        >
+                          <Stethoscope size={16} /> Valorar
+                        </button>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
           </div>
-        ) : (
-          <>
-            {/* Header Expediente Premium */}
-            <div style={{ 
-              padding: '2rem 3rem', 
-              background: 'linear-gradient(to right, #f8fafc, #ffffff)', 
-              borderBottom: '1px solid var(--border)', 
-              display: 'flex', 
-              justifyContent: 'space-between', 
-              alignItems: 'center' 
-            }}>
-              <div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '0.5rem' }}>
-                  <span style={{ background: 'var(--primary-bg)', color: 'var(--primary)', padding: '0.3rem 0.8rem', borderRadius: '100px', fontSize: '12px', fontWeight: '800' }}>EXP #{expediente?.id}</span>
-                  <span style={{ fontSize: '12px', color: '#94a3b8', fontWeight: '600' }}>Ingresado el {expediente && new Date(expediente.createdAt).toLocaleDateString()}</span>
-                </div>
-                <h1 style={{ fontSize: '28px', fontWeight: '800', color: 'var(--text-h)', margin: 0, letterSpacing: '-0.5px' }}>
-                  {expediente?.paciente?.nombre} {expediente?.paciente?.apellidoPaterno} {expediente?.paciente?.apellidoMaterno}
-                </h1>
-                <p style={{ color: '#64748b', margin: 0, marginTop: '0.4rem', fontWeight: '500', display: 'flex', alignItems: 'center', gap: '1rem' }}>
-                  <span style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }}><ClipboardCheck size={16} /> DX: {expediente?.diagnosticoPrincipal || 'Pendiente'}</span>
-                  <span style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }}><Activity size={16} /> Cama: {expediente?.paciente?.cama?.numero || 'N/A'}</span>
-                </p>
+        </div>
+      )}
+
+      {/* VISTA: SEGUIMIENTO INTERNADOS (SIDEBAR + EXPEDIENTE) */}
+      {currentView === 'INTERNADOS' && (
+        <div style={{ display: 'flex', gap: '2rem', flex: 1, minHeight: 0 }}>
+          
+          {/* SIDEBAR PACIENTES INTERNADOS */}
+          <div style={{ width: '380px', backgroundColor: 'white', borderRadius: '32px', border: '1px solid #e2e8f0', display: 'flex', flexDirection: 'column', overflow: 'hidden', boxShadow: 'var(--shadow)' }}>
+            <div style={{ padding: '1.5rem', borderBottom: '1px solid #f1f5f9' }}>
+               <h3 style={{ fontSize: '16px', fontWeight: '900', color: '#1e293b', margin: 0, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                 <Users size={18} color="#3b82f6" /> Pacientes en Residencia
+               </h3>
+               <div style={{ marginTop: '1rem', position: 'relative' }}>
+                <Search size={16} color="#94a3b8" style={{ position: 'absolute', top: '50%', left: '1rem', transform: 'translateY(-50%)' }} />
+                <input type="text" placeholder="Buscar por nombre..." style={{ width: '100%', padding: '0.75rem 1rem 0.75rem 2.8rem', borderRadius: '12px', border: '1px solid #e2e8f0', backgroundColor: '#f8fafc', outline: 'none', fontSize: '13px' }} />
               </div>
             </div>
 
-            {/* Pestañas Clínicas Premium */}
-            <div style={{ display: 'flex', borderBottom: '1px solid var(--border)', padding: '0 3rem' }}>
-              {[
-                { id: 'NOTAS', label: 'Evolución', icon: FileText, color: 'var(--primary)' },
-                { id: 'SIGNOS', label: 'Vitales', icon: Activity, color: '#ef4444' },
-                { id: 'NUTRICION', label: 'Nutrición', icon: Apple, color: '#10b981' },
-                { id: 'PSICOLOGIA', label: 'Psicología', icon: BrainCircuit, color: '#8b5cf6' }
-              ].map(tab => (
-                <button 
-                  key={tab.id}
-                  onClick={() => setActiveTab(tab.id as 'NOTAS' | 'SIGNOS' | 'NUTRICION' | 'PSICOLOGIA')} 
-                  style={{ 
-                    display: 'flex', 
-                    alignItems: 'center', 
-                    padding: '1.25rem 1.5rem', 
-                    border: 'none', 
-                    background: 'none', 
-                    borderBottom: activeTab === tab.id ? `4px solid ${tab.color}` : '4px solid transparent', 
-                    fontWeight: '700', 
-                    color: activeTab === tab.id ? 'var(--text-h)' : '#94a3b8', 
-                    cursor: 'pointer', 
-                    fontSize: '14px',
-                    transition: 'all 0.2s ease',
-                    marginRight: '1rem'
-                  }}
-                >
-                  <tab.icon size={18} style={{ marginRight: '0.6rem' }}/> {tab.label}
-                </button>
-              ))}
+            <div style={{ flex: 1, overflowY: 'auto', padding: '1rem' }} className="custom-scrollbar">
+              {isLoadingInternados ? (
+                <div style={{ textAlign: 'center', padding: '2rem', color: '#94a3b8' }}>Cargando...</div>
+              ) : (
+                pacientesInternados?.map((pac) => (
+                  <div 
+                    key={pac.id} 
+                    onClick={() => setPacienteId(pac.id)}
+                    style={{ 
+                      padding: '1.25rem', marginBottom: '0.6rem', cursor: 'pointer', 
+                      backgroundColor: pacienteId === pac.id ? '#eff6ff' : 'white',
+                      borderRadius: '18px', display: 'flex', alignItems: 'center', gap: '1rem',
+                      border: pacienteId === pac.id ? '1px solid #bfdbfe' : '1px solid #f1f5f9',
+                      transition: 'all 0.2s'
+                    }}
+                  >
+                    <div style={{ width: '44px', height: '44px', borderRadius: '12px', backgroundColor: '#f1f5f9', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#3b82f6', fontWeight: '800' }}>
+                      {pac.nombre[0]}
+                    </div>
+                    <div style={{ flex: 1 }}>
+                      <p style={{ fontWeight: '700', color: '#1e293b', margin: 0, fontSize: '14px' }}>{pac.nombre} {pac.apellidoPaterno}</p>
+                      <p style={{ fontSize: '11px', color: '#64748b', margin: 0, marginTop: '0.2rem' }}>
+                         Cama: {pac.cama?.numero || 'N/A'} • {pac.cama?.habitacion?.area || 'General'}
+                      </p>
+                    </div>
+                    {pacienteId === pac.id && <ChevronRight size={18} color="#3b82f6" />}
+                  </div>
+                ))
+              )}
             </div>
+          </div>
 
-            {/* Contenido de la Pestaña */}
-            <div style={{ flex: 1, padding: '3rem', overflowY: 'auto' }} className="custom-scrollbar">
-              
-              {/* NOTAS DE EVOLUCIÓN */}
-              {activeTab === 'NOTAS' && (
-                <div className="animate-fade-in">
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2.5rem' }}>
-                    <h3 style={{ fontSize: '20px', fontWeight: '800', color: 'var(--text-h)', margin: 0 }}>Bitácora de Evolución</h3>
-                    <div style={{ display: 'flex', gap: '0.5rem' }}>
-                      <select 
-                        value={tipoNota} 
-                        onChange={(e) => setTipoNota(e.target.value)}
-                        style={{ padding: '0.6rem 1rem', borderRadius: '12px', border: '1px solid #e2e8f0', fontSize: '13px', fontWeight: '700', outline: 'none' }}
-                      >
-                        <option value="MEDICA">Médica</option>
-                        <option value="ENFERMERIA">Enfermería</option>
-                        <option value="PSICOLOGICA">Psicología</option>
-                      </select>
+          {/* DETALLES DEL EXPEDIENTE (SOLO INTERNADOS) */}
+          <div style={{ flex: 1, backgroundColor: 'white', borderRadius: '32px', border: '1px solid #e2e8f0', display: 'flex', flexDirection: 'column', overflow: 'hidden', boxShadow: 'var(--shadow-lg)' }}>
+            {!pacienteId ? (
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', color: '#94a3b8', padding: '3rem', textAlign: 'center' }}>
+                <div style={{ background: '#f8fafc', padding: '2rem', borderRadius: '50%', marginBottom: '1.5rem' }}>
+                  <Users size={64} color="#cbd5e1" />
+                </div>
+                <h3 style={{ color: '#1e293b', fontWeight: '800' }}>Gestión Clínica de Internos</h3>
+                <p style={{ maxWidth: '400px', fontSize: '14px', lineHeight: '1.6' }}>
+                  Seleccione un paciente de la lista para ver su expediente digital, registrar notas de evolución o toma de signos vitales.
+                </p>
+              </div>
+            ) : isLoadingExpediente ? (
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%' }}>
+                <p>Cargando información clínica...</p>
+              </div>
+            ) : (
+              <>
+                {/* Header Expediente */}
+                <div style={{ padding: '2rem 2.5rem', background: 'linear-gradient(to right, #f8fafc, #ffffff)', borderBottom: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <div>
+                    <h2 style={{ fontSize: '24px', fontWeight: '900', color: '#1e293b', margin: 0 }}>
+                      {expediente?.paciente?.nombre} {expediente?.paciente?.apellidoPaterno}
+                    </h2>
+                    <div style={{ display: 'flex', gap: '1rem', marginTop: '0.5rem', alignItems: 'center' }}>
+                      <span style={{ fontSize: '13px', color: '#64748b', fontWeight: '600', display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
+                        <Activity size={14} /> Cama: {expediente?.paciente?.cama?.numero || 'N/A'}
+                      </span>
+                      <span style={{ backgroundColor: '#f1f5f9', padding: '0.2rem 0.6rem', borderRadius: '6px', fontSize: '11px', fontWeight: '700', color: '#475569' }}>
+                        ID: EXP-{expediente?.id}
+                      </span>
                     </div>
-                  </div>
-                  
-                  {/* Editor de Nota */}
-                  <div style={{ 
-                    backgroundColor: '#f8fafc', 
-                    padding: '2rem', 
-                    borderRadius: 'var(--radius-lg)', 
-                    border: '1px solid #e2e8f0',
-                    marginBottom: '3rem'
-                  }}>
-                    <textarea 
-                      value={nuevaNota}
-                      onChange={(e) => setNuevaNota(e.target.value)}
-                      placeholder="Escriba aquí la evolución del paciente..."
-                      style={{ 
-                        width: '100%', 
-                        padding: '1.25rem', 
-                        border: '1px solid #e2e8f0', 
-                        borderRadius: '16px', 
-                        minHeight: '150px', 
-                        resize: 'vertical', 
-                        marginBottom: '1.5rem',
-                        fontSize: '15px',
-                        outline: 'none',
-                        boxShadow: 'inset 0 2px 4px rgba(0,0,0,0.02)'
-                      }}
-                    />
-                    <div style={{ textAlign: 'right' }}>
-                      <button 
-                         onClick={handleSaveNota}
-                         disabled={!nuevaNota.trim() || saveNota.isPending}
-                         style={{ 
-                           padding: '1rem 2rem', 
-                           backgroundColor: 'var(--primary)', 
-                           color: 'white', 
-                           border: 'none', 
-                           borderRadius: '14px', 
-                           cursor: 'pointer', 
-                           fontWeight: '700',
-                           display: 'flex',
-                           alignItems: 'center',
-                           marginLeft: 'auto',
-                           boxShadow: '0 10px 15px -3px rgba(59, 130, 246, 0.3)'
-                         }}
-                      >
-                         <Save size={18} style={{ marginRight: '0.5rem' }} /> {saveNota.isPending ? 'Guardando...' : 'Registrar Nota'}
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* Línea de Tiempo de Notas */}
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem', position: 'relative', paddingLeft: '1.5rem' }}>
-                    <div style={{ position: 'absolute', left: '0', top: 0, bottom: 0, width: '2px', backgroundColor: '#e2e8f0' }}></div>
-                    {expediente?.notasEvolucion?.length === 0 ? (
-                      <p style={{ color: '#94a3b8', fontStyle: 'italic' }}>No hay registros en la bitácora.</p>
-                    ) : (
-                      expediente?.notasEvolucion?.map((nota: NotaEvolucion) => (
-                        <div key={nota.id} style={{ position: 'relative', backgroundColor: 'white', padding: '1.75rem', borderRadius: '20px', border: '1px solid #e2e8f0', boxShadow: 'var(--shadow)' }}>
-                          <div style={{ position: 'absolute', left: '-1.5rem', top: '2rem', width: '12px', height: '12px', borderRadius: '50%', backgroundColor: nota.tipo === 'MEDICA' ? '#3b82f6' : '#10b981', border: '3px solid white', boxShadow: '0 0 0 2px #e2e8f0' }}></div>
-                          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '1rem', alignItems: 'center' }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                              <span style={{ fontWeight: '800', fontSize: '14px', color: 'var(--text-h)' }}>{nota.usuario?.nombre} {nota.usuario?.apellidos}</span>
-                              <span style={{ fontSize: '11px', background: '#f1f5f9', color: '#64748b', padding: '0.2rem 0.6rem', borderRadius: '100px', fontWeight: '700' }}>{nota.tipo}</span>
-                            </div>
-                            <span style={{ fontSize: '12px', color: '#94a3b8', fontWeight: '600' }}>{nota.fecha && new Date(nota.fecha).toLocaleString()}</span>
-                          </div>
-                          <p style={{ color: '#334155', margin: 0, whiteSpace: 'pre-wrap', fontSize: '15px', lineHeight: '1.6' }}>{nota.nota}</p>
-                        </div>
-                      ))
-                    )}
                   </div>
                 </div>
-              )}
 
-              {/* SIGNOS VITALES */}
-              {activeTab === 'SIGNOS' && (
-                <div className="animate-fade-in">
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2.5rem' }}>
-                    <h3 style={{ fontSize: '20px', fontWeight: '800', color: 'var(--text-h)', margin: 0 }}>Histórico de Signos Vitales</h3>
+                {/* Tabs Clínicos */}
+                <div style={{ display: 'flex', borderBottom: '1px solid #f1f5f9', padding: '0 2.5rem' }}>
+                  {[
+                    { id: 'NOTAS', label: 'Evolución', icon: FileText, color: '#3b82f6' },
+                    { id: 'SIGNOS', label: 'Signos Vitales', icon: Activity, color: '#ef4444' }
+                  ].map(tab => (
                     <button 
-                      onClick={() => setShowAddVital(true)}
+                      key={tab.id}
+                      onClick={() => setActiveTab(tab.id as any)} 
                       style={{ 
-                        padding: '0.75rem 1.5rem', 
-                        backgroundColor: '#ef4444', 
-                        color: 'white', 
-                        border: 'none', 
-                        borderRadius: '12px', 
-                        cursor: 'pointer', 
-                        fontWeight: '700',
-                        boxShadow: '0 4px 12px rgba(239, 68, 68, 0.2)'
+                        display: 'flex', alignItems: 'center', padding: '1.25rem 1rem', border: 'none', background: 'none', 
+                        borderBottom: activeTab === tab.id ? `4px solid ${tab.color}` : '4px solid transparent', 
+                        fontWeight: '800', color: activeTab === tab.id ? '#1e293b' : '#94a3b8', 
+                        cursor: 'pointer', fontSize: '14px', transition: 'all 0.2s', marginRight: '1.5rem'
                       }}
                     >
-                      Tomar Signos
+                      <tab.icon size={16} style={{ marginRight: '0.5rem' }}/> {tab.label}
                     </button>
-                  </div>
+                  ))}
+                </div>
 
-                  {showAddVital && (
-                    <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.5)', zIndex: 100, display: 'flex', alignItems: 'center', justifyContent: 'center', backdropFilter: 'blur(4px)' }}>
-                      <form onSubmit={handleSaveSignos} style={{ backgroundColor: 'white', padding: '2.5rem', borderRadius: '24px', width: '90%', maxWidth: '600px', boxShadow: 'var(--shadow-lg)' }}>
-                        <h2 style={{ marginBottom: '2rem', fontWeight: '800' }}>Nuevo Registro Clínico</h2>
-                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem' }}>
-                          <input name="presion" placeholder="Presión (ej. 120/80)" style={{ padding: '0.75rem', border: '1px solid #e2e8f0', borderRadius: '10px' }} />
-                          <input name="temp" type="number" step="0.1" placeholder="Temp °C" style={{ padding: '0.75rem', border: '1px solid #e2e8f0', borderRadius: '10px' }} />
-                          <input name="fc" type="number" placeholder="FC (lpm)" style={{ padding: '0.75rem', border: '1px solid #e2e8f0', borderRadius: '10px' }} />
-                          <input name="fr" type="number" placeholder="FR (rpm)" style={{ padding: '0.75rem', border: '1px solid #e2e8f0', borderRadius: '10px' }} />
-                          <input name="spo2" type="number" placeholder="SpO2 (%)" style={{ padding: '0.75rem', border: '1px solid #e2e8f0', borderRadius: '10px' }} />
-                          <input name="peso" type="number" step="0.1" placeholder="Peso (kg)" style={{ padding: '0.75rem', border: '1px solid #e2e8f0', borderRadius: '10px' }} />
+                {/* Contenido Pestaña */}
+                <div style={{ flex: 1, padding: '2.5rem', overflowY: 'auto' }} className="custom-scrollbar">
+                  
+                  {activeTab === 'NOTAS' && (
+                    <div>
+                      <div style={{ backgroundColor: '#f8fafc', padding: '1.5rem', borderRadius: '24px', border: '1px solid #e2e8f0', marginBottom: '2rem' }}>
+                        <textarea 
+                          value={nuevaNota}
+                          onChange={(e) => setNuevaNota(e.target.value)}
+                          placeholder="Registrar nueva evolución médica..."
+                          style={{ width: '100%', padding: '1rem', border: '1px solid #e2e8f0', borderRadius: '16px', minHeight: '120px', resize: 'vertical', fontSize: '14px', outline: 'none' }}
+                        />
+                        <div style={{ textAlign: 'right', marginTop: '1rem' }}>
+                          <button 
+                            onClick={handleSaveNota}
+                            disabled={!nuevaNota.trim() || saveNota.isPending}
+                            style={{ padding: '0.8rem 1.5rem', backgroundColor: '#3b82f6', color: 'white', border: 'none', borderRadius: '12px', cursor: 'pointer', fontWeight: '800' }}
+                          >
+                             {saveNota.isPending ? 'Guardando...' : 'Guardar Nota'}
+                          </button>
                         </div>
-                        <div style={{ display: 'flex', gap: '1rem', marginTop: '2rem' }}>
-                          <button type="button" onClick={() => setShowAddVital(false)} style={{ flex: 1, padding: '1rem', borderRadius: '12px', border: '1px solid #e2e8f0', fontWeight: '700' }}>Cancelar</button>
-                          <button type="submit" style={{ flex: 1, padding: '1rem', borderRadius: '12px', backgroundColor: '#ef4444', color: 'white', border: 'none', fontWeight: '700' }}>Guardar Signos</button>
-                        </div>
-                      </form>
+                      </div>
+
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                        {expediente?.notasEvolucion?.map((nota: any) => (
+                          <div key={nota.id} style={{ padding: '1.5rem', backgroundColor: 'white', borderRadius: '20px', border: '1px solid #f1f5f9', boxShadow: '0 2px 4px rgba(0,0,0,0.02)' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
+                              <span style={{ fontWeight: '800', fontSize: '13px', color: '#1e293b' }}>{nota.usuario?.nombre} {nota.usuario?.apellidos}</span>
+                              <span style={{ fontSize: '11px', color: '#94a3b8' }}>{new Date(nota.fecha).toLocaleString()}</span>
+                            </div>
+                            <p style={{ fontSize: '14px', color: '#475569', margin: 0, lineHeight: '1.5' }}>{nota.nota}</p>
+                          </div>
+                        ))}
+                      </div>
                     </div>
                   )}
 
-                  {/* Listado de Signos */}
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-                    {expediente?.signosVitales?.map((s: SignoVital) => (
-                      <div key={s.id} style={{ backgroundColor: '#f8fafc', padding: '1.5rem', borderRadius: '18px', border: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                         <div style={{ display: 'flex', gap: '2rem' }}>
-                            <div style={{ textAlign: 'center' }}>
-                              <Thermometer size={16} color="#ef4444" style={{ marginBottom: '0.25rem' }} />
-                              <div style={{ fontSize: '14px', fontWeight: '800' }}>{s.temperatura}°C</div>
-                              <div style={{ fontSize: '10px', color: '#94a3b8', textTransform: 'uppercase' }}>Temp</div>
-                            </div>
-                            <div style={{ textAlign: 'center' }}>
-                              <Heart size={16} color="#ef4444" style={{ marginBottom: '0.25rem' }} />
-                              <div style={{ fontSize: '14px', fontWeight: '800' }}>{s.frecuenciaCardiaca}</div>
-                              <div style={{ fontSize: '10px', color: '#94a3b8', textTransform: 'uppercase' }}>FC</div>
-                            </div>
-                            <div style={{ textAlign: 'center' }}>
-                              <Droplets size={16} color="#3b82f6" style={{ marginBottom: '0.25rem' }} />
-                              <div style={{ fontSize: '14px', fontWeight: '800' }}>{s.presionArterial}</div>
-                              <div style={{ fontSize: '10px', color: '#94a3b8', textTransform: 'uppercase' }}>Presión</div>
-                            </div>
-                            <div style={{ textAlign: 'center' }}>
-                              <Wind size={16} color="#10b981" style={{ marginBottom: '0.25rem' }} />
-                              <div style={{ fontSize: '14px', fontWeight: '800' }}>{s.oxigenacion}%</div>
-                              <div style={{ fontSize: '10px', color: '#94a3b8', textTransform: 'uppercase' }}>SpO2</div>
-                            </div>
-                            <div style={{ textAlign: 'center' }}>
-                              <Weight size={16} color="#64748b" style={{ marginBottom: '0.25rem' }} />
-                              <div style={{ fontSize: '14px', fontWeight: '800' }}>{s.peso}kg</div>
-                              <div style={{ fontSize: '10px', color: '#94a3b8', textTransform: 'uppercase' }}>Peso</div>
-                            </div>
-                         </div>
-                         <div style={{ textAlign: 'right' }}>
-                            <div style={{ fontSize: '12px', fontWeight: '700', color: '#475569' }}>Por: {s.usuario?.nombre}</div>
-                            <div style={{ fontSize: '11px', color: '#94a3b8' }}>{s.fecha && new Date(s.fecha).toLocaleString()}</div>
-                         </div>
-                      </div>
-                    ))}
-                  </div>
+                  {activeTab === 'SIGNOS' && (
+                     <div style={{ textAlign: 'center', padding: '2rem', color: '#94a3b8' }}>
+                        Módulo de toma de signos vitales (Visualización histórica).
+                     </div>
+                  )}
                 </div>
-              )}
-
-            </div>
-          </>
-        )}
-      </div>
+              </>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
