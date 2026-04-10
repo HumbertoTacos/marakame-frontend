@@ -27,7 +27,7 @@ export function Almacen() {
 
   // Muts
   const crearProducto = useMutation({
-    mutationFn: (data: Record<string, any>) => apiClient.post('/almacen/productos', data),
+    mutationFn: (data: Record<string, unknown>) => apiClient.post('/almacen/productos', data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['productos'] });
       setShowModal(null);
@@ -36,11 +36,14 @@ export function Almacen() {
   });
 
   const registrarMovimiento = useMutation({
-    mutationFn: (data: Record<string, any>) => apiClient.post('/almacen/movimientos', {
-      ...data, 
-      productoId: parseInt(data.productoId, 10),
-      cantidad: parseInt(data.cantidad, 10)
-    }),
+    mutationFn: (data: Record<string, unknown>) => {
+      const payload = data as { productoId: string, cantidad: string, tipo: string, observaciones: string };
+      return apiClient.post('/almacen/movimientos', {
+        ...payload, 
+        productoId: parseInt(payload.productoId, 10),
+        cantidad: parseInt(payload.cantidad, 10)
+      });
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['productos'] });
       queryClient.invalidateQueries({ queryKey: ['movimientos'] });

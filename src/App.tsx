@@ -1,4 +1,4 @@
-import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Navigate, Outlet } from 'react-router-dom';
 import { Layout } from './components/Layout';
 import { ProtectedRoute } from './components/ProtectedRoute';
 import { Login } from './pages/Login';
@@ -12,6 +12,12 @@ import { AreaClinica } from './pages/clinica/AreaClinica';
 import { Bitacora } from './pages/transversal/Bitacora';
 import { Reportes } from './pages/transversal/Reportes';
 
+// Admisiones Nuevas
+import AdmisionesDashboard from './pages/admisiones/AdmisionesDashboard';
+import NuevaSolicitudPage from './pages/admisiones/NuevaSolicitudPage';
+import AsignarCamaPage from './pages/admisiones/AsignarCamaPage';
+import AreasPage from './pages/admisiones/AreasPage';
+
 function App() {
   return (
     <Router>
@@ -23,17 +29,59 @@ function App() {
           <Route index element={<Navigate to="/dashboard" replace />} />
           <Route path="dashboard" element={<Dashboard />} />
           
-          <Route path="admisiones/ingreso" element={<Ingreso />} />
-          <Route path="admisiones/estudio" element={<EstudioSocioeconomicoForm pacienteId={1} />} />
+          {/* Módulo de Admisiones - Restringido */}
+          <Route path="admisiones" element={
+            <ProtectedRoute allowedRoles={['ADMISIONES', 'ADMIN_GENERAL']}>
+              <Outlet />
+            </ProtectedRoute>
+          }>
+            <Route path="dashboard" element={<AdmisionesDashboard />} />
+            <Route path="nueva-solicitud" element={<NuevaSolicitudPage />} />
+            <Route path="asignar-cama/:id" element={<AsignarCamaPage />} />
+            <Route path="areas" element={<AreasPage />} />
+            <Route path="ingreso" element={<Ingreso />} />
+            <Route path="estudio" element={<EstudioSocioeconomicoForm pacienteId={1} />} />
+          </Route>
           
-          <Route path="almacen" element={<Almacen />} />
-          <Route path="compras" element={<Compras />} />
-          <Route path="rrhh-nominas" element={<Nominas />} />
+          {/* Módulo Clínico - Restringido */}
+          <Route path="clinica" element={
+            <ProtectedRoute allowedRoles={['AREA_MEDICA', 'ENFERMERIA', 'PSICOLOGIA', 'NUTRICION', 'ADMIN_GENERAL']}>
+              <AreaClinica />
+            </ProtectedRoute>
+          } />
           
-          <Route path="clinica" element={<AreaClinica />} />
+          {/* Almacén - Restringido */}
+          <Route path="almacen" element={
+            <ProtectedRoute allowedRoles={['ALMACEN', 'ADMIN_GENERAL']}>
+              <Almacen />
+            </ProtectedRoute>
+          } />
+
+          {/* Compras y Nóminas - Restringido */}
+          <Route path="compras" element={
+            <ProtectedRoute allowedRoles={['RRHH_FINANZAS', 'ADMIN_GENERAL']}>
+              <Compras />
+            </ProtectedRoute>
+          } />
           
-          <Route path="auditoria" element={<Bitacora />} />
-          <Route path="exportaciones" element={<Reportes />} />
+          <Route path="rrhh-nominas" element={
+            <ProtectedRoute allowedRoles={['RRHH_FINANZAS', 'ADMIN_GENERAL']}>
+              <Nominas />
+            </ProtectedRoute>
+          } />
+          
+          {/* Gerencial - Solo Admin General */}
+          <Route path="auditoria" element={
+            <ProtectedRoute allowedRoles={['ADMIN_GENERAL']}>
+              <Bitacora />
+            </ProtectedRoute>
+          } />
+          
+          <Route path="exportaciones" element={
+            <ProtectedRoute allowedRoles={['ADMIN_GENERAL']}>
+              <Reportes />
+            </ProtectedRoute>
+          } />
           {/* Añadir más rutas según los módulos */}
         </Route>
         

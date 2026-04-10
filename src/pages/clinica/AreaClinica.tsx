@@ -33,7 +33,7 @@ export function AreaClinica() {
   });
 
   const saveNota = useMutation({
-    mutationFn: (data: Record<string, any>) => apiClient.post(`/expedientes/${expediente?.id}/notas`, data),
+    mutationFn: (data: Record<string, unknown>) => apiClient.post(`/expedientes/${expediente?.id}/notas`, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['expediente', pacienteId] });
       setNuevaNota('');
@@ -41,7 +41,7 @@ export function AreaClinica() {
   });
 
   const saveSignos = useMutation({
-    mutationFn: (data: Record<string, any>) => apiClient.post(`/expedientes/${expediente?.id}/signos`, data),
+    mutationFn: (data: Record<string, unknown>) => apiClient.post(`/expedientes/${expediente?.id}/signos`, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['expediente', pacienteId] });
       setShowAddVital(false);

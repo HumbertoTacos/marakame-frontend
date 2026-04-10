@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { DollarSign, CheckCircle, Calculator, UserPlus, Clock, Search } from 'lucide-react';
+import { DollarSign, CheckCircle, UserPlus, Clock, Search } from 'lucide-react';
 import apiClient from '../../services/api';
 import type { Empleado, Nomina, PreNomina } from '../../types';
 
@@ -8,11 +8,9 @@ export function Nominas() {
   const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = useState<'NÓMINAS' | 'EMPLEADOS'>('NÓMINAS');
   const [showModalEmp, setShowModalEmp] = useState(false);
-  const [showModalNomina, setShowModalNomina] = useState(false);
 
   // States
   const [nuevoEmp, setNuevoEmp] = useState({ nombre: '', apellidos: '', puesto: '', departamento: '', salarioBase: '' });
-  const [nuevaNomina, setNuevaNomina] = useState({ periodo: 'Abril 2026 - Q1', fechaInicio: '', fechaFin: '' });
 
   const { data: nominas, isLoading: isLoadingNom } = useQuery<Nomina[]>({
     queryKey: ['nominas'],
@@ -34,23 +32,8 @@ export function Nominas() {
     }
   });
 
-  const generarNominaMut = useMutation({
-    mutationFn: (data: Partial<Nomina>) => apiClient.post('/nominas/ciclo', data),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['nominas'] });
-      setShowModalNomina(false);
-    }
-  });
-
   const autorizarMut = useMutation({
     mutationFn: (id: number) => apiClient.put(`/nominas/ciclo/${id}/autorizar`),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['nominas'] });
-    }
-  });
-
-  const updatePreNominaMut = useMutation({
-    mutationFn: ({ id, data }: { id: number, data: Partial<PreNomina> }) => apiClient.put(`/nominas/prenomina/${id}`, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['nominas'] });
     }
@@ -99,24 +82,6 @@ export function Nominas() {
             }}
           >
             <UserPlus size={18} style={{ marginRight: '0.6rem' }} /> Nuevo Empleado
-          </button>
-          <button
-            onClick={() => setShowModalNomina(true)}
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              padding: '0.8rem 1.8rem',
-              backgroundColor: 'var(--primary)',
-              color: 'white',
-              border: 'none',
-              borderRadius: '16px',
-              cursor: 'pointer',
-              fontWeight: '700',
-              fontSize: '14px',
-              boxShadow: '0 10px 15px -3px rgba(59, 130, 246, 0.3)'
-            }}
-          >
-            <Calculator size={18} style={{ marginRight: '0.6rem' }} /> Generar Nómina
           </button>
         </div>
       </div>

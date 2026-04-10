@@ -23,7 +23,7 @@ export function Compras() {
   });
 
   const crearReqMut = useMutation({
-    mutationFn: (data: Record<string, any>) => apiClient.post('/compras/requisicion', data),
+    mutationFn: (data: Record<string, unknown>) => apiClient.post('/compras/requisicion', data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['requisiciones'] });
       setShowModalReq(false);
@@ -32,7 +32,7 @@ export function Compras() {
   });
 
   const crearCotMut = useMutation({
-    mutationFn: ({ reqId, data }: { reqId: number, data: Record<string, any> }) => apiClient.post(`/compras/requisicion/${reqId}/cotizacion`, data),
+    mutationFn: ({ reqId, data }: { reqId: number, data: Record<string, unknown> }) => apiClient.post(`/compras/requisicion/${reqId}/cotizacion`, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['requisiciones'] });
       setShowModalCot(null);
