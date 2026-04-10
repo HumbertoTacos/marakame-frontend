@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 
-type Rol = 'ADMIN_GENERAL' | 'AREA_MEDICA' | 'NUTRICION' | 'PSICOLOGIA' | 'RRHH_FINANZAS' | 'ADMISIONES' | 'ALMACEN';
+type Rol = 'ADMIN_GENERAL' | 'AREA_MEDICA' | 'NUTRICION' | 'PSICOLOGIA' | 'RRHH_FINANZAS' | 'ADMISIONES' | 'ALMACEN' | 'ENFERMERIA';
 
 interface Usuario {
   id: number;
