@@ -8,7 +8,8 @@ import {
   ArrowUpRight, 
   Users, 
   Bed, 
-  Clock as ClockIcon 
+  Clock as ClockIcon,
+  ClipboardList
 } from 'lucide-react';
 import { useIngresoStore } from '../../stores/ingresoStore';
 import EstadoSolicitudChip from '../../components/admisiones/EstadoSolicitudChip';
@@ -59,27 +60,51 @@ const AdmisionesDashboard: React.FC = () => {
           <h1 style={{ fontSize: '32px', fontWeight: '900', color: '#1e293b', margin: 0, letterSpacing: '-1px' }}>Dashboard de Admisiones</h1>
           <p style={{ color: '#64748b', fontSize: '16px', marginTop: '4px' }}>Gestión centralizada de solicitudes e ingresos residenciales.</p>
         </div>
-        <button 
-          onClick={() => navigate('/admisiones/nueva-solicitud')}
-          style={{ 
-            display: 'flex', 
-            alignItems: 'center', 
-            gap: '0.75rem', 
-            padding: '0.875rem 1.5rem', 
-            backgroundColor: '#3b82f6', 
-            color: 'white', 
-            border: 'none', 
-            borderRadius: '14px', 
-            fontWeight: 'bold',
-            cursor: 'pointer',
-            boxShadow: '0 10px 15px -3px rgba(59,130,246,0.3)',
-            transition: 'all 0.2s ease'
-          }}
-          onMouseEnter={(e) => e.currentTarget.style.transform = 'translateY(-2px)'}
-          onMouseLeave={(e) => e.currentTarget.style.transform = 'translateY(0)'}
-        >
-          <Plus size={20} /> Nueva Solicitud
-        </button>
+        <div style={{ display: 'flex', gap: '1rem' }}>
+          <button 
+            onClick={() => navigate('/admisiones/primer-contacto')}
+            style={{ 
+              display: 'flex', 
+              alignItems: 'center', 
+              gap: '0.75rem', 
+              padding: '0.875rem 1.5rem', 
+              backgroundColor: '#1e293b', 
+              color: 'white', 
+              border: 'none', 
+              borderRadius: '14px', 
+              fontWeight: 'bold',
+              cursor: 'pointer',
+              boxShadow: '0 10px 15px -3px rgba(30, 41, 59, 0.3)',
+              transition: 'all 0.2s ease'
+            }}
+            onMouseEnter={(e) => e.currentTarget.style.transform = 'translateY(-2px)'}
+            onMouseLeave={(e) => e.currentTarget.style.transform = 'translateY(0)'}
+          >
+            <ClipboardList size={20} /> Primer Contacto
+          </button>
+          
+          <button 
+            onClick={() => navigate('/admisiones/nueva-solicitud')}
+            style={{ 
+              display: 'flex', 
+              alignItems: 'center', 
+              gap: '0.75rem', 
+              padding: '0.875rem 1.5rem', 
+              backgroundColor: '#3b82f6', 
+              color: 'white', 
+              border: 'none', 
+              borderRadius: '14px', 
+              fontWeight: 'bold',
+              cursor: 'pointer',
+              boxShadow: '0 10px 15px -3px rgba(59,130,246,0.3)',
+              transition: 'all 0.2s ease'
+            }}
+            onMouseEnter={(e) => e.currentTarget.style.transform = 'translateY(-2px)'}
+            onMouseLeave={(e) => e.currentTarget.style.transform = 'translateY(0)'}
+          >
+            <Plus size={20} /> Nueva Solicitud
+          </button>
+        </div>
       </div>
 
       {/* Stats Cards */}

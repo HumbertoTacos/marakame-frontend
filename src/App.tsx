@@ -17,6 +17,7 @@ import AdmisionesDashboard from './pages/admisiones/AdmisionesDashboard';
 import NuevaSolicitudPage from './pages/admisiones/NuevaSolicitudPage';
 import AsignarCamaPage from './pages/admisiones/AsignarCamaPage';
 import AreasPage from './pages/admisiones/AreasPage';
+import PrimerContactoPage from './pages/admisiones/PrimerContactoPage';
 
 function App() {
   return (
@@ -39,6 +40,7 @@ function App() {
             <Route path="nueva-solicitud" element={<NuevaSolicitudPage />} />
             <Route path="asignar-cama/:id" element={<AsignarCamaPage />} />
             <Route path="areas" element={<AreasPage />} />
+            <Route path="primer-contacto" element={<PrimerContactoPage />} />
             <Route path="ingreso" element={<Ingreso />} />
             <Route path="estudio" element={<EstudioSocioeconomicoForm pacienteId={1} />} />
           </Route>
