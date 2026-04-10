@@ -40,7 +40,7 @@ export function AreaClinica() {
   // 1. Cargar prospectos (Cola de Valoración)
   const { data: prospectos, isLoading: isLoadingProspectos } = useQuery<Paciente[]>({
     queryKey: ['prospectos_pendientes'],
-    queryFn: () => apiClient.get('/pacientes?estado=PROSPECTO').then(res => res.data.data)
+    queryFn: () => apiClient.get('/pacientes?estado=PROSPECTO&sinValorar=true').then(res => res.data.data)
   });
 
   // 2. Cargar pacientes internados (Seguimiento)
