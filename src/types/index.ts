@@ -58,6 +58,19 @@ export const TipoAdiccion = {
 } as const;
 export type TipoAdiccion = (typeof TipoAdiccion)[keyof typeof TipoAdiccion];
 
+export const TipoIngreso = {
+  PRIMARIO: 'PRIMARIO',
+  REFORZAMIENTO: 'REFORZAMIENTO'
+} as const;
+export type TipoIngreso = (typeof TipoIngreso)[keyof typeof TipoIngreso];
+
+export const UbicacionFisica = {
+  LADO_IZQ: 'LADO_IZQ',
+  LADO_DER: 'LADO_DER',
+  EVALUACIONES: 'EVALUACIONES'
+} as const;
+export type UbicacionFisica = (typeof UbicacionFisica)[keyof typeof UbicacionFisica];
+
 export type CategoriaProducto = 'MEDICAMENTO' | 'INSUMO_MEDICO' | 'MOBILIARIO' | 'PAPELERIA' | 'LIMPIEZA' | 'OTRO';
 export type EstadoStock = 'NORMAL' | 'BAJO' | 'CRITICO';
 export type EstadoCompra = 'BORRADOR' | 'PENDIENTE_COTIZACION' | 'EN_COMPARATIVO' | 'PENDIENTE_AUTORIZACION' | 'AUTORIZADO' | 'RECHAZADO' | 'ORDEN_GENERADA';
@@ -186,28 +199,42 @@ export interface Auditoria {
 
 // --- Circular and Dependent Models (Paciente / Cama / Ingreso) ---
 
+export interface Habitacion {
+  id: number;
+  nombre: string;
+  capacidadMax: number;
+  area: AreaCentro;
+}
+
 export interface Cama {
   id: number;
   codigo?: string;
   numero: string;
-  area: AreaCentro;
   estado: EstadoCama;
   descripcion?: string;
   pacienteId?: number;
+  habitacionId: number;
+  habitacion?: Habitacion;
   paciente?: Partial<Paciente>;
 }
 
 export interface Paciente {
   id: number;
-  nombre: string;
-  apellidoPaterno: string;
-  apellidoMaterno: string;
+  claveUnica?: string;
+  nombre?: string;
+  apellidoPaterno?: string;
+  apellidoMaterno?: string;
   fechaNacimiento: string | Date;
   sexo: string;
   curp?: string;
   estado: EstadoPaciente;
   tipoAdiccion?: TipoAdiccion;
   areaDeseada?: AreaCentro;
+  tipoIngreso?: TipoIngreso;
+  nivelTratamiento?: number;
+  fechaIngreso?: string;
+  fechaEgresoPrevista?: string;
+  totalDiasTratamiento?: number;
   cama?: Cama;
   createdAt?: string;
 }

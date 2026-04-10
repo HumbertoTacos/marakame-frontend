@@ -139,8 +139,14 @@ const AdmisionesDashboard: React.FC = () => {
                   <tr key={sol.id} style={{ borderBottom: '1px solid #f1f5f9', cursor: 'pointer', transition: 'background 0.2s' }} onClick={() => openSolicitud(sol)}>
                     <td style={{ padding: '1.25rem 2rem', fontWeight: 'bold', color: '#334155' }}>{sol.folio}</td>
                     <td style={{ padding: '1.25rem 2rem' }}>
-                      <div style={{ fontWeight: '700', color: '#1e293b' }}>{sol.paciente?.nombre} {sol.paciente?.apellidoPaterno}</div>
-                      <div style={{ fontSize: '12px', color: '#64748b' }}>CURP: {sol.paciente?.curp || '---'}</div>
+                      <div style={{ fontWeight: '700', color: '#1e293b' }}>
+                        {sol.paciente?.claveUnica 
+                          ? `Paciente #${sol.paciente.claveUnica}` 
+                          : (sol.paciente?.nombre ? `${sol.paciente.nombre} ${sol.paciente.apellidoPaterno}` : 'Sin nombre')}
+                      </div>
+                      <div style={{ fontSize: '12px', color: '#64748b' }}>
+                        {sol.paciente?.claveUnica ? 'Identidad Protegida' : `CURP: ${sol.paciente?.curp || '---'}`}
+                      </div>
                     </td>
                     <td style={{ padding: '1.25rem 2rem' }}><UrgenciaChip nivel={sol.urgencia} /></td>
                     <td style={{ padding: '1.25rem 2rem' }}><EstadoSolicitudChip estado={sol.estado} /></td>

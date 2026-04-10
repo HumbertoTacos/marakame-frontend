@@ -1,7 +1,8 @@
-import { useState } from 'react';
-import { useMutation } from '@tanstack/react-query';
-import { Save, AlertCircle, FileText, ChevronRight } from 'lucide-react';
+import React, { useState } from 'react';
+import { Save, AlertCircle, FileText, ChevronRight, ArrowLeft } from 'lucide-react';
 import apiClient from '../../services/api';
+import { useNavigate } from 'react-router-dom';
+import { useMutation } from '@tanstack/react-query';
 
 const SECCIONES = [
   'I. Ficha de Identificación',
@@ -15,6 +16,7 @@ const SECCIONES = [
 ];
 
 export function EstudioSocioeconomicoForm({ pacienteId }: { pacienteId: number }) {
+  const navigate = useNavigate();
   const [seccionActual, setSeccionActual] = useState(0);
   const [datos, setDatos] = useState<Record<string, string | number | boolean | null>>({});
 
@@ -113,9 +115,17 @@ export function EstudioSocioeconomicoForm({ pacienteId }: { pacienteId: number }
         minHeight: '600px'
       }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '3rem' }}>
-          <div>
-            <span style={{ fontSize: '12px', fontWeight: '800', color: 'var(--primary)', textTransform: 'uppercase', letterSpacing: '1px' }}>Sección Actual</span>
-            <h2 style={{ fontSize: '32px', fontWeight: '800', color: 'var(--text-h)', margin: '0.25rem 0 0 0', letterSpacing: '-1px' }}>{SECCIONES[seccionActual]}</h2>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '1.5rem' }}>
+            <button 
+              onClick={() => navigate(-1)}
+              style={{ padding: '8px', border: '1px solid #e2e8f0', background: 'white', borderRadius: '10px', color: '#64748b', cursor: 'pointer' }}
+            >
+              <ArrowLeft size={20} />
+            </button>
+            <div>
+              <span style={{ fontSize: '12px', fontWeight: '800', color: 'var(--primary)', textTransform: 'uppercase', letterSpacing: '1px' }}>Sección Actual</span>
+              <h2 style={{ fontSize: '32px', fontWeight: '800', color: 'var(--text-h)', margin: '0.25rem 0 0 0', letterSpacing: '-1px' }}>{SECCIONES[seccionActual]}</h2>
+            </div>
           </div>
           <button 
             onClick={handleSave}

@@ -12,6 +12,7 @@ import { useIngresoStore } from '../../stores/ingresoStore';
 import { AreaCentro } from '../../types';
 import type { SolicitudIngreso, Cama } from '../../types';
 import CamaCard from '../../components/admisiones/CamaCard';
+import HabitacionCard from '../../components/admisiones/HabitacionCard';
 
 const AsignarCamaPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -28,6 +29,24 @@ const AsignarCamaPage: React.FC = () => {
   const [selectedCama, setSelectedCama] = useState<Cama | null>(null);
   const [medico, setMedico] = useState({ id: '1', nombre: '' });
   const [fechaCita, setFechaCita] = useState(new Date().toISOString().split('T')[0]);
+
+  // Agrupar camas por habitación
+  const camasFiltradas = camas.filter(c => c.habitacion?.area === selectedArea);
+  const habitacionesMap = new Map<number, { info: any, beds: Cama[] }>();
+
+  camasFiltradas.forEach(c => {
+    if (!c.habitacion) return;
+    if (!habitacionesMap.has(c.habitacionId)) {
+      habitacionesMap.set(c.habitacionId, { info: c.habitacion, beds: [] });
+    }
+    habitacionesMap.get(c.habitacionId)?.beds.push(c);
+  });
+
+  const habitaciones = Array.from(habitacionesMap.values());
+  // Ordenar habitaciones por nombre (A, B, C, D)
+  habitaciones.sort((a, b) => a.info.nombre.localeCompare(b.info.nombre));
+
+  // ... rest of useeffect ...
 
   // En un entorno real, buscaríamos la solicitud por ID desde el store o API
   useEffect(() => {
@@ -123,18 +142,19 @@ const AsignarCamaPage: React.FC = () => {
               <BedIcon size={20} color="#3b82f6" /> Mapa de Camas - Área {selectedArea}
             </h3>
             
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: '1.25rem' }}>
-              {camas.filter(c => c.area === selectedArea).map(cama => (
-                <CamaCard 
-                  key={cama.id} 
-                  cama={cama} 
-                  selected={selectedCama?.id === cama.id}
-                  onSelect={setSelectedCama}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(350px, 1fr))', gap: '1.5rem' }}>
+              {habitaciones.map(hab => (
+                <HabitacionCard 
+                  key={hab.info.id}
+                  habitacion={hab.info}
+                  camas={hab.beds}
+                  selectedCamaId={selectedCama?.id}
+                  onSelectCama={setSelectedCama}
                 />
               ))}
             </div>
             
-            {camas.filter(c => c.area === selectedArea).length === 0 && (
+            {habitaciones.length === 0 && (
               <div style={{ textAlign: 'center', padding: '4rem', color: '#94a3b8' }}>
                 No hay camas registradas en esta área.
               </div>
