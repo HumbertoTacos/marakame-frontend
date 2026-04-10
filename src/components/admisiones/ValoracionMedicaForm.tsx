@@ -68,7 +68,7 @@ export const ValoracionMedicaForm: React.FC<Props> = ({ pacienteId, onSuccess })
     diagnosticoOtro: '',
     pronostico: '',
     tratamientoSugerido: '',
-    esAptoParaIngreso: false
+    esAptoParaIngreso: null as boolean | null
   });
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
@@ -92,6 +92,13 @@ export const ValoracionMedicaForm: React.FC<Props> = ({ pacienteId, onSuccess })
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    // VALIDACIÓN ESTRICTA: Decisión Médica
+    if (formData.esAptoParaIngreso === null) {
+      alert('Debes seleccionar explícitamente si el paciente es Apto o No Apto antes de guardar.');
+      return;
+    }
+
     setIsSubmitting(true);
 
     const dataToSend = {
@@ -310,11 +317,11 @@ export const ValoracionMedicaForm: React.FC<Props> = ({ pacienteId, onSuccess })
                   style={{
                     padding: '1.5rem 3rem',
                     borderRadius: '16px',
-                    border: formData.esAptoParaIngreso ? '4px solid #10b981' : '1px solid #d1d5db',
-                    backgroundColor: formData.esAptoParaIngreso ? '#dcfce7' : 'white',
+                    border: formData.esAptoParaIngreso === true ? '4px solid #10b981' : '1px solid #d1d5db',
+                    backgroundColor: formData.esAptoParaIngreso === true ? '#dcfce7' : 'white',
                     fontWeight: '800',
                     fontSize: '18px',
-                    color: formData.esAptoParaIngreso ? '#166534' : '#64748b',
+                    color: formData.esAptoParaIngreso === true ? '#166534' : '#64748b',
                     cursor: 'pointer',
                     transition: 'all 0.2s ease'
                   }}
@@ -327,11 +334,11 @@ export const ValoracionMedicaForm: React.FC<Props> = ({ pacienteId, onSuccess })
                   style={{
                     padding: '1.5rem 3rem',
                     borderRadius: '16px',
-                    border: !formData.esAptoParaIngreso ? '4px solid #ef4444' : '1px solid #d1d5db',
-                    backgroundColor: !formData.esAptoParaIngreso ? '#fee2e2' : 'white',
+                    border: formData.esAptoParaIngreso === false ? '4px solid #ef4444' : '1px solid #d1d5db',
+                    backgroundColor: formData.esAptoParaIngreso === false ? '#fee2e2' : 'white',
                     fontWeight: '800',
                     fontSize: '18px',
-                    color: !formData.esAptoParaIngreso ? '#991b1b' : '#64748b',
+                    color: formData.esAptoParaIngreso === false ? '#991b1b' : '#64748b',
                     cursor: 'pointer',
                     transition: 'all 0.2s ease'
                   }}

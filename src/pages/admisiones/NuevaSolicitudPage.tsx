@@ -47,9 +47,9 @@ const NuevaSolicitudPage: React.FC = () => {
     sexo: 'M',
     curp: '',
     // Detalles
-    tipoAdiccion: TipoAdiccion.ALCOHOL,
-    urgencia: NivelUrgencia.BAJA,
-    areaDeseada: AreaCentro.HOMBRES,
+    tipoAdiccion: TipoAdiccion.ALCOHOL as TipoAdiccion,
+    urgencia: NivelUrgencia.BAJA as NivelUrgencia,
+    areaDeseada: AreaCentro.HOMBRES as AreaCentro,
     motivoIngreso: '',
     observaciones: '',
     // Cama (Para pre-aprobados)
@@ -87,6 +87,10 @@ const NuevaSolicitudPage: React.FC = () => {
   const handleSelectAprobado = (paciente: any) => {
     setIsAprobado(true);
     setSelectedPacienteId(paciente.id);
+    
+    // Obtener datos del primer contacto (fuente primaria de familiar/solicitante)
+    const pc = paciente.primerContacto?.[0] || {};
+    
     setFormData({
       ...formData,
       pacienteId: paciente.id,
@@ -96,16 +100,16 @@ const NuevaSolicitudPage: React.FC = () => {
       fechaNacimiento: paciente.fechaNacimiento ? new Date(paciente.fechaNacimiento).toISOString().split('T')[0] : '',
       sexo: paciente.sexo,
       curp: paciente.curp || '',
-      // Pre-llenar familiar si existe
-      solicitanteNombre: paciente.familiar?.nombre || '',
-      solicitanteParentesco: paciente.familiar?.parentesco || '',
-      solicitanteTelefono: paciente.familiar?.telefono || '',
+      // Mapeo EXPLÍCITO desde Primer Contacto (Requerimiento Crítico)
+      solicitanteNombre: pc.solicitanteNombre || '',
+      solicitanteParentesco: pc.relacionPaciente || '',
+      solicitanteTelefono: pc.solicitanteTelefono || pc.solicitanteCelular || '',
       solicitanteCorreo: paciente.familiar?.correo || '',
       solicitanteMunicipio: paciente.familiar?.municipio || '',
       solicitanteEstado: paciente.familiar?.estado || '',
       // Datos clínicos del primer contacto
-      tipoAdiccion: paciente.primerContacto?.[0]?.sustancias?.[0] || TipoAdiccion.ALCOHOL,
-      motivoIngreso: paciente.primerContacto?.[0]?.observaciones || ''
+      tipoAdiccion: pc.sustancias?.[0] || TipoAdiccion.ALCOHOL,
+      motivoIngreso: pc.observaciones || ''
     });
     setShowAprobadosModal(false);
     setPasoActual(1); // Reiniciar al inicio con datos cargados
@@ -149,7 +153,7 @@ const NuevaSolicitudPage: React.FC = () => {
                   <div style={{ textAlign: 'center', padding: '3rem', color: '#64748b' }}>No hay pacientes pendientes de formalizar ingreso.</div>
                 ) : (
                   pacientesAprobados.map(p => (
-                    <div key={p.id} onClick={() => handleSelectAprobado(p)} style={{ padding: '1.25rem', border: '1px solid #e2e8f0', borderRadius: '16px', marginBottom: '1rem', cursor: 'pointer', transition: 'all 0.2s', hover: { backgroundColor: '#f1f5f9' } }} className="hover-card">
+                    <div key={p.id} onClick={() => handleSelectAprobado(p)} style={{ padding: '1.25rem', border: '1px solid #e2e8f0', borderRadius: '16px', marginBottom: '1rem', cursor: 'pointer' }} className="hover-card">
                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                           <div>
                             <div style={{ fontWeight: '800', color: '#1e293b' }}>{p.nombre} {p.apellidoPaterno}</div>
@@ -238,14 +242,15 @@ const NuevaSolicitudPage: React.FC = () => {
               {isAprobado && <div style={{ backgroundColor: '#f0fdf4', color: '#16a34a', padding: '0.5rem 1rem', borderRadius: '12px', fontSize: '12px', fontWeight: '900' }}>✓ Paciente Precargado</div>}
             </div>
             
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '2rem' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '2rem', opacity: !isAprobado ? 0.6 : 1, pointerEvents: !isAprobado ? 'none' : 'auto' }}>
               <div className="form-group">
                 <label style={{ display: 'block', fontSize: '13px', fontWeight: '800', color: '#475569', marginBottom: '0.6rem', textTransform: 'uppercase' }}>Nombre Completo</label>
                 <input 
                   type="text" 
                   value={formData.solicitanteNombre} 
                   onChange={e => setFormData({...formData, solicitanteNombre: e.target.value})}
-                  placeholder="Ej. Juan Pérez López"
+                  disabled={!isAprobado}
+                  placeholder={!isAprobado ? "Use el botón de arriba ↑" : "Ej. Juan Pérez López"}
                   style={{ width: '100%', padding: '1rem', borderRadius: '14px', border: '1px solid #e2e8f0', outline: 'none', backgroundColor: '#f8fafc' }} 
                 />
               </div>
@@ -254,6 +259,7 @@ const NuevaSolicitudPage: React.FC = () => {
                 <select 
                   value={formData.solicitanteParentesco} 
                   onChange={e => setFormData({...formData, solicitanteParentesco: e.target.value})}
+                  disabled={!isAprobado}
                   style={{ width: '100%', padding: '1rem', borderRadius: '14px', border: '1px solid #e2e8f0', backgroundColor: '#f8fafc' }}
                 >
                   <option value="">Seleccione...</option>
@@ -270,6 +276,7 @@ const NuevaSolicitudPage: React.FC = () => {
                   type="tel" 
                   value={formData.solicitanteTelefono} 
                   onChange={e => setFormData({...formData, solicitanteTelefono: e.target.value})}
+                  disabled={!isAprobado}
                   style={{ width: '100%', padding: '1rem', borderRadius: '14px', border: '1px solid #e2e8f0', backgroundColor: '#f8fafc' }} 
                 />
               </div>
@@ -279,6 +286,7 @@ const NuevaSolicitudPage: React.FC = () => {
                   type="email" 
                   value={formData.solicitanteCorreo} 
                   onChange={e => setFormData({...formData, solicitanteCorreo: e.target.value})}
+                  disabled={!isAprobado}
                   style={{ width: '100%', padding: '1rem', borderRadius: '14px', border: '1px solid #e2e8f0', backgroundColor: '#f8fafc' }} 
                 />
               </div>
@@ -289,30 +297,30 @@ const NuevaSolicitudPage: React.FC = () => {
         {pasoActual === 2 && (
           <div>
             <h3 style={{ fontSize: '20px', fontWeight: '900', color: '#1e293b', marginBottom: '2rem' }}>Identificación del Paciente</h3>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '2rem' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '2rem', opacity: !isAprobado ? 0.6 : 1, pointerEvents: !isAprobado ? 'none' : 'auto' }}>
               <div style={{ gridColumn: 'span 1' }}>
                 <label style={{ display: 'block', fontSize: '13px', fontWeight: '800', color: '#475569', marginBottom: '0.6rem', textTransform: 'uppercase' }}>Nombre(s)</label>
-                <input type="text" value={formData.nombre} onChange={e => setFormData({...formData, nombre: e.target.value})} style={{ width: '100%', padding: '1rem', borderRadius: '14px', border: '1px solid #e2e8f0' }} />
+                <input type="text" value={formData.nombre} disabled={!isAprobado} onChange={e => setFormData({...formData, nombre: e.target.value})} style={{ width: '100%', padding: '1rem', borderRadius: '14px', border: '1px solid #e2e8f0' }} />
               </div>
               <div>
                 <label style={{ display: 'block', fontSize: '13px', fontWeight: '800', color: '#475569', marginBottom: '0.6rem', textTransform: 'uppercase' }}>Apellido Paterno</label>
-                <input type="text" value={formData.apellidoPaterno} onChange={e => setFormData({...formData, apellidoPaterno: e.target.value})} style={{ width: '100%', padding: '1rem', borderRadius: '14px', border: '1px solid #e2e8f0' }} />
+                <input type="text" value={formData.apellidoPaterno} disabled={!isAprobado} onChange={e => setFormData({...formData, apellidoPaterno: e.target.value})} style={{ width: '100%', padding: '1rem', borderRadius: '14px', border: '1px solid #e2e8f0' }} />
               </div>
               <div>
                 <label style={{ display: 'block', fontSize: '13px', fontWeight: '800', color: '#475569', marginBottom: '0.6rem', textTransform: 'uppercase' }}>Apellido Materno</label>
-                <input type="text" value={formData.apellidoMaterno} onChange={e => setFormData({...formData, apellidoMaterno: e.target.value})} style={{ width: '100%', padding: '1rem', borderRadius: '14px', border: '1px solid #e2e8f0' }} />
+                <input type="text" value={formData.apellidoMaterno} disabled={!isAprobado} onChange={e => setFormData({...formData, apellidoMaterno: e.target.value})} style={{ width: '100%', padding: '1rem', borderRadius: '14px', border: '1px solid #e2e8f0' }} />
               </div>
               <div>
                 <label style={{ display: 'block', fontSize: '13px', fontWeight: '800', color: '#475569', marginBottom: '0.6rem', textTransform: 'uppercase' }}>CURP / ID Oficial</label>
-                <input type="text" value={formData.curp} onChange={e => setFormData({...formData, curp: e.target.value})} style={{ width: '100%', padding: '1rem', borderRadius: '14px', border: '1px solid #e2e8f0' }} placeholder="Opcional en crisis" />
+                <input type="text" value={formData.curp} disabled={!isAprobado} onChange={e => setFormData({...formData, curp: e.target.value})} style={{ width: '100%', padding: '1rem', borderRadius: '14px', border: '1px solid #e2e8f0' }} placeholder="Opcional en crisis" />
               </div>
               <div>
                 <label style={{ display: 'block', fontSize: '13px', fontWeight: '800', color: '#475569', marginBottom: '0.6rem', textTransform: 'uppercase' }}>Fecha de Nacimiento</label>
-                <input type="date" value={formData.fechaNacimiento} onChange={e => setFormData({...formData, fechaNacimiento: e.target.value})} style={{ width: '100%', padding: '1rem', borderRadius: '14px', border: '1px solid #e2e8f0' }} />
+                <input type="date" value={formData.fechaNacimiento} disabled={!isAprobado} onChange={e => setFormData({...formData, fechaNacimiento: e.target.value})} style={{ width: '100%', padding: '1rem', borderRadius: '14px', border: '1px solid #e2e8f0' }} />
               </div>
               <div>
                 <label style={{ display: 'block', fontSize: '13px', fontWeight: '800', color: '#475569', marginBottom: '0.6rem', textTransform: 'uppercase' }}>Sexo</label>
-                <select value={formData.sexo} onChange={e => setFormData({...formData, sexo: e.target.value})} style={{ width: '100%', padding: '1rem', borderRadius: '14px', border: '1px solid #e2e8f0' }}>
+                <select value={formData.sexo} disabled={!isAprobado} onChange={e => setFormData({...formData, sexo: e.target.value})} style={{ width: '100%', padding: '1rem', borderRadius: '14px', border: '1px solid #e2e8f0' }}>
                   <option value="M">Masculino</option>
                   <option value="F">Femenino</option>
                 </select>
@@ -428,7 +436,7 @@ const NuevaSolicitudPage: React.FC = () => {
             onClick={handleBack} 
             disabled={pasoActual === 1}
             style={{ 
-              display: 'flex', spacing: '0.5rem', alignItems: 'center', gap: '0.5rem', padding: '1rem 2rem', 
+              display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '1rem 2rem', 
               backgroundColor: 'white', color: pasoActual === 1 ? '#cbd5e1' : '#64748b', 
               border: '1px solid #e2e8f0', borderRadius: '16px', fontWeight: '900',
               cursor: pasoActual === 1 ? 'not-allowed' : 'pointer'
