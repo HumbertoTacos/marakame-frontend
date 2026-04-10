@@ -9,7 +9,8 @@ import {
   Users, 
   Bed, 
   Clock as ClockIcon,
-  ClipboardList
+  ClipboardList,
+  Folder
 } from 'lucide-react';
 import { useIngresoStore } from '../../stores/ingresoStore';
 import EstadoSolicitudChip from '../../components/admisiones/EstadoSolicitudChip';
@@ -179,9 +180,23 @@ const AdmisionesDashboard: React.FC = () => {
                       {new Date(sol.createdAt).toLocaleDateString()}
                     </td>
                     <td style={{ padding: '1.25rem 2rem', textAlign: 'right' }}>
-                      <button style={{ padding: '8px', borderRadius: '8px', border: '1px solid #e2e8f0', background: 'white', color: '#64748b' }}>
-                        <ArrowUpRight size={18} />
-                      </button>
+                      <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'flex-end' }}>
+                        {sol.estado === 'APROBADA' && (
+                          <button 
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              navigate(`/admisiones/expediente/${sol.pacienteId}`);
+                            }}
+                            title="Ver Expediente Digital"
+                            style={{ padding: '8px', borderRadius: '8px', border: '1px solid #bbf7d0', background: '#f0fdf4', color: '#10b981', cursor: 'pointer' }}
+                          >
+                            <Folder size={18} />
+                          </button>
+                        )}
+                        <button style={{ padding: '8px', borderRadius: '8px', border: '1px solid #e2e8f0', background: 'white', color: '#64748b' }}>
+                          <ArrowUpRight size={18} />
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))

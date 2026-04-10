@@ -3,7 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { 
   Apple, BrainCircuit, Activity, Search, Save, 
   FileText, User, ChevronRight, Thermometer, Droplets, 
-  Heart, Wind, Weight, ClipboardCheck, Stethoscope, Clock, Users, Calendar
+  Heart, Wind, Weight, ClipboardCheck, Stethoscope, Clock, Users, Calendar, Folder
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import apiClient from '../../services/api';
@@ -102,7 +102,7 @@ export function AreaClinica() {
       {/* HEADER DASHBOARD CLINICO */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', backgroundColor: 'white', padding: '1.5rem 2.5rem', borderRadius: '24px', border: '1px solid #e2e8f0', boxShadow: 'var(--shadow)' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-          <div style={{ p: '0.75rem', backgroundColor: '#3b82f6', color: 'white', borderRadius: '16px' }}>
+          <div style={{ padding: '0.75rem', backgroundColor: '#3b82f6', color: 'white', borderRadius: '16px' }}>
             <Activity size={32} />
           </div>
           <div>
@@ -301,7 +301,6 @@ export function AreaClinica() {
               </div>
             ) : (
               <>
-                {/* Header Expediente */}
                 <div style={{ padding: '2rem 2.5rem', background: 'linear-gradient(to right, #f8fafc, #ffffff)', borderBottom: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <div>
                     <h2 style={{ fontSize: '24px', fontWeight: '900', color: '#1e293b', margin: 0 }}>
@@ -316,6 +315,32 @@ export function AreaClinica() {
                       </span>
                     </div>
                   </div>
+
+                  <button 
+                    onClick={() => navigate(`/admisiones/expediente/${pacienteId}`)}
+                    style={{ 
+                      display: 'flex', 
+                      alignItems: 'center', 
+                      gap: '0.6rem', 
+                      padding: '0.75rem 1.25rem', 
+                      backgroundColor: 'white', 
+                      color: '#10b981', 
+                      border: '1.5px solid #10b981', 
+                      borderRadius: '12px', 
+                      fontWeight: '800', 
+                      cursor: 'pointer',
+                      fontSize: '13px',
+                      transition: 'all 0.2s'
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.backgroundColor = '#f0fdf4';
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.backgroundColor = 'white';
+                    }}
+                  >
+                    <Folder size={18} /> Ver Expediente Digital
+                  </button>
                 </div>
 
                 {/* Tabs Clínicos */}

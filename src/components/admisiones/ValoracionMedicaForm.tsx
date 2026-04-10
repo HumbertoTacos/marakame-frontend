@@ -349,8 +349,8 @@ export const ValoracionMedicaForm: React.FC<Props> = ({ pacienteId, onSuccess })
           </div>
         )}
 
-        {/* TAB 4: EXAMEN MENTAL */}
-        {activeTab === 4 && (
+        {/* TAB 4: EXAMEN MENTAL (IDX 3) */}
+        {activeTab === 3 && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
             <div>
               <label style={labelStyle}>Aspecto General</label>
@@ -371,29 +371,7 @@ export const ValoracionMedicaForm: React.FC<Props> = ({ pacienteId, onSuccess })
           </div>
         )}
 
-        {/* TAB 5 (IDX 4): EXAMEN MENTAL - CORRECCIÓN DE INDEX */}
-        {activeTab === 3 && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-            <div>
-              <label style={labelStyle}>Aspecto General</label>
-              <textarea name="examenMental.aspectoGeneral" style={inputStyle} rows={2} onChange={handleChange} placeholder="Higiene, vestimenta, actitud ante la entrevista..." />
-            </div>
-            <div>
-              <label style={labelStyle}>Psicomotricidad</label>
-              <textarea name="examenMental.psicomotricidad" style={inputStyle} rows={2} onChange={handleChange} placeholder="Marcha, tics, inquietud, lentitud..." />
-            </div>
-            <div>
-              <label style={labelStyle}>Afectividad</label>
-              <textarea name="examenMental.afectividad" style={inputStyle} rows={2} onChange={handleChange} placeholder="Euforia, labilidad, aplanamiento..." />
-            </div>
-            <div>
-              <label style={labelStyle}>Ideación / Conciencia</label>
-              <textarea name="examenMental.ideacion" style={inputStyle} rows={2} onChange={handleChange} placeholder="Delirios, obsesiones, conciencia de enfermedad..." />
-            </div>
-          </div>
-        )}
-
-        {/* TAB 6 (IDX 4): RESOLUCIÓN */}
+        {/* TAB 5: RESOLUCIÓN (IDX 4) */}
         {activeTab === 4 && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
             <div style={{ padding: '2rem', backgroundColor: '#f0fdf4', borderRadius: '24px', border: '1px solid #bbf7d0' }}>

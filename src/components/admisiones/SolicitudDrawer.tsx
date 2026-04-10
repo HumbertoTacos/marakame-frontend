@@ -1,4 +1,4 @@
-import { X, Phone, Mail, MapPin, CheckCircle, Trash2, Stethoscope } from 'lucide-react';
+import { X, Phone, Mail, MapPin, CheckCircle, Trash2, Stethoscope, Folder } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { EstadoSolicitud } from '../../types';
 import type { SolicitudIngreso } from '../../types';
@@ -156,8 +156,19 @@ const SolicitudDrawer: React.FC<SolicitudDrawerProps> = ({
             </>
           )}
           {solicitud.estado === EstadoSolicitud.APROBADA && (
-            <div style={{ flex: 1, background: '#f0fdf4', padding: '0.75rem', borderRadius: '12px', color: '#166534', textAlign: 'center', fontWeight: 'bold', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem' }}>
-              <CheckCircle size={18} /> Solicitud Procesada Correctamente
+            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+              <button 
+                onClick={() => {
+                  onClose();
+                  navigate(`/admisiones/expediente/${solicitud.pacienteId}`);
+                }}
+                style={{ width: '100%', padding: '0.75rem', borderRadius: '12px', border: 'none', color: 'white', backgroundColor: '#10b981', fontWeight: 'bold', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', boxShadow: '0 4px 6px -1px rgba(16,185,129,0.3)' }}
+              >
+                <Folder size={18} /> Ver Expediente Digital
+              </button>
+              <div style={{ background: '#f0fdf4', padding: '0.75rem', borderRadius: '12px', color: '#166534', textAlign: 'center', fontWeight: 'bold', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', fontSize: '13px' }}>
+                <CheckCircle size={16} /> Solicitud Procesada Correctamente
+              </div>
             </div>
           )}
         </div>
