@@ -24,11 +24,10 @@ const NuevaSolicitudPage: React.FC = () => {
   const { submitSolicitud, isLoading, camas, fetchCamas } = useIngresoStore();
   
   // Estados de flujo
+  const [pacienteSeleccionado, setPacienteSeleccionado] = useState<any | null>(null);
+  const [listaAprobados, setListaAprobados] = useState<any[]>([]);
   const [pasoActual, setPasoActual] = useState(1);
-  const [isAprobado, setIsAprobado] = useState(false);
-  const [showAprobadosModal, setShowAprobadosModal] = useState(false);
-  const [pacientesAprobados, setPacientesAprobados] = useState<any[]>([]);
-  const [selectedPacienteId, setSelectedPacienteId] = useState<number | null>(null);
+  const [isFetching, setIsFetching] = useState(false);
 
   const [formData, setFormData] = useState({
     // Solicitante
@@ -52,43 +51,43 @@ const NuevaSolicitudPage: React.FC = () => {
     areaDeseada: AreaCentro.HOMBRES as AreaCentro,
     motivoIngreso: '',
     observaciones: '',
-    // Cama (Para pre-aprobados)
+    // Cama
     camaId: undefined as number | undefined
   });
 
-  // Definición dinámica de pasos
+  // Definición dinámica de pasos (Siempre es aprobado ahora)
   const PASOS = [
     { id: 1, label: 'Solicitante', icon: Users },
     { id: 2, label: 'Paciente', icon: User },
     { id: 3, label: 'Urgencia', icon: AlertCircle },
-    ...(isAprobado ? [{ id: 4, label: 'Asignación Cama', icon: BedDouble }] : []),
-    { id: isAprobado ? 5 : 4, label: 'Confirmación', icon: CheckCircle },
+    { id: 4, label: 'Asignación Cama', icon: BedDouble },
+    { id: 5, label: 'Confirmación', icon: CheckCircle },
   ];
 
-  const MAX_PASO = isAprobado ? 5 : 4;
+  const MAX_PASO = 5;
 
   useEffect(() => {
-    if (showAprobadosModal) {
+    if (!pacienteSeleccionado) {
+      setIsFetching(true);
       apiClient.get('/pacientes/aprobados-para-ingreso').then(res => {
-        setPacientesAprobados(res.data.data);
+        setListaAprobados(res.data.data);
+        setIsFetching(false);
       });
     }
-  }, [showAprobadosModal]);
+  }, [pacienteSeleccionado]);
 
   useEffect(() => {
-    if (pasoActual === 4 && isAprobado) {
+    if (pasoActual === 4 && pacienteSeleccionado) {
       fetchCamas(formData.areaDeseada);
     }
-  }, [pasoActual, isAprobado, formData.areaDeseada, fetchCamas]);
+  }, [pasoActual, pacienteSeleccionado, formData.areaDeseada, fetchCamas]);
 
   const handleNext = () => setPasoActual(prev => Math.min(prev + 1, MAX_PASO));
   const handleBack = () => setPasoActual(prev => Math.max(prev - 1, 1));
 
   const handleSelectAprobado = (paciente: any) => {
-    setIsAprobado(true);
-    setSelectedPacienteId(paciente.id);
+    setPacienteSeleccionado(paciente);
     
-    // Obtener datos del primer contacto (fuente primaria de familiar/solicitante)
     const pc = paciente.primerContacto?.[0] || {};
     
     setFormData({
@@ -100,28 +99,33 @@ const NuevaSolicitudPage: React.FC = () => {
       fechaNacimiento: paciente.fechaNacimiento ? new Date(paciente.fechaNacimiento).toISOString().split('T')[0] : '',
       sexo: paciente.sexo,
       curp: paciente.curp || '',
-      // Mapeo EXPLÍCITO desde Primer Contacto (Requerimiento Crítico)
       solicitanteNombre: pc.solicitanteNombre || '',
       solicitanteParentesco: pc.relacionPaciente || '',
       solicitanteTelefono: pc.solicitanteTelefono || pc.solicitanteCelular || '',
       solicitanteCorreo: paciente.familiar?.correo || '',
       solicitanteMunicipio: paciente.familiar?.municipio || '',
       solicitanteEstado: paciente.familiar?.estado || '',
-      // Datos clínicos del primer contacto
       tipoAdiccion: pc.sustancias?.[0] || TipoAdiccion.ALCOHOL,
-      motivoIngreso: pc.observaciones || ''
+      motivoIngreso: pc.observaciones || '',
+      areaDeseada: paciente.areaDeseada || AreaCentro.HOMBRES
     });
-    setShowAprobadosModal(false);
-    setPasoActual(1); // Reiniciar al inicio con datos cargados
+    setPasoActual(1);
+  };
+
+  const handleCancel = () => {
+    setPacienteSeleccionado(null);
+    setFormData({
+      solicitanteNombre: '', solicitanteParentesco: '', solicitanteTelefono: '', solicitanteCorreo: '', solicitanteMunicipio: '', solicitanteEstado: '',
+      pacienteId: undefined, nombre: '', apellidoPaterno: '', apellidoMaterno: '', fechaNacimiento: '', sexo: 'M', curp: '',
+      tipoAdiccion: TipoAdiccion.ALCOHOL, urgencia: NivelUrgencia.BAJA, areaDeseada: AreaCentro.HOMBRES, motivoIngreso: '', observaciones: '', camaId: undefined
+    });
+    setPasoActual(1);
   };
 
   const handleSubmit = async () => {
     try {
-      const result = await submitSolicitud(formData);
-      alert(isAprobado 
-        ? `¡Internamiento Formalizado con Éxito! Clave Única asignada. Proceda al área de enfermería.` 
-        : `Solicitud creada con éxito. Folio: ${result.folio}`
-      );
+      await submitSolicitud(formData);
+      alert('¡Internamiento Formalizado con Éxito! Clave Única asignada. Proceda al área de enfermería.');
       navigate('/admisiones/dashboard');
     } catch (err: unknown) {
       const error = err as Error;
@@ -137,69 +141,75 @@ const NuevaSolicitudPage: React.FC = () => {
     return acc;
   }, {});
 
+  if (!pacienteSeleccionado) {
+    return (
+      <div style={{ padding: '2rem', maxWidth: '1200px', margin: '0 auto' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '3rem' }}>
+          <div>
+            <h1 style={{ fontSize: '32px', fontWeight: '900', color: '#1e293b', margin: 0 }}>Nueva Solicitud de Ingreso</h1>
+            <p style={{ color: '#64748b', fontSize: '16px' }}>Seleccione un prospecto aprobado por el área médica para formalizar su entrada.</p>
+          </div>
+          <button onClick={() => navigate('/admisiones/dashboard')} style={{ padding: '0.75rem 1.5rem', borderRadius: '16px', border: '1px solid #e2e8f0', background: 'white', color: '#64748b', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.5rem', fontWeight: '800' }}>
+            <Home size={20} /> Dashboard
+          </button>
+        </div>
+
+        <div style={{ backgroundColor: 'white', borderRadius: '32px', border: '1px solid #e2e8f0', overflow: 'hidden', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.05)' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
+            <thead style={{ backgroundColor: '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
+              <tr>
+                <th style={{ padding: '1.5rem 2rem', fontSize: '12px', fontWeight: '900', color: '#64748b', textTransform: 'uppercase' }}>Paciente</th>
+                <th style={{ padding: '1.5rem 2rem', fontSize: '12px', fontWeight: '900', color: '#64748b', textTransform: 'uppercase' }}>Fecha Valoración</th>
+                <th style={{ padding: '1.5rem 2rem', fontSize: '12px', fontWeight: '900', color: '#64748b', textTransform: 'uppercase', textAlign: 'right' }}>Acción</th>
+              </tr>
+            </thead>
+            <tbody>
+              {isFetching ? (
+                <tr><td colSpan={3} style={{ padding: '4rem', textAlign: 'center', color: '#64748b' }}><Activity className="animate-spin" style={{ margin: '0 auto 1rem' }} /> Cargando prospectos aprobados...</td></tr>
+              ) : listaAprobados.length === 0 ? (
+                <tr><td colSpan={3} style={{ padding: '4rem', textAlign: 'center', color: '#64748b' }}>No hay pacientes aprobados pendientes de ingreso.</td></tr>
+              ) : (
+                listaAprobados.map(p => (
+                  <tr key={p.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
+                    <td style={{ padding: '1.5rem 2rem' }}>
+                      <div style={{ fontWeight: '800', color: '#1e293b', fontSize: '16px' }}>{p.nombre} {p.apellidoPaterno} {p.apellidoMaterno}</div>
+                      <div style={{ fontSize: '12px', color: '#3b82f6', fontWeight: '700' }}>CURP: {p.curp || 'S/N'}</div>
+                    </td>
+                    <td style={{ padding: '1.5rem 2rem', color: '#475569' }}>
+                      {p.valoracionMedica?.createdAt ? new Date(p.valoracionMedica.createdAt).toLocaleDateString('es-MX', { day: '2-digit', month: 'long', year: 'numeric' }) : 'Fecha no disponible'}
+                    </td>
+                    <td style={{ padding: '1.5rem 2rem', textAlign: 'right' }}>
+                      <button 
+                        onClick={() => handleSelectAprobado(p)}
+                        style={{ padding: '0.75rem 1.5rem', backgroundColor: '#3b82f6', color: 'white', border: 'none', borderRadius: '14px', fontWeight: '900', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '0.5rem', boxShadow: '0 4px 6px -1px rgba(59,130,246,0.2)' }}
+                      >
+                        Iniciar Ingreso Formal <ArrowRight size={18} />
+                      </button>
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div style={{ padding: '2rem', maxWidth: '1000px', margin: '0 auto', position: 'relative' }}>
-      
-      {/* Selector de Aprobados Modal */}
-      {showAprobadosModal && (
-        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(15, 23, 42, 0.8)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', backdropFilter: 'blur(4px)' }}>
-          <div style={{ backgroundColor: 'white', borderRadius: '32px', width: '90%', maxWidth: '600px', maxHeight: '80vh', overflow: 'hidden', display: 'flex', flexDirection: 'column', boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)' }}>
-             <div style={{ padding: '1.5rem 2rem', borderBottom: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#f8fafc' }}>
-                <h3 style={{ margin: 0, fontWeight: '900', color: '#1e293b' }}>Prospectos con Valoración Aprobada</h3>
-                <button onClick={() => setShowAprobadosModal(false)} style={{ border: 'none', background: 'none', cursor: 'pointer', color: '#64748b' }}><X size={24} /></button>
-             </div>
-             <div style={{ padding: '1.5rem', overflowY: 'auto', flex: 1 }}>
-                {pacientesAprobados.length === 0 ? (
-                  <div style={{ textAlign: 'center', padding: '3rem', color: '#64748b' }}>No hay pacientes pendientes de formalizar ingreso.</div>
-                ) : (
-                  pacientesAprobados.map(p => (
-                    <div key={p.id} onClick={() => handleSelectAprobado(p)} style={{ padding: '1.25rem', border: '1px solid #e2e8f0', borderRadius: '16px', marginBottom: '1rem', cursor: 'pointer' }} className="hover-card">
-                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                          <div>
-                            <div style={{ fontWeight: '800', color: '#1e293b' }}>{p.nombre} {p.apellidoPaterno}</div>
-                            <div style={{ fontSize: '12px', color: '#3b82f6', fontWeight: 'bold' }}>✓ Aprobado por Médico</div>
-                          </div>
-                          <ArrowRight size={20} color="#3b82f6" />
-                       </div>
-                    </div>
-                  ))
-                )}
-             </div>
-          </div>
-        </div>
-      )}
-
       {/* Header */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '3rem' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-          <button onClick={() => navigate('/admisiones/dashboard')} style={{ padding: '8px', borderRadius: '10px', border: '1px solid #e2e8f0', background: 'white', color: '#64748b', cursor: 'pointer' }}>
-            <Home size={20} />
+          <button onClick={handleCancel} style={{ padding: '8px', borderRadius: '10px', border: '1px solid #e2e8f0', background: 'white', color: '#ef4444', cursor: 'pointer' }} title="Cancelar y volver">
+            <X size={20} />
           </button>
           <div>
-            <h1 style={{ fontSize: '24px', fontWeight: '900', margin: 0 }}>Nueva Solicitud de Ingreso</h1>
-            <p style={{ color: '#64748b', fontSize: '14px', margin: 0 }}>Registre los datos para iniciar el proceso administrativo.</p>
+            <h1 style={{ fontSize: '24px', fontWeight: '900', margin: 0 }}>Registro de Ingreso Activo</h1>
+            <p style={{ color: '#64748b', fontSize: '14px', margin: 0 }}>Formalizando estancia de: <strong style={{ color: '#1e293b' }}>{formData.nombre} {formData.apellidoPaterno}</strong></p>
           </div>
         </div>
-
-        <button 
-          onClick={() => setShowAprobadosModal(true)}
-          style={{ 
-            padding: '0.75rem 1.5rem', 
-            backgroundColor: '#eff6ff', 
-            color: '#3b82f6', 
-            border: '2px dashed #bfdbfe', 
-            borderRadius: '16px', 
-            fontWeight: '900', 
-            fontSize: '13px',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '0.6rem',
-            cursor: 'pointer',
-            transition: 'all 0.2s'
-          }}
-        >
-          <Stethoscope size={18} /> Cargar Prospecto Aprobado
-        </button>
+        <div style={{ backgroundColor: '#f0fdf4', color: '#16a34a', padding: '0.5rem 1rem', borderRadius: '12px', fontSize: '12px', fontWeight: '900', border: '1px solid #dcfce7' }}>✓ Prospecto Aprobado Clínicamente</div>
       </div>
 
       {/* Stepper */}
@@ -239,18 +249,17 @@ const NuevaSolicitudPage: React.FC = () => {
                 <h3 style={{ fontSize: '20px', fontWeight: '900', color: '#1e293b', margin: 0 }}>Datos del Solicitante</h3>
                 <p style={{ color: '#64748b', fontSize: '14px', margin: 0 }}>Familiar responsable o tutor legal.</p>
               </div>
-              {isAprobado && <div style={{ backgroundColor: '#f0fdf4', color: '#16a34a', padding: '0.5rem 1rem', borderRadius: '12px', fontSize: '12px', fontWeight: '900' }}>✓ Paciente Precargado</div>}
+              <div style={{ backgroundColor: '#f0fdf4', color: '#16a34a', padding: '0.5rem 1rem', borderRadius: '12px', fontSize: '12px', fontWeight: '900' }}>✓ Paciente Precargado</div>
             </div>
             
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '2rem', opacity: !isAprobado ? 0.6 : 1, pointerEvents: !isAprobado ? 'none' : 'auto' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '2rem' }}>
               <div className="form-group">
                 <label style={{ display: 'block', fontSize: '13px', fontWeight: '800', color: '#475569', marginBottom: '0.6rem', textTransform: 'uppercase' }}>Nombre Completo</label>
                 <input 
                   type="text" 
                   value={formData.solicitanteNombre} 
                   onChange={e => setFormData({...formData, solicitanteNombre: e.target.value})}
-                  disabled={!isAprobado}
-                  placeholder={!isAprobado ? "Use el botón de arriba ↑" : "Ej. Juan Pérez López"}
+                  placeholder="Ej. Juan Pérez López"
                   style={{ width: '100%', padding: '1rem', borderRadius: '14px', border: '1px solid #e2e8f0', outline: 'none', backgroundColor: '#f8fafc' }} 
                 />
               </div>
@@ -259,7 +268,7 @@ const NuevaSolicitudPage: React.FC = () => {
                 <select 
                   value={formData.solicitanteParentesco} 
                   onChange={e => setFormData({...formData, solicitanteParentesco: e.target.value})}
-                  disabled={!isAprobado}
+                  disabled
                   style={{ width: '100%', padding: '1rem', borderRadius: '14px', border: '1px solid #e2e8f0', backgroundColor: '#f8fafc' }}
                 >
                   <option value="">Seleccione...</option>
@@ -276,7 +285,7 @@ const NuevaSolicitudPage: React.FC = () => {
                   type="tel" 
                   value={formData.solicitanteTelefono} 
                   onChange={e => setFormData({...formData, solicitanteTelefono: e.target.value})}
-                  disabled={!isAprobado}
+                  disabled
                   style={{ width: '100%', padding: '1rem', borderRadius: '14px', border: '1px solid #e2e8f0', backgroundColor: '#f8fafc' }} 
                 />
               </div>
@@ -286,7 +295,7 @@ const NuevaSolicitudPage: React.FC = () => {
                   type="email" 
                   value={formData.solicitanteCorreo} 
                   onChange={e => setFormData({...formData, solicitanteCorreo: e.target.value})}
-                  disabled={!isAprobado}
+                  disabled
                   style={{ width: '100%', padding: '1rem', borderRadius: '14px', border: '1px solid #e2e8f0', backgroundColor: '#f8fafc' }} 
                 />
               </div>
@@ -297,30 +306,30 @@ const NuevaSolicitudPage: React.FC = () => {
         {pasoActual === 2 && (
           <div>
             <h3 style={{ fontSize: '20px', fontWeight: '900', color: '#1e293b', marginBottom: '2rem' }}>Identificación del Paciente</h3>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '2rem', opacity: !isAprobado ? 0.6 : 1, pointerEvents: !isAprobado ? 'none' : 'auto' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '2rem' }}>
               <div style={{ gridColumn: 'span 1' }}>
                 <label style={{ display: 'block', fontSize: '13px', fontWeight: '800', color: '#475569', marginBottom: '0.6rem', textTransform: 'uppercase' }}>Nombre(s)</label>
-                <input type="text" value={formData.nombre} disabled={!isAprobado} onChange={e => setFormData({...formData, nombre: e.target.value})} style={{ width: '100%', padding: '1rem', borderRadius: '14px', border: '1px solid #e2e8f0' }} />
+                <input type="text" value={formData.nombre} disabled onChange={e => setFormData({...formData, nombre: e.target.value})} style={{ width: '100%', padding: '1rem', borderRadius: '14px', border: '1px solid #e2e8f0' }} />
               </div>
               <div>
                 <label style={{ display: 'block', fontSize: '13px', fontWeight: '800', color: '#475569', marginBottom: '0.6rem', textTransform: 'uppercase' }}>Apellido Paterno</label>
-                <input type="text" value={formData.apellidoPaterno} disabled={!isAprobado} onChange={e => setFormData({...formData, apellidoPaterno: e.target.value})} style={{ width: '100%', padding: '1rem', borderRadius: '14px', border: '1px solid #e2e8f0' }} />
+                <input type="text" value={formData.apellidoPaterno} disabled onChange={e => setFormData({...formData, apellidoPaterno: e.target.value})} style={{ width: '100%', padding: '1rem', borderRadius: '14px', border: '1px solid #e2e8f0' }} />
               </div>
               <div>
                 <label style={{ display: 'block', fontSize: '13px', fontWeight: '800', color: '#475569', marginBottom: '0.6rem', textTransform: 'uppercase' }}>Apellido Materno</label>
-                <input type="text" value={formData.apellidoMaterno} disabled={!isAprobado} onChange={e => setFormData({...formData, apellidoMaterno: e.target.value})} style={{ width: '100%', padding: '1rem', borderRadius: '14px', border: '1px solid #e2e8f0' }} />
+                <input type="text" value={formData.apellidoMaterno} disabled onChange={e => setFormData({...formData, apellidoMaterno: e.target.value})} style={{ width: '100%', padding: '1rem', borderRadius: '14px', border: '1px solid #e2e8f0' }} />
               </div>
               <div>
                 <label style={{ display: 'block', fontSize: '13px', fontWeight: '800', color: '#475569', marginBottom: '0.6rem', textTransform: 'uppercase' }}>CURP / ID Oficial</label>
-                <input type="text" value={formData.curp} disabled={!isAprobado} onChange={e => setFormData({...formData, curp: e.target.value})} style={{ width: '100%', padding: '1rem', borderRadius: '14px', border: '1px solid #e2e8f0' }} placeholder="Opcional en crisis" />
+                <input type="text" value={formData.curp} disabled onChange={e => setFormData({...formData, curp: e.target.value})} style={{ width: '100%', padding: '1rem', borderRadius: '14px', border: '1px solid #e2e8f0' }} placeholder="Opcional en crisis" />
               </div>
               <div>
                 <label style={{ display: 'block', fontSize: '13px', fontWeight: '800', color: '#475569', marginBottom: '0.6rem', textTransform: 'uppercase' }}>Fecha de Nacimiento</label>
-                <input type="date" value={formData.fechaNacimiento} disabled={!isAprobado} onChange={e => setFormData({...formData, fechaNacimiento: e.target.value})} style={{ width: '100%', padding: '1rem', borderRadius: '14px', border: '1px solid #e2e8f0' }} />
+                <input type="date" value={formData.fechaNacimiento} disabled onChange={e => setFormData({...formData, fechaNacimiento: e.target.value})} style={{ width: '100%', padding: '1rem', borderRadius: '14px', border: '1px solid #e2e8f0' }} />
               </div>
               <div>
                 <label style={{ display: 'block', fontSize: '13px', fontWeight: '800', color: '#475569', marginBottom: '0.6rem', textTransform: 'uppercase' }}>Sexo</label>
-                <select value={formData.sexo} disabled={!isAprobado} onChange={e => setFormData({...formData, sexo: e.target.value})} style={{ width: '100%', padding: '1rem', borderRadius: '14px', border: '1px solid #e2e8f0' }}>
+                <select value={formData.sexo} disabled onChange={e => setFormData({...formData, sexo: e.target.value})} style={{ width: '100%', padding: '1rem', borderRadius: '14px', border: '1px solid #e2e8f0' }}>
                   <option value="M">Masculino</option>
                   <option value="F">Femenino</option>
                 </select>
@@ -363,7 +372,7 @@ const NuevaSolicitudPage: React.FC = () => {
           </div>
         )}
 
-        {pasoActual === 4 && isAprobado && (
+        {pasoActual === 4 && (
           <div>
             <h3 style={{ fontSize: '20px', fontWeight: '900', color: '#1e293b', marginBottom: '2rem' }}>Formalización: Selección de Cama</h3>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '1.5rem' }}>
@@ -419,13 +428,11 @@ const NuevaSolicitudPage: React.FC = () => {
                   <div style={{ fontSize: '18px', fontWeight: '900', color: '#1e293b' }}>{formData.nombre} {formData.apellidoPaterno}</div>
                   <div style={{ fontSize: '13px', color: '#64748b' }}>Curp: {formData.curp || 'N/A'}</div>
                </div>
-               {isAprobado && (
-                  <div style={{ padding: '1.5rem', backgroundColor: '#eff6ff', borderRadius: '20px', border: '1px solid #bfdbfe' }}>
-                    <span style={{ fontSize: '11px', fontWeight: '900', color: '#3b82f6', textTransform: 'uppercase' }}>Asignación Clínica</span>
-                    <div style={{ fontSize: '18px', fontWeight: '900', color: '#1e293b' }}>Cama Seleccionada</div>
-                    <div style={{ fontSize: '13px', color: '#3b82f6', fontWeight: '800' }}>Habitación {camas.find(c => c.id === formData.camaId)?.habitacion?.nombre || '-'}</div>
-                  </div>
-               )}
+               <div style={{ padding: '1.5rem', backgroundColor: '#eff6ff', borderRadius: '20px', border: '1px solid #bfdbfe' }}>
+                  <span style={{ fontSize: '11px', fontWeight: '900', color: '#3b82f6', textTransform: 'uppercase' }}>Asignación Clínica</span>
+                  <div style={{ fontSize: '18px', fontWeight: '900', color: '#1e293b' }}>Cama Seleccionada</div>
+                  <div style={{ fontSize: '13px', color: '#3b82f6', fontWeight: '800' }}>Habitación {camas.find(c => c.id === formData.camaId)?.habitacion?.nombre || '-'}</div>
+               </div>
             </div>
           </div>
         )}
@@ -448,12 +455,12 @@ const NuevaSolicitudPage: React.FC = () => {
           {pasoActual < MAX_PASO ? (
             <button 
               onClick={handleNext} 
-              disabled={pasoActual === 4 && isAprobado && !formData.camaId}
+              disabled={pasoActual === 4 && !formData.camaId}
               style={{ 
                 display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '1rem 2.5rem', 
                 backgroundColor: '#3b82f6', color: 'white', border: 'none', borderRadius: '16px', 
-                fontWeight: '900', cursor: (pasoActual === 4 && isAprobado && !formData.camaId) ? 'not-allowed' : 'pointer',
-                opacity: (pasoActual === 4 && isAprobado && !formData.camaId) ? 0.5 : 1,
+                fontWeight: '900', cursor: (pasoActual === 4 && !formData.camaId) ? 'not-allowed' : 'pointer',
+                opacity: (pasoActual === 4 && !formData.camaId) ? 0.5 : 1,
                 boxShadow: '0 10px 15px -3px rgba(59,130,246,0.3)'
               }}
             >
