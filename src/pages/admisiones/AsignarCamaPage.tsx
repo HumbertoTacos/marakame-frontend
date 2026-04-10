@@ -13,6 +13,8 @@ import { AreaCentro } from '../../types';
 import type { SolicitudIngreso, Cama } from '../../types';
 import CamaCard from '../../components/admisiones/CamaCard';
 import HabitacionCard from '../../components/admisiones/HabitacionCard';
+import { CustomDatePicker } from '../../components/common/DatePicker';
+import { parseISO, format } from 'date-fns';
 
 const AsignarCamaPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -190,12 +192,11 @@ const AsignarCamaPage: React.FC = () => {
               </div>
 
               <div>
-                <label style={{ display: 'block', fontSize: '13px', fontWeight: 'bold', color: '#64748b', marginBottom: '0.5rem' }}>Fecha de Ingreso</label>
-                <input 
-                  type="date" 
-                  value={fechaCita}
-                  onChange={e => setFechaCita(e.target.value)}
-                  style={{ width: '100%', padding: '0.75rem', borderRadius: '12px', border: '1px solid #e2e8f0', outline: 'none' }} 
+                <CustomDatePicker 
+                  label="Fecha de Ingreso" 
+                  selected={fechaCita ? parseISO(fechaCita) : null} 
+                  onChange={(date) => setFechaCita(date ? format(date, 'yyyy-MM-dd') : '')} 
+                  required 
                 />
               </div>
 

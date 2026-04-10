@@ -18,6 +18,8 @@ import { useNavigate } from 'react-router-dom';
 import { useIngresoStore } from '../../stores/ingresoStore';
 import { NivelUrgencia, TipoAdiccion, AreaCentro, EstadoCama } from '../../types';
 import apiClient from '../../services/api';
+import { CustomDatePicker } from '../../components/common/DatePicker';
+import { parseISO } from 'date-fns';
 
 const NuevaSolicitudPage: React.FC = () => {
   const navigate = useNavigate();
@@ -324,8 +326,12 @@ const NuevaSolicitudPage: React.FC = () => {
                 <input type="text" value={formData.curp} disabled onChange={e => setFormData({...formData, curp: e.target.value})} style={{ width: '100%', padding: '1rem', borderRadius: '14px', border: '1px solid #e2e8f0' }} placeholder="Opcional en crisis" />
               </div>
               <div>
-                <label style={{ display: 'block', fontSize: '13px', fontWeight: '800', color: '#475569', marginBottom: '0.6rem', textTransform: 'uppercase' }}>Fecha de Nacimiento</label>
-                <input type="date" value={formData.fechaNacimiento} disabled onChange={e => setFormData({...formData, fechaNacimiento: e.target.value})} style={{ width: '100%', padding: '1rem', borderRadius: '14px', border: '1px solid #e2e8f0' }} />
+                <CustomDatePicker 
+                  label="Fecha de Nacimiento" 
+                  selected={formData.fechaNacimiento ? parseISO(formData.fechaNacimiento) : null} 
+                  onChange={() => {}} 
+                  disabled={true} 
+                />
               </div>
               <div>
                 <label style={{ display: 'block', fontSize: '13px', fontWeight: '800', color: '#475569', marginBottom: '0.6rem', textTransform: 'uppercase' }}>Sexo</label>

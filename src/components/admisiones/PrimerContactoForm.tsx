@@ -17,6 +17,8 @@ import {
 } from 'lucide-react';
 import { useAuthStore } from '../../stores/authStore';
 import apiClient from '../../services/api';
+import { CustomDatePicker } from '../common/DatePicker';
+import { parseISO, format } from 'date-fns';
 
 const SUSTANCIAS_LIST = [
   'Cristal', 'Alcohol', 'Cocaína', 'Marihuana', 'Éxtasis', 
@@ -36,7 +38,7 @@ const AccordionSection: React.FC<AccordionSectionProps> = ({ title, icon, isOpen
     border: '1px solid #e2e8f0', 
     borderRadius: '12px', 
     marginBottom: '1rem', 
-    overflow: 'hidden',
+    overflow: isOpen ? 'visible' : 'hidden',
     backgroundColor: 'white',
     boxShadow: '0 1px 3px rgba(0,0,0,0.05)'
   }}>
@@ -312,8 +314,17 @@ export const PrimerContactoForm: React.FC = () => {
             <input name="apellidoMaterno" style={inputStyle} onChange={handleChange} value={formData.apellidoMaterno} />
           </div>
           <div>
-            <label style={labelStyle}>F. Nacimiento</label>
-            <input type="date" name="fechaNacimiento" style={inputStyle} onChange={handleChange} required />
+            <CustomDatePicker 
+              label="F. Nacimiento" 
+              selected={formData.fechaNacimiento ? parseISO(formData.fechaNacimiento) : null} 
+              onChange={(date) => {
+                setFormData(prev => ({ 
+                  ...prev, 
+                  fechaNacimiento: date ? format(date, 'yyyy-MM-dd') : '' 
+                }));
+              }} 
+              required 
+            />
           </div>
           <div>
             <label style={labelStyle}>Edad Calculada</label>
