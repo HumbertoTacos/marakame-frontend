@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { 
   User, 
   Phone, 
@@ -68,13 +69,14 @@ const AccordionSection: React.FC<AccordionSectionProps> = ({ title, icon, isOpen
 );
 
 export const PrimerContactoForm: React.FC = () => {
+  const navigate = useNavigate();
   const { usuario } = useAuthStore();
   const [openSection, setOpenSection] = useState<number>(0);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [solicitanteEsPaciente, setSolicitanteEsPaciente] = useState(false);
   const [edad, setEdad] = useState<number | null>(null);
 
-  const [formData, setFormData] = useState({
+  const INITIAL_STATE = {
     // General
     fuenteReferencia: '',
     
@@ -115,11 +117,9 @@ export const PrimerContactoForm: React.FC = () => {
     observaciones: '',
     posibilidadesEconomicas: '',
     acuerdo: '',
+  };
 
-    // Validación Médica
-    medicoNombre: '',
-    conclusionMedica: ''
-  });
+  const [formData, setFormData] = useState(INITIAL_STATE);
 
   // Cálculo de edad automático
   useEffect(() => {
@@ -185,7 +185,9 @@ export const PrimerContactoForm: React.FC = () => {
         sustancias: sustanciasFinales
       });
       alert('Registro de Primer Contacto guardado exitosamente');
-      // Podríamos navegar al dashboard o limpiar el form
+      setFormData(INITIAL_STATE);
+      setSolicitanteEsPaciente(false);
+      navigate('/admisiones/dashboard');
     } catch (error) {
       console.error('Error saving First Contact:', error);
       alert('Hubo un error al guardar el registro');
@@ -485,24 +487,6 @@ export const PrimerContactoForm: React.FC = () => {
         </select>
       </AccordionSection>
 
-      {/* SECCIÓN 9: VALIDACIÓN MÉDICA */}
-      <AccordionSection 
-        title="9. Validación Médica (Opcional)" 
-        icon={<Stethoscope size={22} />} 
-        isOpen={openSection === 8} 
-        onToggle={() => setOpenSection(openSection === 8 ? -1 : 8)}
-      >
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '1.5rem' }}>
-          <div>
-            <label style={labelStyle}>Nombre del Médico Informante</label>
-            <input name="medicoNombre" style={inputStyle} onChange={handleChange} />
-          </div>
-          <div>
-            <label style={labelStyle}>Conclusión Médica / Sugerencia</label>
-            <textarea name="conclusionMedica" rows={3} style={inputStyle} onChange={handleChange} />
-          </div>
-        </div>
-      </AccordionSection>
 
       {/* BOTONES DE ACCIÓN */}
       <div style={{ 

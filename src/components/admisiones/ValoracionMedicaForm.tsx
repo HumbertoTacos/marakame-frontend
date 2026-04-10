@@ -8,8 +8,11 @@ import {
   Save, 
   ArrowLeft, 
   ArrowRight,
-  AlertCircle
+  AlertCircle,
+  Printer,
+  Upload
 } from 'lucide-react';
+import { jsPDF } from 'jspdf';
 import apiClient from '../../services/api';
 
 const CIE10_COMMON = [
@@ -30,6 +33,23 @@ export const ValoracionMedicaForm: React.FC<Props> = ({ pacienteId, onSuccess })
   const [activeTab, setActiveTab] = useState(0);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isCIE10Other, setIsCIE10Other] = useState(false);
+  const [fileFirmado, setFileFirmado] = useState<File | null>(null);
+  const [pacienteData, setPacienteData] = useState<any>(null);
+
+  useEffect(() => {
+    // Cargar datos básicos del paciente para el PDF
+    const fetchPaciente = async () => {
+      try {
+        const response = await apiClient.get(`/admisiones/primer-contacto/${pacienteId}`);
+        if (response.data.success) {
+          setPacienteData(response.data.data.paciente);
+        }
+      } catch (err) {
+        console.error('Error fetching paciente data:', err);
+      }
+    };
+    fetchPaciente();
+  }, [pacienteId]);
 
   const [formData, setFormData] = useState({
     // Tab 1: Padecimiento Actual
@@ -101,7 +121,7 @@ export const ValoracionMedicaForm: React.FC<Props> = ({ pacienteId, onSuccess })
 
     setIsSubmitting(true);
 
-    const dataToSend = {
+    const clinicalData = {
       pacienteId,
       padecimientoActual: `MOTIVO: ${formData.motivoConsulta}\nEVOLUCIÓN: ${formData.evolucionEstado}\nFACTORES: ${formData.factoresDesencadenantes}`,
       antecedentes: formData.antecedentes,
@@ -114,9 +134,17 @@ export const ValoracionMedicaForm: React.FC<Props> = ({ pacienteId, onSuccess })
       esAptoParaIngreso: formData.esAptoParaIngreso
     };
 
+    const finalFormData = new FormData();
+    finalFormData.append('data', JSON.stringify(clinicalData));
+    if (fileFirmado) {
+      finalFormData.append('archivo', fileFirmado);
+    }
+
     try {
-      await apiClient.post('/admisiones/valoracion-medica', dataToSend);
-      alert('Valoración Médica guardada exitosamente. El estado del paciente ha sido actualizado.');
+      await apiClient.post('/admisiones/valoracion-medica', finalFormData, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      });
+      alert('Valoración Médica (Digital + Física) guardada exitosamente.');
       if (onSuccess) onSuccess();
     } catch (error) {
       console.error('Error saving medical valuation:', error);
@@ -124,6 +152,68 @@ export const ValoracionMedicaForm: React.FC<Props> = ({ pacienteId, onSuccess })
     } finally {
       setIsSubmitting(false);
     }
+  };
+
+  const handleGeneratePDF = () => {
+    const doc = new jsPDF();
+    const margin = 20;
+    let y = 30;
+
+    // --- ENCABEZADO FORMAL ---
+    doc.setFontSize(16);
+    doc.setFont('helvetica', 'bold');
+    doc.text('INSTITUTO MARAKAME', 105, y, { align: 'center' });
+    y += 8;
+    doc.setFontSize(12);
+    doc.text('DEPARTAMENTO MÉDICO', 105, y, { align: 'center' });
+    y += 8;
+    doc.setFontSize(14);
+    doc.text('HOJA DE VALORACIÓN MÉDICA', 105, y, { align: 'center' });
+    y += 15;
+
+    // --- DATOS DEL PACIENTE ---
+    doc.setFontSize(10);
+    doc.setFont('helvetica', 'normal');
+    const nombreFull = pacienteData ? `${pacienteData.nombre} ${pacienteData.apellidoPaterno} ${pacienteData.apellidoMaterno}` : '---';
+    doc.text(`PACIENTE: ${nombreFull}`, margin, y);
+    doc.text(`FECHA: ${new Date().toLocaleDateString()}`, 150, y);
+    y += 10;
+    doc.line(margin, y, 190, y);
+    y += 10;
+
+    // --- CONTENIDO CLÍNICO ---
+    const addSection = (title: string, content: string) => {
+      doc.setFont('helvetica', 'bold');
+      doc.text(title, margin, y);
+      y += 6;
+      doc.setFont('helvetica', 'normal');
+      const lines = doc.splitTextToSize(content || 'Sin reporte', 170);
+      doc.text(lines, margin, y);
+      y += (lines.length * 5) + 8;
+      
+      if (y > 250) {
+        doc.addPage();
+        y = 30;
+      }
+    };
+
+    addSection('PADECIMIENTO ACTUAL:', `MOTIVO: ${formData.motivoConsulta}\nEVOLUCIÓN: ${formData.evolucionEstado}`);
+    addSection('SIGNOS VITALES:', `TA: ${formData.signosVitales.ta} | FC: ${formData.signosVitales.fc} | FR: ${formData.signosVitales.fr} | TEMP: ${formData.signosVitales.temp}°C | PESO: ${formData.signosVitales.peso}kg`);
+    addSection('EXPLORACIÓN FÍSICA:', formData.exploracionFisica);
+    addSection('EXAMEN MENTAL:', `Aspecto: ${formData.examenMental.aspectoGeneral}\nAfectividad: ${formData.examenMental.afectividad}`);
+    addSection('DIAGNÓSTICO CIE-10:', isCIE10Other ? formData.diagnosticoOtro : formData.diagnosticoCIE10);
+    addSection('DICTRÁMEN:', formData.esAptoParaIngreso ? 'APTO PARA INGRESO' : 'NO APTO PARA INGRESO');
+
+    // --- ESPACIO PARA FIRMA ---
+    y = 260;
+    doc.line(70, y, 140, y);
+    y += 5;
+    doc.setFontSize(10);
+    doc.text('FIRMA Y CÉDULA DEL MÉDICO', 105, y, { align: 'center' });
+
+    // Descargar
+    const fileName = `VALORACION_PACIENTE_${pacienteId}_${new Date().toLocaleDateString('es-MX').replace(/\//g,'')}.pdf`;
+    doc.save(fileName);
   };
 
   const tabs = [
@@ -376,6 +466,70 @@ export const ValoracionMedicaForm: React.FC<Props> = ({ pacienteId, onSuccess })
                 <textarea name="tratamientoSugerido" style={inputStyle} rows={3} onChange={handleChange} />
               </div>
             </div>
+
+            {/* SECCIÓN PHYigital: GENERACIÓN Y CARGA */}
+            <div style={{ marginTop: '2rem', padding: '2rem', backgroundColor: '#f8fafc', borderRadius: '24px', border: '2px dashed #cbd5e1' }}>
+              <h4 style={{ margin: '0 0 1rem 0', color: '#1e293b', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <FileCheck size={20} color="#3b82f6" /> Respaldo Legal y Evidencia
+              </h4>
+              
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '2rem', alignItems: 'center' }}>
+                <div>
+                  <p style={{ fontSize: '13px', color: '#64748b', marginBottom: '1rem' }}>
+                    1. Genera el documento oficial pre-llenado, imprímelo y recaba la firma del médico responsable.
+                  </p>
+                  <button 
+                    type="button"
+                    onClick={handleGeneratePDF}
+                    style={{ 
+                      width: '100%',
+                      padding: '1rem', 
+                      borderRadius: '12px', 
+                      border: 'none', 
+                      background: '#6366f1', 
+                      color: 'white', 
+                      fontWeight: '700',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: '0.75rem',
+                      cursor: 'pointer'
+                    }}
+                  >
+                    <Printer size={20} /> Generar PDF para Firma
+                  </button>
+                </div>
+
+                <div>
+                  <p style={{ fontSize: '13px', color: '#64748b', marginBottom: '1rem' }}>
+                    2. Escanea o toma una foto de la valoración firmada y súbela aquí (Obligatorio).
+                  </p>
+                  <label style={{ 
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    gap: '0.5rem',
+                    padding: '1.5rem',
+                    borderRadius: '12px',
+                    border: fileFirmado ? '2px solid #10b981' : '2px dashed #3b82f6',
+                    backgroundColor: fileFirmado ? '#f0fdf4' : '#eff6ff',
+                    cursor: 'pointer',
+                    transition: 'all 0.2s ease'
+                  }}>
+                    <Upload size={24} color={fileFirmado ? '#10b981' : '#3b82f6'} />
+                    <span style={{ fontSize: '14px', fontWeight: '700', color: fileFirmado ? '#166534' : '#3b82f6' }}>
+                      {fileFirmado ? fileFirmado.name : 'Seleccionar Archivo Firmado'}
+                    </span>
+                    <input 
+                      type="file" 
+                      accept=".pdf,image/*" 
+                      onChange={(e) => setFileFirmado(e.target.files?.[0] || null)}
+                      style={{ display: 'none' }}
+                    />
+                  </label>
+                </div>
+              </div>
+            </div>
           </div>
         )}
 
@@ -401,8 +555,8 @@ export const ValoracionMedicaForm: React.FC<Props> = ({ pacienteId, onSuccess })
           ) : (
             <button 
               type="submit"
-              disabled={isSubmitting}
-              style={{ padding: '0.75rem 3rem', display: 'flex', alignItems: 'center', gap: '0.75rem', borderRadius: '10px', border: 'none', background: '#10b981', color: 'white', fontWeight: '800', cursor: isSubmitting ? 'not-allowed' : 'pointer', boxShadow: '0 10px 15px -3px rgba(16,185,129,0.3)' }}
+              disabled={isSubmitting || !fileFirmado || formData.esAptoParaIngreso === null}
+              style={{ padding: '0.75rem 3rem', display: 'flex', alignItems: 'center', gap: '0.75rem', borderRadius: '10px', border: 'none', background: (isSubmitting || !fileFirmado || formData.esAptoParaIngreso === null) ? '#94a3b8' : '#10b981', color: 'white', fontWeight: '800', cursor: (isSubmitting || !fileFirmado || formData.esAptoParaIngreso === null) ? 'not-allowed' : 'pointer', boxShadow: '0 10px 15px -3px rgba(16,185,129,0.3)' }}
             >
               {isSubmitting ? 'Guardando...' : <><Save size={20} /> Guardar Valoración Médica</>}
             </button>
