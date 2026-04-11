@@ -1,7 +1,6 @@
 import React from 'react';
 import { 
   Activity, 
-  History, 
   Plus,
   Thermometer,
   Wind,

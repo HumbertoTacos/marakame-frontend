@@ -147,9 +147,13 @@ export function Compras() {
                 )}
 
                 {/* Si está Autorizado, Almacén puede generar la orden final */}
-                {(req.estado === 'AUTORIZADO' && req.cotizaciones?.length > 0) && (
+                {(req.estado === 'AUTORIZADO' && req.cotizaciones && req.cotizaciones.length > 0) && (
                    <button 
-                     onClick={() => generarOrdenMut.mutate({ reqId: req.id, proveedor: req.cotizaciones[0].proveedor, total: req.cotizaciones[0].precio })} 
+                     onClick={() => generarOrdenMut.mutate({ 
+                       reqId: req.id, 
+                       proveedor: req.cotizaciones ? req.cotizaciones[0].proveedor : '', 
+                       total: req.cotizaciones ? req.cotizaciones[0].precio : 0 
+                     })} 
                      style={{ padding: '0.5rem 1rem', background: '#3182ce', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold'}}>
                      Generar Orden de Compra
                    </button>

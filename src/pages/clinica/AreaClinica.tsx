@@ -1,14 +1,13 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { 
-  Apple, BrainCircuit, Activity, Search, Save, 
-  FileText, User, ChevronRight, Thermometer, Droplets, 
-  Heart, Wind, Weight, ClipboardCheck, Stethoscope, Clock, Users, Calendar, Folder
+  Activity, Search, 
+  FileText, ChevronRight, Stethoscope, Clock, Users, Calendar, Folder
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import apiClient from '../../services/api';
 import { useAuthStore } from '../../stores/authStore';
-import type { Paciente, Expediente, NotaEvolucion, SignoVital } from '../../types';
+import type { Paciente, Expediente } from '../../types';
 
 // Componente para calcular edad
 const calcularEdad = (fechaNacimiento: string) => {
@@ -34,8 +33,6 @@ export function AreaClinica() {
   
   // Estados de formulario
   const [nuevaNota, setNuevaNota] = useState('');
-  const [tipoNota, setTipoNota] = useState('MEDICA');
-  const [showAddVital, setShowAddVital] = useState(false);
 
   // 1. Cargar prospectos (Cola de Valoración)
   const { data: prospectos, isLoading: isLoadingProspectos } = useQuery<Paciente[]>({
@@ -64,37 +61,16 @@ export function AreaClinica() {
     }
   });
 
-  const saveSignos = useMutation({
-    mutationFn: (data: Record<string, unknown>) => apiClient.post(`/expedientes/${expediente?.id}/signos`, data),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['expediente', pacienteId] });
-      setShowAddVital(false);
-    }
-  });
 
   const handleSaveNota = () => {
     if (!nuevaNota.trim()) return;
     saveNota.mutate({
       usuarioId: usuario?.id,
-      tipo: tipoNota,
+      tipo: 'MEDICA',
       nota: nuevaNota
     });
   };
 
-  const handleSaveSignos = (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    const formData = new FormData(e.currentTarget);
-    saveSignos.mutate({
-      usuarioId: usuario?.id,
-      presionArterial: formData.get('presion'),
-      temperatura: parseFloat(formData.get('temp') as string),
-      frecuenciaCardiaca: parseInt(formData.get('fc') as string),
-      frecuenciaRespiratoria: parseInt(formData.get('fr') as string),
-      oxigenacion: parseInt(formData.get('spo2') as string),
-      glucosa: parseFloat(formData.get('glucosa') as string),
-      peso: parseFloat(formData.get('peso') as string),
-    });
-  };
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: 'calc(100vh - 120px)', gap: '1.5rem' }}>
@@ -201,7 +177,7 @@ export function AreaClinica() {
                       </td>
                       <td style={{ padding: '1.25rem 1.5rem' }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', color: '#64748b', fontSize: '13px', fontWeight: '600' }}>
-                          <Calendar size={14} /> {new Date(prospecto.createdAt).toLocaleDateString()}
+                          <Calendar size={14} /> {prospecto.createdAt ? new Date(prospecto.createdAt).toLocaleDateString() : 'N/A'}
                         </div>
                       </td>
                       <td style={{ padding: '1.25rem 1.5rem', textAlign: 'center', borderRadius: '0 16px 16px 0' }}>
@@ -268,7 +244,7 @@ export function AreaClinica() {
                     }}
                   >
                     <div style={{ width: '44px', height: '44px', borderRadius: '12px', backgroundColor: '#f1f5f9', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#3b82f6', fontWeight: '800' }}>
-                      {pac.nombre[0]}
+                      {pac.nombre ? pac.nombre[0] : '?'}
                     </div>
                     <div style={{ flex: 1 }}>
                       <p style={{ fontWeight: '700', color: '#1e293b', margin: 0, fontSize: '14px' }}>{pac.nombre} {pac.apellidoPaterno}</p>

@@ -2,18 +2,13 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
   User, 
-  Phone, 
-  MapPin, 
-  Heart, 
   Activity, 
   MessageSquare, 
   DollarSign, 
   ClipboardList, 
-  Stethoscope, 
   Save, 
   ChevronDown, 
-  ChevronUp,
-  CheckCircle2
+  ChevronUp
 } from 'lucide-react';
 import { useAuthStore } from '../../stores/authStore';
 import apiClient from '../../services/api';
@@ -33,7 +28,7 @@ interface AccordionSectionProps {
   children: React.ReactNode;
 }
 
-const AccordionSection: React.FC<AccordionSectionProps> = ({ title, icon, isOpen, onToggle, children }) => (
+const AccordionSection = React.memo<AccordionSectionProps>(({ title, icon, isOpen, onToggle, children }) => (
   <div style={{ 
     border: '1px solid #e2e8f0', 
     borderRadius: '12px', 
@@ -68,7 +63,7 @@ const AccordionSection: React.FC<AccordionSectionProps> = ({ title, icon, isOpen
       </div>
     )}
   </div>
-);
+));
 
 export const PrimerContactoForm: React.FC = () => {
   const navigate = useNavigate();

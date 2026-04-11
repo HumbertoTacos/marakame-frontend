@@ -18,7 +18,7 @@ const AreasPage: React.FC = () => {
   }, [fetchCamas]);
 
   const getStats = (area: AreaCentro) => {
-    const areaCamas = camas.filter(c => c.area === area);
+    const areaCamas = camas.filter(c => c.habitacion?.area === area);
     return {
       total: areaCamas.length,
       disponibles: areaCamas.filter(c => c.estado === EstadoCama.DISPONIBLE).length,
@@ -103,12 +103,12 @@ const AreasPage: React.FC = () => {
         </div>
 
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: '1.5rem' }}>
-          {camas.filter(c => c.area === activeTab).map(cama => (
+          {camas.filter(c => c.habitacion?.area === activeTab).map(cama => (
             <CamaCard key={cama.id} cama={cama} />
           ))}
         </div>
 
-        {!isLoading && camas.filter(c => c.area === activeTab).length === 0 && (
+        {!isLoading && camas.filter(c => c.habitacion?.area === activeTab).length === 0 && (
           <div style={{ textAlign: 'center', padding: '6rem 0', color: '#94a3b8' }}>
             <div style={{ fontSize: '48px', marginBottom: '1rem' }}>🛏️</div>
             <h3 style={{ fontSize: '18px', fontWeight: '800' }}>Sin registros de camas</h3>

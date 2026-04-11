@@ -2,9 +2,7 @@ import React from 'react';
 import { 
   User, 
   Calendar, 
-  Tag, 
   Clock, 
-  Search,
   Plus
 } from 'lucide-react';
 import type { NotaEvolucion, TipoNota } from '../../types';

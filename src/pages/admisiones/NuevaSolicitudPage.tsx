@@ -8,8 +8,6 @@ import {
   ArrowLeft, 
   Save, 
   Home,
-  UserPlus,
-  Stethoscope,
   X,
   BedDouble,
   Activity

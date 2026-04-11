@@ -11,7 +11,6 @@ import {
 import { useIngresoStore } from '../../stores/ingresoStore';
 import { AreaCentro } from '../../types';
 import type { SolicitudIngreso, Cama } from '../../types';
-import CamaCard from '../../components/admisiones/CamaCard';
 import HabitacionCard from '../../components/admisiones/HabitacionCard';
 import { CustomDatePicker } from '../../components/common/DatePicker';
 import { parseISO, format } from 'date-fns';
