@@ -1,5 +1,5 @@
 import { Outlet, useNavigate, useLocation } from 'react-router-dom';
-import { LogOut, Search, Bell, HeartPulse, Stethoscope, PackageOpen, ShoppingCart, Banknote, ShieldAlert, FileOutput, ChevronRight, LayoutDashboard, Users } from 'lucide-react';
+import { LogOut, Search, Bell, HeartPulse, Stethoscope, PackageOpen, ShoppingCart, Banknote, ShieldAlert, FileOutput, ChevronRight, LayoutDashboard, Users, Clock, ClipboardList, Plus } from 'lucide-react';
 import { useState } from 'react';
 import { useAuthStore } from '../stores/authStore';
 
@@ -81,11 +81,23 @@ export function Layout() {
               >
                 <Users size={20} style={{ marginRight: '1rem' }}/> Dashboard Admisión
               </div>
+              <div style={navItemStyle('admisiones/primer-contacto')} onClick={() => navigate('/admisiones/primer-contacto')}
+                   onMouseEnter={(e) => { if (!location.pathname.includes('admisiones/primer-contacto')) { e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.05)'; e.currentTarget.style.color = '#e2e8f0'; } }}
+                   onMouseLeave={(e) => { if (!location.pathname.includes('admisiones/primer-contacto')) { e.currentTarget.style.backgroundColor = 'transparent'; e.currentTarget.style.color = '#94a3b8'; } }}
+              >
+                <ClipboardList size={20} style={{ marginRight: '1rem' }}/> Primer Contacto
+              </div>
+              <div style={navItemStyle('admisiones/seguimiento')} onClick={() => navigate('/admisiones/seguimiento')}
+                   onMouseEnter={(e) => { if (!location.pathname.includes('admisiones/seguimiento')) { e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.05)'; e.currentTarget.style.color = '#e2e8f0'; } }}
+                   onMouseLeave={(e) => { if (!location.pathname.includes('admisiones/seguimiento')) { e.currentTarget.style.backgroundColor = 'transparent'; e.currentTarget.style.color = '#94a3b8'; } }}
+              >
+                <Clock size={20} style={{ marginRight: '1rem' }}/> Seguimiento de Prospectos
+              </div>
               <div style={navItemStyle('admisiones/nueva-solicitud')} onClick={() => navigate('/admisiones/nueva-solicitud')}
                    onMouseEnter={(e) => { if (!location.pathname.includes('admisiones/nueva-solicitud')) { e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.05)'; e.currentTarget.style.color = '#e2e8f0'; } }}
                    onMouseLeave={(e) => { if (!location.pathname.includes('admisiones/nueva-solicitud')) { e.currentTarget.style.backgroundColor = 'transparent'; e.currentTarget.style.color = '#94a3b8'; } }}
               >
-                <Search size={20} style={{ marginRight: '1rem' }}/> Mas de Registro
+                <Plus size={20} style={{ marginRight: '1rem' }}/> Nueva Solicitud
               </div>
               <div style={navItemStyle('admisiones/areas')} onClick={() => navigate('/admisiones/areas')}
                    onMouseEnter={(e) => { if (!location.pathname.includes('admisiones/areas')) { e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.05)'; e.currentTarget.style.color = '#e2e8f0'; } }}

@@ -23,6 +23,7 @@ const AreasPage = lazy(() => import('./pages/admisiones/AreasPage'));
 const PrimerContactoPage = lazy(() => import('./pages/admisiones/PrimerContactoPage'));
 const ValoracionMedicaPage = lazy(() => import('./pages/admisiones/ValoracionMedicaPage'));
 const ExpedienteDigitalPage = lazy(() => import('./pages/admisiones/ExpedienteDigitalPage').then(m => ({ default: m.ExpedienteDigitalPage })));
+const SeguimientoProspectosPage = lazy(() => import('./pages/admisiones/SeguimientoProspectosPage'));
 
 // Loader Premium para Suspense
 const PageLoader = () => (
@@ -62,6 +63,7 @@ function App() {
               <Route path="areas" element={<AreasPage />} />
               <Route path="primer-contacto" element={<PrimerContactoPage />} />
               <Route path="valoracion-medica/:id" element={<ValoracionMedicaPage />} />
+              <Route path="seguimiento" element={<SeguimientoProspectosPage />} />
               <Route path="expediente/:pacienteId" element={
                 <ProtectedRoute allowedRoles={['ADMIN_GENERAL', 'AREA_MEDICA', 'ENFERMERIA', 'PSICOLOGIA', 'NUTRICION', 'ADMISIONES']}>
                   <ExpedienteDigitalPage />

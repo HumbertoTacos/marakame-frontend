@@ -8,7 +8,8 @@ import {
   ClipboardList, 
   Save, 
   ChevronDown, 
-  ChevronUp
+  ChevronUp,
+  Calendar
 } from 'lucide-react';
 import { useAuthStore } from '../../stores/authStore';
 import apiClient from '../../services/api';
@@ -113,7 +114,8 @@ export const PrimerContactoForm: React.FC = () => {
     // Observaciones y Seguimiento
     observaciones: '',
     posibilidadesEconomicas: '',
-    acuerdo: '',
+    acuerdoSeguimiento: '' as any,
+    fechaSeguimiento: '',
   };
 
   const [formData, setFormData] = useState(INITIAL_STATE);
@@ -170,6 +172,13 @@ export const PrimerContactoForm: React.FC = () => {
     e.preventDefault();
     setIsSubmitting(true);
     
+    // Validación de CRM
+    if ((formData.acuerdoSeguimiento === 'LLAMARA_MARAKAME' || formData.acuerdoSeguimiento === 'CITA_PROGRAMADA') && !formData.fechaSeguimiento) {
+      alert('Por favor seleccione una fecha de seguimiento para el acuerdo seleccionado.');
+      setIsSubmitting(false);
+      return;
+    }
+
     // Preparar sustancias finales (incluyendo 'Otros' si aplica)
     const sustanciasFinales = [...formData.sustancias];
     if (formData.otraSustancia) {
@@ -477,20 +486,40 @@ export const PrimerContactoForm: React.FC = () => {
 
       {/* SECCIÓN 8: SEGUIMIENTO Y ACUERDOS */}
       <AccordionSection 
-        title="8. Seguimiento y Acuerdos" 
-        icon={<ClipboardList size={22} />} 
+        title="8. Seguimiento y Acuerdos (CRM)" 
+        icon={<Calendar size={22} />} 
         isOpen={openSection === 7} 
         onToggle={() => setOpenSection(openSection === 7 ? -1 : 7)}
       >
-        <label style={labelStyle}>Acción acordada</label>
-        <select name="acuerdo" style={inputStyle} onChange={handleChange} required>
-          <option value="">Seleccione acción...</option>
-          <option value="LLAMAR_NOSOTROS">Llamar nosotros</option>
-          <option value="ESPERAR_LLAMADA">Esperar llamada</option>
-          <option value="PROGRAMO_VISITA">Programó visita</option>
-          <option value="INGRESO_INMINENTE">Ingreso inminente</option>
-          <option value="DESCARTADO">Descartado</option>
-        </select>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem' }}>
+          <div>
+            <label style={labelStyle}>Acuerdo de Seguimiento*</label>
+            <select 
+              name="acuerdoSeguimiento" 
+              style={inputStyle} 
+              value={formData.acuerdoSeguimiento}
+              onChange={handleChange} 
+              required
+            >
+              <option value="">Seleccione acuerdo...</option>
+              <option value="LLAMARA_PROSPECTO">Prospecto llamará luego</option>
+              <option value="LLAMARA_MARAKAME">Llamaremos al prospecto (Nosotros)</option>
+              <option value="CITA_PROGRAMADA">Cita Programada / Visita</option>
+              <option value="RECHAZADO">Rechazado / Descartado</option>
+            </select>
+          </div>
+
+          {(formData.acuerdoSeguimiento === 'LLAMARA_MARAKAME' || formData.acuerdoSeguimiento === 'CITA_PROGRAMADA') && (
+            <div>
+              <label style={labelStyle}>Fecha Programada de Acción*</label>
+              <CustomDatePicker
+                selected={formData.fechaSeguimiento ? parseISO(formData.fechaSeguimiento) : null}
+                onChange={(date) => setFormData(prev => ({ ...prev, fechaSeguimiento: date ? date.toISOString() : '' }))}
+                placeholderText="Seleccione fecha..."
+              />
+            </div>
+          )}
+        </div>
       </AccordionSection>
 
 
