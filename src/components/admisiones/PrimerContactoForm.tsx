@@ -12,6 +12,7 @@ import {
   Calendar
 } from 'lucide-react';
 import { useAuthStore } from '../../stores/authStore';
+import { usePrimerContactoStore } from '../../stores/formDraftStore';
 import apiClient from '../../services/api';
 import { CustomDatePicker } from '../common/DatePicker';
 import { parseISO, format } from 'date-fns';
@@ -69,56 +70,22 @@ const AccordionSection = React.memo<AccordionSectionProps>(({ title, icon, isOpe
 export const PrimerContactoForm: React.FC = () => {
   const navigate = useNavigate();
   const { usuario } = useAuthStore();
-  const [openSection, setOpenSection] = useState<number>(0);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [solicitanteEsPaciente, setSolicitanteEsPaciente] = useState(false);
   const [edad, setEdad] = useState<number | null>(null);
 
-  const INITIAL_STATE = {
-    // General
-    fuenteReferencia: '',
-    
-    // Solicitante
-    solicitanteNombre: '',
-    solicitanteTelefono: '',
-    solicitanteCelular: '',
-    solicitanteDireccion: '',
-    solicitanteOcupacion: '',
-    relacionPaciente: '',
+  // Zustand Store Persistence
+  const { 
+    formData, openSection, solicitanteEsPaciente, lastUpdated,
+    setFormData, setOpenSection, setSolicitanteEsPaciente, resetForm 
+  } = usePrimerContactoStore();
 
-    // Paciente
-    nombrePaciente: '',
-    apellidoPaterno: '',
-    apellidoMaterno: '',
-    fechaNacimiento: '',
-    sexo: 'M',
-    curp: '',
-    estadoCivil: '',
-    hijos: '0',
-    escolaridad: '',
-    lugarOrigen: '',
-    ocupacion: '',
-    telefonoPaciente: '',
-    celularPaciente: '',
-    direccionPaciente: '',
-
-    // Sustancias
-    sustancias: [] as string[],
-    otraSustancia: '',
-
-    // Evaluación
-    dispuestoInternarse: 'DUDA',
-    requiereIntervencion: false,
-    estadoPrevioTratamiento: false,
-
-    // Observaciones y Seguimiento
-    observaciones: '',
-    posibilidadesEconomicas: '',
-    acuerdoSeguimiento: '' as any,
-    fechaSeguimiento: '',
-  };
-
-  const [formData, setFormData] = useState(INITIAL_STATE);
+  // 10-Minute Expiration Logic
+  useEffect(() => {
+    const TEN_MINUTES = 10 * 60 * 1000;
+    if (Date.now() - lastUpdated > TEN_MINUTES) {
+      resetForm();
+    }
+  }, []);
 
   // Cálculo de edad automático
   useEffect(() => {
@@ -137,35 +104,32 @@ export const PrimerContactoForm: React.FC = () => {
   // Lógica de autollenado
   useEffect(() => {
     if (solicitanteEsPaciente) {
-      setFormData(prev => ({
-        ...prev,
-        nombrePaciente: prev.solicitanteNombre.split(' ')[0] || '',
-        apellidoPaterno: prev.solicitanteNombre.split(' ')[1] || '',
-        apellidoMaterno: prev.solicitanteNombre.split(' ')[2] || '',
-        telefonoPaciente: prev.solicitanteTelefono,
-        celularPaciente: prev.solicitanteCelular,
-        direccionPaciente: prev.solicitanteDireccion,
-        ocupacion: prev.solicitanteOcupacion,
+      setFormData({
+        nombrePaciente: formData.solicitanteNombre.split(' ')[0] || '',
+        apellidoPaterno: formData.solicitanteNombre.split(' ')[1] || '',
+        apellidoMaterno: formData.solicitanteNombre.split(' ')[2] || '',
+        telefonoPaciente: formData.solicitanteTelefono,
+        celularPaciente: formData.solicitanteCelular,
+        direccionPaciente: formData.solicitanteDireccion,
+        ocupacion: formData.solicitanteOcupacion,
         relacionPaciente: 'EL MISMO'
-      }));
+      });
     }
   }, [solicitanteEsPaciente, formData.solicitanteNombre, formData.solicitanteTelefono, formData.solicitanteCelular, formData.solicitanteDireccion, formData.solicitanteOcupacion]);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     const { name, value, type } = e.target;
     const val = type === 'checkbox' ? (e.target as HTMLInputElement).checked : value;
-    setFormData(prev => ({ ...prev, [name]: val }));
+    setFormData({ [name]: val });
   };
 
   const handleSustanciaToggle = (sustancia: string) => {
-    setFormData(prev => {
-      const current = [...prev.sustancias];
-      if (current.includes(sustancia)) {
-        return { ...prev, sustancias: current.filter(s => s !== sustancia) };
-      } else {
-        return { ...prev, sustancias: [...current, sustancia] };
-      }
-    });
+    const current = [...formData.sustancias];
+    if (current.includes(sustancia)) {
+      setFormData({ sustancias: current.filter(s => s !== sustancia) });
+    } else {
+      setFormData({ sustancias: [...current, sustancia] });
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -191,8 +155,7 @@ export const PrimerContactoForm: React.FC = () => {
         sustancias: sustanciasFinales
       });
       alert('Registro de Primer Contacto guardado exitosamente');
-      setFormData(INITIAL_STATE);
-      setSolicitanteEsPaciente(false);
+      resetForm();
       navigate('/admisiones/dashboard');
     } catch (error) {
       console.error('Error saving First Contact:', error);
@@ -322,10 +285,9 @@ export const PrimerContactoForm: React.FC = () => {
               label="F. Nacimiento" 
               selected={formData.fechaNacimiento ? parseISO(formData.fechaNacimiento) : null} 
               onChange={(date) => {
-                setFormData(prev => ({ 
-                  ...prev, 
+                setFormData({ 
                   fechaNacimiento: date ? format(date, 'yyyy-MM-dd') : '' 
-                }));
+                });
               }} 
               required 
             />
@@ -435,15 +397,15 @@ export const PrimerContactoForm: React.FC = () => {
             <div>
               <label style={labelStyle}>¿Requiere intervención?</label>
               <div style={{ display: 'flex', gap: '1rem', marginTop: '0.5rem' }}>
-                <label style={{ fontSize: '14px' }}><input type="radio" name="requiereIntervencion" value="true" checked={formData.requiereIntervencion === true} onChange={() => setFormData(p => ({...p, requiereIntervencion: true}))} /> Sí</label>
-                <label style={{ fontSize: '14px' }}><input type="radio" name="requiereIntervencion" value="false" checked={formData.requiereIntervencion === false} onChange={() => setFormData(p => ({...p, requiereIntervencion: false}))} /> No</label>
+                <label style={{ fontSize: '14px' }}><input type="radio" name="requiereIntervencion" value="true" checked={formData.requiereIntervencion === true} onChange={() => setFormData({ requiereIntervencion: true })} /> Sí</label>
+                <label style={{ fontSize: '14px' }}><input type="radio" name="requiereIntervencion" value="false" checked={formData.requiereIntervencion === false} onChange={() => setFormData({ requiereIntervencion: false })} /> No</label>
               </div>
             </div>
             <div>
               <label style={labelStyle}>¿Tiene tratamiento previo?</label>
               <div style={{ display: 'flex', gap: '1rem', marginTop: '0.5rem' }}>
-                <label style={{ fontSize: '14px' }}><input type="radio" name="estadoPrevioTratamiento" value="true" checked={formData.estadoPrevioTratamiento === true} onChange={() => setFormData(p => ({...p, estadoPrevioTratamiento: true}))} /> Sí</label>
-                <label style={{ fontSize: '14px' }}><input type="radio" name="estadoPrevioTratamiento" value="false" checked={formData.estadoPrevioTratamiento === false} onChange={() => setFormData(p => ({...p, estadoPrevioTratamiento: false}))} /> No</label>
+                <label style={{ fontSize: '14px' }}><input type="radio" name="estadoPrevioTratamiento" value="true" checked={formData.estadoPrevioTratamiento === true} onChange={() => setFormData({ estadoPrevioTratamiento: true })} /> Sí</label>
+                <label style={{ fontSize: '14px' }}><input type="radio" name="estadoPrevioTratamiento" value="false" checked={formData.estadoPrevioTratamiento === false} onChange={() => setFormData({ estadoPrevioTratamiento: false })} /> No</label>
               </div>
             </div>
           </div>
@@ -514,7 +476,7 @@ export const PrimerContactoForm: React.FC = () => {
               <label style={labelStyle}>Fecha Programada de Acción*</label>
               <CustomDatePicker
                 selected={formData.fechaSeguimiento ? parseISO(formData.fechaSeguimiento) : null}
-                onChange={(date) => setFormData(prev => ({ ...prev, fechaSeguimiento: date ? date.toISOString() : '' }))}
+                onChange={(date) => setFormData({ fechaSeguimiento: date ? date.toISOString() : '' })}
                 placeholderText="Seleccione fecha..."
               />
             </div>

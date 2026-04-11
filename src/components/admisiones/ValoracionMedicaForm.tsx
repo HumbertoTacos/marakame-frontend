@@ -14,6 +14,7 @@ import {
 } from 'lucide-react';
 import { jsPDF } from 'jspdf';
 import apiClient from '../../services/api';
+import { useValoracionMedicaStore } from '../../stores/formDraftStore';
 
 const CIE10_COMMON = [
   { code: 'F10', label: 'F10 - Trastornos por consumo de Alcohol' },
@@ -30,14 +31,46 @@ interface Props {
 }
 
 export const ValoracionMedicaForm: React.FC<Props> = ({ pacienteId, onSuccess }) => {
-  const [activeTab, setActiveTab] = useState(0);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isCIE10Other, setIsCIE10Other] = useState(false);
   const [fileFirmado, setFileFirmado] = useState<File | null>(null);
   const [pacienteData, setPacienteData] = useState<any>(null);
 
+  // Zustand Store Persistence
+  const { 
+    formData, activeTab, lastUpdated,
+    setFormData, setActiveTab, resetForm 
+  } = useValoracionMedicaStore();
+
+  // 10-Minute Expiration Logic
   useEffect(() => {
-    // Cargar datos básicos del paciente para el PDF
+    const TEN_MINUTES = 10 * 60 * 1000;
+    if (Date.now() - lastUpdated > TEN_MINUTES) {
+      resetForm();
+    }
+  }, []);
+
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
+    const { name, value, type } = e.target;
+    
+    // Manejo de campos anidados (Json)
+    if (name.includes('.')) {
+      const [parent, child] = name.split('.');
+      const parentData = formData[parent as keyof typeof formData];
+      setFormData({
+        [parent]: {
+          ...(parentData as any),
+          [child]: value
+        }
+      });
+    } else {
+      const val = type === 'checkbox' ? (e.target as HTMLInputElement).checked : value;
+      setFormData({ [name]: val });
+    }
+  };
+
+  useEffect(() => {
+    // Cargar datos básicos del paciente para el PDF (No persistente en store)
     const fetchPaciente = async () => {
       try {
         const response = await apiClient.get(`/admisiones/primer-contacto/${pacienteId}`);
@@ -50,65 +83,6 @@ export const ValoracionMedicaForm: React.FC<Props> = ({ pacienteId, onSuccess })
     };
     fetchPaciente();
   }, [pacienteId]);
-
-  const [formData, setFormData] = useState({
-    // Tab 1: Padecimiento Actual
-    motivoConsulta: '',
-    evolucionEstado: '',
-    factoresDesencadenantes: '',
-
-    // Tab 2: Antecedentes (JSON)
-    antecedentes: {
-      heredofamiliares: '',
-      personalesPatologicos: '',
-      psiquiatricos: ''
-    },
-
-    // Tab 3: Exploración Física (JSON Signos Vitales + Texto)
-    signosVitales: {
-      ta: '',
-      fc: '',
-      fr: '',
-      temp: '',
-      peso: '',
-      talla: ''
-    },
-    exploracionFisica: '',
-
-    // Tab 4: Examen Mental (JSON)
-    examenMental: {
-      aspectoGeneral: '',
-      psicomotricidad: '',
-      afectividad: '',
-      ideacion: ''
-    },
-
-    // Tab 5: Diagnóstico y Resolución
-    diagnosticoCIE10: '',
-    diagnosticoOtro: '',
-    pronostico: '',
-    tratamientoSugerido: '',
-    esAptoParaIngreso: null as boolean | null
-  });
-
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
-    const { name, value, type } = e.target;
-    
-    // Manejo de campos anidados (Json)
-    if (name.includes('.')) {
-      const [parent, child] = name.split('.');
-      setFormData(prev => ({
-        ...prev,
-        [parent]: {
-          ...(prev[parent as keyof typeof prev] as any),
-          [child]: value
-        }
-      }));
-    } else {
-      const val = type === 'checkbox' ? (e.target as HTMLInputElement).checked : value;
-      setFormData(prev => ({ ...prev, [name]: val }));
-    }
-  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -145,6 +119,7 @@ export const ValoracionMedicaForm: React.FC<Props> = ({ pacienteId, onSuccess })
         headers: { 'Content-Type': 'multipart/form-data' }
       });
       alert('Valoración Médica (Digital + Física) guardada exitosamente.');
+      resetForm();
       if (onSuccess) onSuccess();
     } catch (error) {
       console.error('Error saving medical valuation:', error);
@@ -381,7 +356,7 @@ export const ValoracionMedicaForm: React.FC<Props> = ({ pacienteId, onSuccess })
               <div style={{ display: 'flex', justifyContent: 'center', gap: '2rem' }}>
                 <button 
                   type="button"
-                  onClick={() => setFormData(p => ({...p, esAptoParaIngreso: true}))}
+                  onClick={() => setFormData({ esAptoParaIngreso: true })}
                   style={{
                     padding: '1.5rem 3rem',
                     borderRadius: '16px',
@@ -398,7 +373,7 @@ export const ValoracionMedicaForm: React.FC<Props> = ({ pacienteId, onSuccess })
                 </button>
                 <button 
                   type="button"
-                  onClick={() => setFormData(p => ({...p, esAptoParaIngreso: false}))}
+                  onClick={() => setFormData({ esAptoParaIngreso: false })}
                   style={{
                     padding: '1.5rem 3rem',
                     borderRadius: '16px',
@@ -516,7 +491,7 @@ export const ValoracionMedicaForm: React.FC<Props> = ({ pacienteId, onSuccess })
           <button 
             type="button" 
             disabled={activeTab === 0}
-            onClick={() => setActiveTab(p => p - 1)}
+            onClick={() => setActiveTab(activeTab - 1)}
             style={{ padding: '0.75rem 1.5rem', display: 'flex', alignItems: 'center', gap: '0.5rem', borderRadius: '10px', border: '1px solid #cbd5e1', background: 'white', cursor: activeTab === 0 ? 'not-allowed' : 'pointer', opacity: activeTab === 0 ? 0.5 : 1 }}
           >
             <ArrowLeft size={18} /> Anterior
@@ -525,7 +500,7 @@ export const ValoracionMedicaForm: React.FC<Props> = ({ pacienteId, onSuccess })
           {activeTab < 4 ? (
             <button 
               type="button"
-              onClick={() => setActiveTab(p => p + 1)}
+              onClick={() => setActiveTab(activeTab + 1)}
               style={{ padding: '0.75rem 2rem', display: 'flex', alignItems: 'center', gap: '0.5rem', borderRadius: '10px', border: 'none', background: '#3b82f6', color: 'white', fontWeight: '700', cursor: 'pointer' }}
             >
               Siguiente <ArrowRight size={18} />

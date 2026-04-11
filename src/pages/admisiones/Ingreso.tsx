@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useEffect } from 'react';
+import { useIngresoWizardStore } from '../../stores/formDraftStore';
 import { useMutation } from '@tanstack/react-query';
 import { CheckCircle, ChevronRight, ChevronLeft, Activity, Home } from 'lucide-react';
 import apiClient from '../../services/api';
@@ -26,17 +27,19 @@ const PASOS = [
 ];
 
 export function Ingreso() {
-  const [pasoActual, setPasoActual] = useState(1);
-  const [ingresoId, setIngresoId] = useState<number | null>(null);
-  
-  const [formData, setFormData] = useState<FormData>({
-    nombre: '',
-    motivoIngreso: '',
-    fechaCita: '',
-    esApto: false,
-    areaAsignada: 'HOMBRES',
-    habitacionAsignada: ''
-  });
+  // Zustand Store Persistence
+  const { 
+    formData, pasoActual, ingresoId, lastUpdated,
+    setFormData, setPasoActual, setIngresoId, resetForm 
+  } = useIngresoWizardStore();
+
+  // 10-Minute Expiration Logic
+  useEffect(() => {
+    const TEN_MINUTES = 10 * 60 * 1000;
+    if (Date.now() - lastUpdated > TEN_MINUTES) {
+      resetForm();
+    }
+  }, []);
 
   // const queryClient = useQueryClient();
 
@@ -67,6 +70,7 @@ export function Ingreso() {
     onSuccess: (_, variables) => {
       if (variables.finalizar) {
         alert('Ingreso Completado Exitosamente');
+        resetForm();
         // Reset or navigate away
       } else {
         setPasoActual(variables.paso);
@@ -184,7 +188,7 @@ export function Ingreso() {
                 <input 
                   type="text" 
                   value={formData.nombre} 
-                  onChange={e => setFormData({...formData, nombre: e.target.value})}
+                  onChange={e => setFormData({ nombre: e.target.value })}
                   style={{ width: '100%', padding: '0.75rem', border: '1px solid #e2e8f0', borderRadius: '4px' }} 
                 />
               </div>
@@ -193,7 +197,7 @@ export function Ingreso() {
                 <input 
                   type="text" 
                   value={formData.motivoIngreso} 
-                  onChange={e => setFormData({...formData, motivoIngreso: e.target.value})}
+                  onChange={e => setFormData({ motivoIngreso: e.target.value })}
                   style={{ width: '100%', padding: '0.75rem', border: '1px solid #e2e8f0', borderRadius: '4px' }} 
                 />
               </div>
@@ -211,7 +215,7 @@ export function Ingreso() {
                   type="text" 
                   name="fuente" 
                   value={formData.fuente || ''} 
-                  onChange={e => setFormData({ ...formData, [e.target.name]: e.target.value })}
+                  onChange={e => setFormData({ [e.target.name]: e.target.value })}
                   style={{ width: '100%', padding: '0.75rem', border: '1px solid #e2e8f0', borderRadius: '4px' }} 
                 />
               </div>
@@ -221,7 +225,7 @@ export function Ingreso() {
                   type="text" 
                   name="solicitante" 
                   value={formData.solicitante || ''} 
-                  onChange={e => setFormData({ ...formData, [e.target.name]: e.target.value })}
+                  onChange={e => setFormData({ [e.target.name]: e.target.value })}
                   style={{ width: '100%', padding: '0.75rem', border: '1px solid #e2e8f0', borderRadius: '4px' }} 
                 />
               </div>
@@ -245,7 +249,7 @@ export function Ingreso() {
                 <label style={{ display: 'block', marginBottom: '0.5rem' }}>Área</label>
                 <select 
                   value={formData.areaAsignada} 
-                  onChange={e => setFormData({...formData, areaAsignada: e.target.value})}
+                  onChange={e => setFormData({ areaAsignada: e.target.value })}
                   style={{ width: '100%', padding: '0.75rem', border: '1px solid #e2e8f0', borderRadius: '4px' }}>
                   <option value="HOMBRES">Hombres</option>
                   <option value="MUJERES">Mujeres</option>
@@ -257,7 +261,7 @@ export function Ingreso() {
                 <input 
                   type="text" 
                   value={formData.habitacionAsignada} 
-                  onChange={e => setFormData({...formData, habitacionAsignada: e.target.value})}
+                  onChange={e => setFormData({ habitacionAsignada: e.target.value })}
                   style={{ width: '100%', padding: '0.75rem', border: '1px solid #e2e8f0', borderRadius: '4px' }} 
                   placeholder="Ej: Cama 12"
                 />

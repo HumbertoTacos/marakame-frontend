@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React, { useEffect } from 'react';
+import { useEstudioSocioeconomicoStore } from '../../stores/formDraftStore';
 import { Save, AlertCircle, FileText, ChevronRight, ArrowLeft } from 'lucide-react';
 import apiClient from '../../services/api';
 import { useNavigate } from 'react-router-dom';
@@ -17,8 +18,20 @@ const SECCIONES = [
 
 export function EstudioSocioeconomicoForm({ pacienteId }: { pacienteId: number }) {
   const navigate = useNavigate();
-  const [seccionActual, setSeccionActual] = useState(0);
-  const [datos, setDatos] = useState<Record<string, string | number | boolean | null>>({});
+
+  // Zustand Store Persistence
+  const { 
+    datos, seccionActual, lastUpdated,
+    setDatos, setSeccionActual, resetForm 
+  } = useEstudioSocioeconomicoStore();
+
+  // 10-Minute Expiration Logic
+  useEffect(() => {
+    const TEN_MINUTES = 10 * 60 * 1000;
+    if (Date.now() - lastUpdated > TEN_MINUTES) {
+      resetForm();
+    }
+  }, []);
 
   const guardarEstudio = useMutation({
     mutationFn: async (payload: Record<string, string | number | boolean | null>) => {
@@ -31,6 +44,7 @@ export function EstudioSocioeconomicoForm({ pacienteId }: { pacienteId: number }
     },
     onSuccess: () => {
       alert('Estudio Socioeconómico guardado exitosamente.');
+      resetForm();
     }
   });
 
@@ -40,7 +54,7 @@ export function EstudioSocioeconomicoForm({ pacienteId }: { pacienteId: number }
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
-    setDatos(prev => ({ ...prev, [name]: value }));
+    setDatos({ [name]: value });
   };
 
   return (
