@@ -21,19 +21,54 @@ interface PrimerContactoDraft {
 }
 
 const INITIAL_PRIMER_CONTACTO = {
-  fuenteReferencia: '',
-  solicitanteNombre: '',
-  solicitanteTelefono: '',
-  relacionPaciente: '',
+  // 1-3. Generales
+  hora: '',
+  medioEnterado: '',
+  medioEnteradoOtro: '',
+  // 4-9. Datos del Solicitante
+  nombreLlamada: '',
+  lugarLlamada: '',
+  domicilioLlamada: '',
+  telCasaLlamada: '',
+  celularLlamada: '',
+  ocupacionLlamada: '',
+  // 10-19. Datos del Prospecto
+  parentescoLlamada: '',
+  parentescoOtro: '',
   nombrePaciente: '',
-  apellidoPaterno: '',
-  apellidoMaterno: '',
-  edad: '',
+  edadPaciente: '',
+  estadoCivilPaciente: '',
+  estadoCivilOtro: '',
+  hijosPaciente: '',
+  direccionPaciente: '',
+  escolaridadPaciente: '',
+  escolaridadOtro: '',
+  origenPaciente: '',
+  telefonoPaciente: '',
+  ocupacionPaciente: '',
+  // 20. Sustancias
   sustancias: [] as string[],
-  otraSustancia: '',
-  observaciones: '',
-  acuerdoSeguimiento: '',
-  fechaSeguimiento: '',
+  sustanciasOtros: [] as string[],
+  // 21-23. Disposición y Antecedentes
+  dispuestoInternarse: '', // SI, NO, DUDA
+  realizoIntervencion: '', // SI, NO
+  conclusionIntervencion: '',
+  tratamientoPrevio: '', // SI, NO
+  lugarTratamiento: '',
+  // 24. Otros
+  posibilidadesEconomicas: '',
+  // 25-29. Acuerdos
+  acuerdoLlamarle: false,
+  acuerdoOtro: '',
+  acuerdoEsperarLlamada: false,
+  acuerdoEsperarVisita: false,
+  acuerdoPosibleIngreso: false,
+  // CRM Tracking
+  acuerdoSeguimiento: 'ESPERAR_LLAMADA',
+  fechaAcuerdo: '',
+  // 30-31. Cierre Médico
+  medicoValoro: '',
+  conclusionMedica: '',
 };
 
 export const usePrimerContactoStore = create<PrimerContactoDraft>()(
