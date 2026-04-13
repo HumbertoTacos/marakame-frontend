@@ -4,7 +4,7 @@ import {
   Users, Search, Calendar, Phone, 
   ArrowLeft, Clock, CheckCircle2, 
   AlertCircle, XCircle, CalendarPlus, Stethoscope,
-  LayoutGrid, List, X, Info, FileText, PhoneCall, ArrowRight,
+  LayoutGrid, List, X, Info, FileText, PhoneCall, ArrowRight, ArrowRightCircle,
   Trash2, Eye, EyeOff, Archive
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
@@ -231,7 +231,15 @@ const DetalleProspectoModal = ({ prospecto, onClose, onEdit }: { prospecto: any,
 const safeParseDate = (dateVal: any) => {
   if (!dateVal) return null;
   if (dateVal instanceof Date) return dateVal;
-  if (typeof dateVal === 'string') return parseISO(dateVal);
+  if (typeof dateVal === 'string') {
+    // Extraemos año, mes, día manualmente para ignorar UTC y zona horaria
+    const matches = dateVal.match(/^(\d{4})-(\d{2})-(\d{2})/);
+    if (matches) {
+      const [, y, m, d] = matches;
+      return new Date(parseInt(y), parseInt(m) - 1, parseInt(d), 12, 0, 0);
+    }
+    return parseISO(dateVal);
+  }
   return null;
 };
 
@@ -318,6 +326,15 @@ export default function SeguimientoProspectosPage() {
     }
   });
 
+  // MUTACIÓN: Confirmar Llegada
+  const mutationLlegada = useMutation({
+    mutationFn: (pacienteId: number) => 
+      apiClient.patch(`/admisiones/paciente/${pacienteId}/confirmar-llegada`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['prospectos_crm'] });
+    }
+  });
+
   const handleAgendar = (id: number, fecha: string) => {
     mutationAgendar.mutate({ id, fecha });
   };
@@ -331,6 +348,12 @@ export default function SeguimientoProspectosPage() {
   const handleArchivar = (id: number, nombre: string) => {
     if (window.confirm(`¿Seguro que deseas archivar a ${nombre}? El registro no se borrará de la base de datos pero dejará de ser visible en esta tabla principal.`)) {
       mutationArchivar.mutate(id);
+    }
+  };
+
+  const handleRegistrarLlegada = (prospecto: any) => {
+    if (window.confirm(`¿Confirmar llegada de ${prospecto.nombrePaciente}? Esto habilitará las valoraciones médica y socioeconómica.`)) {
+      mutationLlegada.mutate(prospecto.paciente.id);
     }
   };
 
@@ -355,7 +378,7 @@ export default function SeguimientoProspectosPage() {
     const today = startOfDay(new Date());
     
     return prospectos
-      .filter(p => p.acuerdoSeguimiento === 'CITA_PROGRAMADA' && p.fechaAcuerdo)
+      .filter(p => (p.acuerdoSeguimiento === 'CITA_PROGRAMADA' || p.acuerdoSeguimiento === 'POSIBLE_INGRESO') && p.fechaAcuerdo)
       .filter(p => {
         const date = safeParseDate(p.fechaAcuerdo);
         if (!date) return false;
@@ -540,12 +563,33 @@ export default function SeguimientoProspectosPage() {
                           <CalendarPlus size={16} />
                         </button>
 
+                        {p.acuerdoSeguimiento === 'CITA_PROGRAMADA' && 
+                         p.paciente?.estado !== 'EN_VALORACION' && 
+                         isToday(safeParseDate(p.fechaAcuerdo)) && (
+                          <button 
+                            onClick={() => handleRegistrarLlegada(p)}
+                            title="Registrar Llegada"
+                            style={{ padding: '0.5rem', borderRadius: '8px', border: '1px solid #10b981', backgroundColor: '#f0fdf4', cursor: 'pointer', color: '#10b981' }}
+                          >
+                            <CheckCircle2 size={16} />
+                          </button>
+                        )}
+
+
+                        
                         <button 
-                          onClick={() => handleSolicitarValoracion(p)}
-                          title="Solicitar Valoración Médica"
-                          style={{ padding: '0.5rem', borderRadius: '8px', border: '1px solid #e2e8f0', backgroundColor: 'white', cursor: 'pointer', color: '#10b981' }}
+                          onClick={() => navigate(`/admisiones/nuevo-ingreso?pacienteId=${p.paciente.id}`)}
+                          disabled={p.paciente?.estado !== 'EN_VALORACION'}
+                          title={p.paciente?.estado !== 'EN_VALORACION' ? "Debe registrar llegada primero" : "Iniciar Nuevo Ingreso"}
+                          style={{ 
+                            padding: '0.5rem', borderRadius: '8px', border: '1px solid #e2e8f0', 
+                            backgroundColor: p.paciente?.estado === 'EN_VALORACION' ? 'white' : '#f8fafc', 
+                            cursor: p.paciente?.estado === 'EN_VALORACION' ? 'pointer' : 'not-allowed', 
+                            color: p.paciente?.estado === 'EN_VALORACION' ? '#3b82f6' : '#94a3b8',
+                            opacity: p.paciente?.estado === 'EN_VALORACION' ? 1 : 0.5
+                          }}
                         >
-                          <Stethoscope size={16} />
+                          <ArrowRightCircle size={16} />
                         </button>
 
                         <button 
@@ -674,19 +718,43 @@ export default function SeguimientoProspectosPage() {
                       </div>
                     </div>
 
-                    <div style={{ display: 'flex', gap: '1rem' }}>
-                      <a 
-                        href={`tel:${cita.celularLlamada}`}
-                        style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', padding: '0.8rem', backgroundColor: '#3b82f6', color: 'white', borderRadius: '16px', textDecoration: 'none', fontSize: '14px', fontWeight: '800', transition: 'all 0.2s', boxShadow: '0 4px 6px -1px rgba(59, 130, 246, 0.3)' }}
-                      >
-                        <Phone size={16} /> Confirmar
-                      </a>
+                    <div style={{ display: 'flex', gap: '0.75rem', marginTop: '1rem' }}>
+                      {cita.paciente?.estado !== 'EN_VALORACION' ? (
+                        <button 
+                          onClick={() => handleRegistrarLlegada(cita)}
+                          disabled={!isToday(safeParseDate(cita.fechaAcuerdo))}
+                          style={{ 
+                            flex: 2, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', padding: '0.8rem', 
+                            backgroundColor: isToday(safeParseDate(cita.fechaAcuerdo)) ? '#10b981' : '#f1f5f9', 
+                            color: isToday(safeParseDate(cita.fechaAcuerdo)) ? 'white' : '#94a3b8', 
+                            borderRadius: '16px', border: 'none', fontSize: '14px', fontWeight: '800', 
+                            cursor: isToday(safeParseDate(cita.fechaAcuerdo)) ? 'pointer' : 'not-allowed', 
+                            boxShadow: isToday(safeParseDate(cita.fechaAcuerdo)) ? '0 4px 6px -1px rgba(16, 185, 129, 0.3)' : 'none' 
+                          }}
+                        >
+                          <CheckCircle2 size={16} /> {isToday(safeParseDate(cita.fechaAcuerdo)) ? 'Registrar Llegada' : 'No es hoy'}
+                        </button>
+                      ) : (
+                        <div style={{ flex: 2, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', padding: '0.8rem', backgroundColor: '#f0fdf4', color: '#10b981', borderRadius: '16px', fontSize: '13px', fontWeight: '800', border: '1px solid #dcfce7' }}>
+                          <CheckCircle2 size={16} /> Llegada Registrada
+                        </div>
+                      )}
+                      
                       <button 
                         onClick={() => setSelectedDetalle(cita)}
-                        style={{ padding: '0.8rem', border: '1px solid #e2e8f0', backgroundColor: 'white', borderRadius: '16px', cursor: 'pointer', color: '#64748b', transition: 'all 0.2s' }}
+                        style={{ flex: 0.5, padding: '0.8rem', border: '1px solid #e2e8f0', backgroundColor: 'white', borderRadius: '16px', cursor: 'pointer', color: '#64748b', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
                       >
                         <Search size={20} />
                       </button>
+                    </div>
+
+                    <div style={{ display: 'flex', gap: '1rem', marginTop: '0.75rem' }}>
+                      <a 
+                        href={`tel:${cita.celularLlamada}`}
+                        style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', padding: '0.8rem', backgroundColor: '#f1f5f9', color: '#475569', borderRadius: '16px', textDecoration: 'none', fontSize: '13px', fontWeight: '700' }}
+                      >
+                        <Phone size={14} /> Llamar p/ Confirmar
+                      </a>
                     </div>
                   </div>
                 );
@@ -728,7 +796,16 @@ export default function SeguimientoProspectosPage() {
                           </td>
                           <td style={{ padding: '1.25rem 2rem', textAlign: 'center' }}>
                             <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'center' }}>
-                              <a href={`tel:${cita.celularLlamada}`} style={{ padding: '0.6rem', borderRadius: '8px', border: '1px solid #e2e8f0', backgroundColor: 'white', color: '#10b981' }}>
+                              {cita.paciente?.estado !== 'EN_VALORACION' && isToday(date) && (
+                                <button 
+                                  onClick={() => handleRegistrarLlegada(cita)}
+                                  title="Registrar Llegada"
+                                  style={{ padding: '0.6rem', borderRadius: '8px', border: '1px solid #10b981', backgroundColor: '#f0fdf4', color: '#10b981', cursor: 'pointer' }}
+                                >
+                                  <CheckCircle2 size={14} />
+                                </button>
+                              )}
+                              <a href={`tel:${cita.celularLlamada}`} style={{ padding: '0.6rem', borderRadius: '8px', border: '1px solid #e2e8f0', backgroundColor: 'white', color: '#94a3b8' }}>
                                 <Phone size={14} />
                               </a>
                               <button 

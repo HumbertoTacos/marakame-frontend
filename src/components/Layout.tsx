@@ -93,12 +93,7 @@ export function Layout() {
               >
                 <Clock size={20} style={{ marginRight: '1rem' }}/> Seguimiento de Prospectos
               </div>
-              <div style={navItemStyle('admisiones/nueva-solicitud')} onClick={() => navigate('/admisiones/nueva-solicitud')}
-                   onMouseEnter={(e) => { if (!location.pathname.includes('admisiones/nueva-solicitud')) { e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.05)'; e.currentTarget.style.color = '#e2e8f0'; } }}
-                   onMouseLeave={(e) => { if (!location.pathname.includes('admisiones/nueva-solicitud')) { e.currentTarget.style.backgroundColor = 'transparent'; e.currentTarget.style.color = '#94a3b8'; } }}
-              >
-                <Plus size={20} style={{ marginRight: '1rem' }}/> Nueva Solicitud
-              </div>
+
               <div style={navItemStyle('admisiones/areas')} onClick={() => navigate('/admisiones/areas')}
                    onMouseEnter={(e) => { if (!location.pathname.includes('admisiones/areas')) { e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.05)'; e.currentTarget.style.color = '#e2e8f0'; } }}
                    onMouseLeave={(e) => { if (!location.pathname.includes('admisiones/areas')) { e.currentTarget.style.backgroundColor = 'transparent'; e.currentTarget.style.color = '#94a3b8'; } }}

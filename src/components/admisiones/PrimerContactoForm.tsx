@@ -9,7 +9,9 @@ import {
   Home,
   MapPin,
   Briefcase,
-  Skull
+  Skull,
+  CheckCircle2,
+  XCircle
 } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 import { useAuthStore } from '../../stores/authStore';
@@ -131,6 +133,8 @@ export const PrimerContactoForm: React.FC = () => {
     setFormData, setOpenSection, resetForm
   } = usePrimerContactoStore();
 
+  const [errors, setErrors] = useState<Record<string, string>>({});
+
   // Cargar Catálogo de Sustancias
   useEffect(() => {
     const fetchSustancias = async () => {
@@ -152,6 +156,22 @@ export const PrimerContactoForm: React.FC = () => {
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
     
+    // Limpieza de errores al escribir
+    if (errors[name]) {
+      setErrors(prev => {
+        const newErrs = { ...prev };
+        delete newErrs[name];
+        return newErrs;
+      });
+    }
+
+    // Validación y Formateo de Teléfonos (solo números, max 10)
+    if (['celularLlamada', 'telCasaLlamada', 'telefonoPaciente'].includes(name)) {
+      const digits = value.replace(/\D/g, '').slice(0, 10);
+      setFormData({ [name]: digits });
+      return;
+    }
+
     // Lógica Especial: Autofill "EL MISMO"
     if (name === 'parentescoLlamada' && value === 'EL MISMO') {
       setFormData({
@@ -197,8 +217,68 @@ export const PrimerContactoForm: React.FC = () => {
     setFormData({ sustanciasOtros: current });
   };
 
+  const validateForm = () => {
+    const newErrors: Record<string, string> = {};
+
+    // 1. Nombre del Paciente (Obligatorio)
+    if (!formData.nombrePaciente?.trim()) {
+      newErrors.nombrePaciente = 'El nombre del prospecto es obligatorio';
+    }
+
+    // 2. Celular del Solicitante (Obligatorio, 10 dígitos)
+    if (!formData.celularLlamada?.trim()) {
+      newErrors.celularLlamada = 'El celular del solicitante es obligatorio';
+    } else if (formData.celularLlamada.length !== 10) {
+      newErrors.celularLlamada = 'El teléfono debe tener exactamente 10 dígitos';
+    }
+
+    // 3. Otros teléfonos (Opcionales, pero si existen deben ser de 10)
+    if (formData.telCasaLlamada && formData.telCasaLlamada.length !== 10) {
+      newErrors.telCasaLlamada = 'Debe tener 10 dígitos';
+    }
+    if (formData.telefonoPaciente && formData.telefonoPaciente.length !== 10) {
+      newErrors.telefonoPaciente = 'Debe tener 10 dígitos';
+    }
+
+    // 4. Motivo de la llamada / Conclusión (Obligatorio según reglas de negocio)
+    if (!formData.conclusionMedica?.trim()) {
+      newErrors.conclusionMedica = 'Debe describir el motivo o conclusión inicial';
+    }
+
+    // 5. Acuerdo de Seguimiento (Obligatorio)
+    if (!formData.acuerdoSeguimiento) {
+      newErrors.acuerdoSeguimiento = 'Seleccione un acuerdo de seguimiento';
+    }
+
+    // 6. Fecha de Acuerdo (Obligatorio si aplica)
+    const requiereFecha = ['LLAMARLE', 'ESPERAR_LLAMADA', 'POSIBLE_INGRESO'].includes(formData.acuerdoSeguimiento);
+    if (requiereFecha && !formData.fechaAcuerdo) {
+      newErrors.fechaAcuerdo = 'Defina la fecha para este seguimiento';
+    }
+
+    // 7. Validación de Hora (Formato HH:mm)
+    if (formData.hora && !/^([01][0-9]|2[0-3]):[0-5][0-9]$/.test(formData.hora)) {
+      newErrors.hora = 'Formato inválido (Ej: 14:20)';
+    }
+
+    // 8. Dictamen de Admisiones
+    if (formData.esApto === null) {
+      newErrors.esApto = 'Debe definir si el prospecto es apto o canalizado';
+    }
+
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    
+    if (!validateForm()) {
+      const firstErrorKey = Object.keys(errors)[0];
+      alert('Por favor corrige los campos marcados en rojo antes de continuar.');
+      return;
+    }
+
     setIsSubmitting(true);
 
     const submissionData = { ...formData };
@@ -257,6 +337,19 @@ export const PrimerContactoForm: React.FC = () => {
     letterSpacing: '0.025em'
   };
 
+  const errorTextStyle = {
+    color: '#ef4444',
+    fontSize: '11px',
+    fontWeight: '600',
+    marginTop: '4px',
+    marginLeft: '2px'
+  };
+
+  const inputErrorStyle = {
+    borderColor: '#ef4444',
+    backgroundColor: '#fef2f2'
+  };
+
   const grid2 = { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '1.25rem' };
   const grid3 = { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '1rem' };
 
@@ -280,8 +373,15 @@ export const PrimerContactoForm: React.FC = () => {
             <input style={{ ...inputStyle, backgroundColor: '#f1f5f9' }} value={`${usuario?.nombre} ${usuario?.apellidos}`} disabled />
           </div>
           <div>
-            <label style={labelStyle}>3) Hora</label>
-            <input name="hora" placeholder="Ej: 14:20" style={inputStyle} onChange={handleChange} value={formData.hora} />
+            <label style={labelStyle}>3) Hora *</label>
+            <input 
+              type="time"
+              name="hora" 
+              style={{ ...inputStyle, ...(errors.hora ? inputErrorStyle : {}) }} 
+              onChange={handleChange} 
+              value={formData.hora} 
+            />
+            {errors.hora && <div style={errorTextStyle}>{errors.hora}</div>}
           </div>
           <div>
             <label style={labelStyle}>Fuente de Referencia / Medio</label>
@@ -332,11 +432,25 @@ export const PrimerContactoForm: React.FC = () => {
           </div>
           <div>
             <label style={labelStyle}>7) Tel Casa</label>
-            <input name="telCasaLlamada" style={inputStyle} onChange={handleChange} value={formData.telCasaLlamada} />
+            <input 
+              name="telCasaLlamada" 
+              placeholder="10 dígitos"
+              style={{ ...inputStyle, ...(errors.telCasaLlamada ? inputErrorStyle : {}) }} 
+              onChange={handleChange} 
+              value={formData.telCasaLlamada} 
+            />
+            {errors.telCasaLlamada && <div style={errorTextStyle}>{errors.telCasaLlamada}</div>}
           </div>
           <div>
-            <label style={labelStyle}>8) Celular</label>
-            <input name="celularLlamada" style={inputStyle} onChange={handleChange} value={formData.celularLlamada} />
+            <label style={labelStyle}>8) Celular *</label>
+            <input 
+              name="celularLlamada" 
+              placeholder="10 dígitos (obligatorio)"
+              style={{ ...inputStyle, ...(errors.celularLlamada ? inputErrorStyle : {}) }} 
+              onChange={handleChange} 
+              value={formData.celularLlamada} 
+            />
+            {errors.celularLlamada && <div style={errorTextStyle}>{errors.celularLlamada}</div>}
           </div>
           <div>
             <label style={labelStyle}>9) Ocupación</label>
@@ -370,8 +484,14 @@ export const PrimerContactoForm: React.FC = () => {
               </div>
             )}
             <div style={{ gridColumn: 'span 2' }}>
-              <label style={labelStyle}>11) Nombre del Prospecto</label>
-              <input name="nombrePaciente" style={inputStyle} onChange={handleChange} value={formData.nombrePaciente} required />
+              <label style={labelStyle}>11) Nombre del Prospecto *</label>
+              <input 
+                name="nombrePaciente" 
+                style={{ ...inputStyle, ...(errors.nombrePaciente ? inputErrorStyle : {}) }} 
+                onChange={handleChange} 
+                value={formData.nombrePaciente} 
+              />
+              {errors.nombrePaciente && <div style={errorTextStyle}>{errors.nombrePaciente}</div>}
             </div>
           </div>
 
@@ -447,7 +567,14 @@ export const PrimerContactoForm: React.FC = () => {
             </div>
             <div>
               <label style={labelStyle}>18) Tel</label>
-              <input name="telefonoPaciente" style={inputStyle} onChange={handleChange} value={formData.telefonoPaciente} />
+              <input 
+                name="telefonoPaciente" 
+                placeholder="10 dígitos"
+                style={{ ...inputStyle, ...(errors.telefonoPaciente ? inputErrorStyle : {}) }} 
+                onChange={handleChange} 
+                value={formData.telefonoPaciente} 
+              />
+              {errors.telefonoPaciente && <div style={errorTextStyle}>{errors.telefonoPaciente}</div>}
             </div>
             <div>
               <label style={labelStyle}>19) Ocupación</label>
@@ -624,14 +751,19 @@ export const PrimerContactoForm: React.FC = () => {
 
               {['LLAMARLE', 'ESPERAR_LLAMADA', 'POSIBLE_INGRESO'].includes(formData.acuerdoSeguimiento) && (
                 <div style={{ animation: 'fadeIn 0.3s ease' }}>
-                  <label style={{ ...labelStyle, color: '#2563eb' }}>📅 Fecha Programada</label>
+                  <label style={{ ...labelStyle, color: '#2563eb' }}>📅 Fecha Programada *</label>
                   <input 
                     type="date" 
                     name="fechaAcuerdo" 
                     value={formData.fechaAcuerdo} 
                     onChange={handleChange} 
-                    style={{ ...inputStyle, borderColor: '#3b82f6', backgroundColor: '#eff6ff' }} 
+                    style={{ 
+                      ...inputStyle, 
+                      borderColor: errors.fechaAcuerdo ? '#ef4444' : '#3b82f6', 
+                      backgroundColor: errors.fechaAcuerdo ? '#fef2f2' : '#eff6ff' 
+                    }} 
                   />
+                  {errors.fechaAcuerdo && <div style={errorTextStyle}>{errors.fechaAcuerdo}</div>}
                 </div>
               )}
             </div>
@@ -653,21 +785,63 @@ export const PrimerContactoForm: React.FC = () => {
         </div>
       </AccordionSection>
 
-      {/* SECCIÓN 7: CIERRE MÉDICO (30-31) */}
+      {/* SECCIÓN 7: DICTAMEN DE ADMISIONES */}
       <AccordionSection
-        title="7. Cierre Médico"
+        title="7. Dictamen de Admisiones"
         icon={<Stethoscope size={20} />}
         isOpen={openSection === 6}
         onToggle={() => setOpenSection(openSection === 6 ? -1 : 6)}
       >
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
           <div>
-            <label style={labelStyle}>30) Nombre del médico que lo valoró</label>
-            <input name="medicoValoro" style={inputStyle} onChange={handleChange} value={formData.medicoValoro} />
+            <label style={{ ...labelStyle, color: '#0f172a', fontSize: '14px' }}>¿Es apto para el proceso de ingreso en Marakame? *</label>
+            <div style={{ display: 'flex', gap: '1rem', marginTop: '0.75rem' }}>
+              <button
+                type="button"
+                onClick={() => setFormData({ esApto: true })}
+                style={{
+                  flex: 1, padding: '1rem', borderRadius: '16px', border: '2px solid',
+                  borderColor: formData.esApto === true ? '#10b981' : '#e2e8f0',
+                  backgroundColor: formData.esApto === true ? '#f0fdf4' : 'white',
+                  color: formData.esApto === true ? '#15803d' : '#64748b',
+                  fontWeight: '800', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px'
+                }}
+              >
+                <CheckCircle2 size={18} /> APTO / SIGUE PROCESO
+              </button>
+              <button
+                type="button"
+                onClick={() => setFormData({ esApto: false })}
+                style={{
+                  flex: 1, padding: '1rem', borderRadius: '16px', border: '2px solid',
+                  borderColor: formData.esApto === false ? '#ef4444' : '#e2e8f0',
+                  backgroundColor: formData.esApto === false ? '#fef2f2' : 'white',
+                  color: formData.esApto === false ? '#991b1b' : '#64748b',
+                  fontWeight: '800', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px'
+                }}
+              >
+                <XCircle size={18} /> NO APTO (CANALIZAR)
+              </button>
+            </div>
+            {errors.esApto && <div style={{ ...errorTextStyle, marginTop: '8px' }}>{errors.esApto}</div>}
           </div>
+
           <div>
-            <label style={labelStyle}>31) Conclusión Médica</label>
-            <textarea name="conclusionMedica" rows={4} style={{ ...inputStyle, resize: 'none' }} onChange={handleChange} value={formData.conclusionMedica} placeholder="Resultados clínicos de la valoración inicial..." />
+            <label style={labelStyle}>{formData.esApto === false ? 'Motivo de Canalización *' : '31) Conclusión de Admisiones *'}</label>
+            <textarea 
+              name="conclusionMedica" 
+              rows={4} 
+              style={{ ...inputStyle, resize: 'none', ...(errors.conclusionMedica ? inputErrorStyle : {}) }} 
+              onChange={handleChange} 
+              value={formData.conclusionMedica} 
+              placeholder={formData.esApto === false ? "Especifique por qué no es apto y a dónde se recomienda canalizar..." : "Describa el resultado de la valoración de admisiones..." }
+            />
+            {errors.conclusionMedica && <div style={errorTextStyle}>{errors.conclusionMedica}</div>}
+          </div>
+
+          <div>
+            <label style={labelStyle}>30) Nombre de quien valida el dictamen</label>
+            <input name="medicoValoro" style={inputStyle} onChange={handleChange} value={formData.medicoValoro} placeholder="Nombre del personal de admisiones" />
           </div>
         </div>
       </AccordionSection>

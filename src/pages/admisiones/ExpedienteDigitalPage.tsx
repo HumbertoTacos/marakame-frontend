@@ -70,7 +70,8 @@ export const ExpedienteDigitalPage: React.FC = () => {
   useEffect(() => {
     fetchData();
   }, [pacienteId]);
-
+  const fetchData = async () => {
+    try {
       const [pRes, dRes, vRes] = await Promise.all([
         apiClient.get(`/pacientes/${pacienteId}`),
         apiClient.get(`/documentos/expediente/${pacienteId}`),

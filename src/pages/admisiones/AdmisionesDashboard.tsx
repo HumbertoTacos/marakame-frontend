@@ -16,10 +16,11 @@ import {
   Info,
   ExternalLink,
   MapPin,
-  ClipboardList
+  ClipboardList,
+  CheckCircle2
 } from 'lucide-react';
 import { useIngresoStore } from '../../stores/ingresoStore';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import apiClient from '../../services/api';
 import { isToday, startOfDay, parseISO, addDays, isWithinInterval, format, endOfDay } from 'date-fns';
 import { es } from 'date-fns/locale';
@@ -27,7 +28,15 @@ import { es } from 'date-fns/locale';
 const safeParseDate = (dateVal: any) => {
   if (!dateVal) return null;
   if (dateVal instanceof Date) return dateVal;
-  if (typeof dateVal === 'string') return parseISO(dateVal);
+  if (typeof dateVal === 'string') {
+    // Extraemos año, mes, día manualmente para ignorar UTC y zona horaria
+    const matches = dateVal.match(/^(\d{4})-(\d{2})-(\d{2})/);
+    if (matches) {
+      const [, y, m, d] = matches;
+      return new Date(parseInt(y), parseInt(m) - 1, parseInt(d), 12, 0, 0);
+    }
+    return parseISO(dateVal);
+  }
   return null;
 };
 
@@ -63,7 +72,7 @@ const DetalleProspectoModal = ({ isOpen, onClose, data }: any) => {
                <span style={{ color: '#64748b', fontSize: '12px' }}>#{data.id}</span>
             </div>
             <h2 style={{ margin: 0, fontSize: '24px', fontWeight: '900', color: '#0f172a' }}>{data.nombrePaciente}</h2>
-            <p style={{ margin: 0, fontSize: '14px', color: '#64748b' }}>Cita: {data.fechaAcuerdo ? format(parseISO(data.fechaAcuerdo), "d 'de' MMMM, HH:mm'hrs'", { locale: es }) : '---'}</p>
+            <p style={{ margin: 0, fontSize: '14px', color: '#64748b' }}>Cita: {data.fechaAcuerdo ? format(safeParseDate(data.fechaAcuerdo)!, "d 'de' MMMM, HH:mm'hrs'", { locale: es }) : '---'}</p>
           </div>
           <button onClick={onClose} style={{ padding: '0.5rem', borderRadius: '12px', border: '1px solid #f1f5f9', cursor: 'pointer' }}><ChevronRight size={20} style={{ transform: 'rotate(90deg)' }}/></button>
         </div>
@@ -124,6 +133,23 @@ const AdmisionesDashboard: React.FC = () => {
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const [selectedDetalle, setSelectedDetalle] = useState<any>(null);
   
+  const queryClient = useQueryClient();
+
+  // MUTACIÓN: Confirmar Llegada
+  const mutationLlegada = useMutation({
+    mutationFn: (pacienteId: number) => 
+      apiClient.patch(`/admisiones/paciente/${pacienteId}/confirmar-llegada`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['prospectos_crm'] });
+    }
+  });
+
+  const handleRegistrarLlegada = (cita: any) => {
+    if (window.confirm(`¿Confirmar llegada de ${cita.nombrePaciente || 'este prospecto'}?`)) {
+      mutationLlegada.mutate(cita.pacienteId);
+    }
+  };
+  
   // FETCH AGENDA (Primeros Contactos) - Usamos una clave unificada para sincronizar con CRM
   const { data: prospectos } = useQuery({
     queryKey: ['prospectos_crm'],
@@ -137,7 +163,7 @@ const AdmisionesDashboard: React.FC = () => {
 
     const filtered = (prospectos as any[]).filter(p => {
       const pDate = safeParseDate(p.fechaAcuerdo);
-      const isCita = p.acuerdoSeguimiento === 'CITA_PROGRAMADA';
+      const isCita = p.acuerdoSeguimiento === 'CITA_PROGRAMADA' || p.acuerdoSeguimiento === 'POSIBLE_INGRESO';
       const inRange = pDate && isWithinInterval(pDate, { start: today, end: limitDate });
       return isCita && inRange;
     });
@@ -319,8 +345,24 @@ const AdmisionesDashboard: React.FC = () => {
                       </button>
                     </div>
                     <div style={{ fontWeight: '800', fontSize: '14px', marginBottom: '4px' }}>{cita.nombrePaciente || 'Prospecto Anónimo'}</div>
-                    <div style={{ fontSize: '11px', color: '#94a3b8', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                      <Phone size={10} /> {cita.celularLlamada || 'Sin teléfono'}
+                    <div style={{ fontSize: '11px', color: '#94a3b8', display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '4px' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                        <Phone size={10} /> {cita.celularLlamada || 'Sin teléfono'}
+                      </div>
+                      {cita.paciente?.estado !== 'EN_VALORACION' ? (
+                        isToday(safeParseDate(cita.fechaAcuerdo)) ? (
+                          <button 
+                            onClick={() => handleRegistrarLlegada(cita)}
+                            style={{ background: '#10b981', color: 'white', border: 'none', borderRadius: '6px', padding: '2px 8px', fontSize: '10px', fontWeight: 'bold', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px' }}
+                          >
+                            <CheckCircle2 size={10} /> Llega
+                          </button>
+                        ) : null
+                      ) : (
+                        <span style={{ color: '#10b981', display: 'flex', alignItems: 'center', gap: '4px', fontSize: '10px', fontWeight: 'bold' }}>
+                          <CheckCircle2 size={10} /> Presente
+                        </span>
+                      )}
                     </div>
                   </div>
                 ))

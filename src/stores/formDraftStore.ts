@@ -69,6 +69,7 @@ const INITIAL_PRIMER_CONTACTO = {
   // 30-31. Cierre Médico
   medicoValoro: '',
   conclusionMedica: '',
+  esApto: null as boolean | null,
 };
 
 export const usePrimerContactoStore = create<PrimerContactoDraft>()(

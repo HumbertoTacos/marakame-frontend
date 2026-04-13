@@ -7,7 +7,7 @@ import { Login } from './pages/Login';
 // Implementación de Lazy Loading para optimización de recursos y bundle size
 const Dashboard = lazy(() => import('./pages/Dashboard').then(m => ({ default: m.Dashboard })));
 const Ingreso = lazy(() => import('./pages/admisiones/Ingreso').then(m => ({ default: m.Ingreso })));
-const EstudioSocioeconomicoForm = lazy(() => import('./pages/admisiones/EstudioSocioeconomicoForm').then(m => ({ default: m.EstudioSocioeconomicoForm })));
+const EstudioSocioeconomicoPage = lazy(() => import('./pages/admisiones/EstudioSocioeconomicoPage'));
 const Almacen = lazy(() => import('./pages/operativos/Almacen').then(m => ({ default: m.Almacen })));
 const Compras = lazy(() => import('./pages/operativos/Compras').then(m => ({ default: m.Compras })));
 const Nominas = lazy(() => import('./pages/operativos/Nominas').then(m => ({ default: m.Nominas })));
@@ -17,7 +17,7 @@ const Reportes = lazy(() => import('./pages/transversal/Reportes').then(m => ({ 
 
 // Admisiones Nuevas
 const AdmisionesDashboard = lazy(() => import('./pages/admisiones/AdmisionesDashboard'));
-const NuevaSolicitudPage = lazy(() => import('./pages/admisiones/NuevaSolicitudPage'));
+const NuevoIngresoPage = lazy(() => import('./pages/admisiones/NuevoIngresoPage'));
 const AsignarCamaPage = lazy(() => import('./pages/admisiones/AsignarCamaPage'));
 const AreasPage = lazy(() => import('./pages/admisiones/AreasPage'));
 const PrimerContactoPage = lazy(() => import('./pages/admisiones/PrimerContactoPage'));
@@ -58,7 +58,7 @@ function App() {
               </ProtectedRoute>
             }>
               <Route path="dashboard" element={<AdmisionesDashboard />} />
-              <Route path="nueva-solicitud" element={<NuevaSolicitudPage />} />
+              <Route path="nuevo-ingreso" element={<NuevoIngresoPage />} />
               <Route path="asignar-cama/:id" element={<AsignarCamaPage />} />
               <Route path="areas" element={<AreasPage />} />
               <Route path="primer-contacto" element={<PrimerContactoPage />} />
@@ -70,7 +70,7 @@ function App() {
                 </ProtectedRoute>
               } />
               <Route path="ingreso" element={<Ingreso />} />
-              <Route path="estudio" element={<EstudioSocioeconomicoForm pacienteId={1} />} />
+              <Route path="estudio-socioeconomico/:id" element={<EstudioSocioeconomicoPage />} />
             </Route>
             
             {/* Módulo Médico - Restringido */}
