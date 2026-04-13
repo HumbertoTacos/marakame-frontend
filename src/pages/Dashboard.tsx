@@ -109,7 +109,7 @@ export function Dashboard() {
         <div style={{ position: 'relative', zIndex: 1, display: 'flex', alignItems: 'center', width: '100%' }}>
           <div style={{ 
             background: 'rgba(255, 255, 255, 0.1)', 
-            backdropFilter: 'blur(10px)',
+            backgroundColor: 'white',
             padding: '1.25rem', 
             borderRadius: '20px', 
             marginRight: '1.5rem',

@@ -99,10 +99,9 @@ export function Ingreso() {
         alignItems: 'center', 
         marginBottom: '2.5rem',
         background: 'var(--glass-bg)',
-        backdropFilter: 'blur(10px)',
-        padding: '1.5rem 2rem',
+        backgroundColor: '#ffffff',
+        border: '1px solid #e2e8f0',
         borderRadius: 'var(--radius-lg)',
-        border: '1px solid var(--glass-border)',
         boxShadow: 'var(--shadow)'
       }}>
         <div style={{ 

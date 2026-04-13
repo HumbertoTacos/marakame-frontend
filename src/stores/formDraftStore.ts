@@ -100,44 +100,75 @@ export const usePrimerContactoStore = create<PrimerContactoDraft>()(
 // STORE: VALORACIÓN MÉDICA
 // ==========================================
 interface ValoracionMedicaDraft {
-  formData: any;
-  activeTab: number;
+  formData: {
+    motivoConsulta: string;
+    padecimientoActual: string;
+    sintomasGenerales: string;
+    tratamientosPrevios: string;
+    antecedentesHeredofamiliares: string;
+    antecedentesPatologicos: string;
+    antecedentesNoPatologicos: string;
+    historialConsumo: string;
+    tensionArterial: string;
+    frecuenciaCardiaca: string;
+    frecuenciaRespiratoria: string;
+    temperatura: string;
+    peso: string;
+    talla: string;
+    exploracionFisicaDesc: string;
+    examenMental: string;
+    impresionDiagnostica: string;
+    pronostico: string;
+    planTratamiento: string;
+    esAptoParaIngreso: boolean | null;
+    // Nuevos campos
+    residente: string;
+    tipoValoracion: 'PRESENCIAL' | 'TELEFONICA' | '';
+    fechaValoracion: string;
+    horaValoracion: string;
+  };
   lastUpdated: number;
   setFormData: (data: StateUpdater<any>) => void;
-  setActiveTab: (tab: StateUpdater<number>) => void;
   resetForm: () => void;
 }
 
 const INITIAL_VALORACION_MEDICA = {
   motivoConsulta: '',
-  evolucionEstado: '',
-  factoresDesencadenantes: '',
-  antecedentes: { heredofamiliares: '', personalesPatologicos: '', psiquiatricos: '' },
-  signosVitales: { ta: '', fc: '', fr: '', temp: '', peso: '', talla: '' },
-  exploracionFisica: '',
-  examenMental: { aspectoGeneral: '', psicomotricidad: '', afectividad: '', ideacion: '' },
-  diagnosticoCIE10: '',
-  diagnosticoOtro: '',
+  padecimientoActual: '',
+  sintomasGenerales: '',
+  tratamientosPrevios: '',
+  antecedentesHeredofamiliares: '',
+  antecedentesPatologicos: '',
+  antecedentesNoPatologicos: '',
+  historialConsumo: '',
+  tensionArterial: '',
+  frecuenciaCardiaca: '',
+  frecuenciaRespiratoria: '',
+  temperatura: '',
+  peso: '',
+  talla: '',
+  exploracionFisicaDesc: '',
+  examenMental: '',
+  impresionDiagnostica: '',
   pronostico: '',
-  tratamientoSugerido: '',
+  planTratamiento: '',
   esAptoParaIngreso: null,
+  residente: '',
+  tipoValoracion: '',
+  fechaValoracion: new Date().toISOString().split('T')[0],
+  horaValoracion: new Date().toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit', hour12: false }),
 };
 
 export const useValoracionMedicaStore = create<ValoracionMedicaDraft>()(
   persist(
     (set) => ({
       formData: INITIAL_VALORACION_MEDICA,
-      activeTab: 0,
       lastUpdated: Date.now(),
       setFormData: (data) => set((state) => ({ 
         formData: typeof data === 'function' ? data(state.formData) : { ...state.formData, ...data }, 
         lastUpdated: Date.now() 
       })),
-      setActiveTab: (tab) => set((state) => ({ 
-        activeTab: typeof tab === 'function' ? tab(state.activeTab) : tab, 
-        lastUpdated: Date.now() 
-      })),
-      resetForm: () => set({ formData: INITIAL_VALORACION_MEDICA, activeTab: 0, lastUpdated: Date.now() }),
+      resetForm: () => set({ formData: INITIAL_VALORACION_MEDICA, lastUpdated: Date.now() }),
     }),
     { name: 'marakame-draft-valoracion-medica' }
   )

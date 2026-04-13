@@ -61,11 +61,10 @@ export function Almacen() {
         justifyContent: 'space-between', 
         alignItems: 'center', 
         marginBottom: '2.5rem',
-        background: 'var(--glass-bg)',
-        backdropFilter: 'blur(10px)',
+        backgroundColor: '#ffffff',
+        border: '1px solid #e2e8f0',
         padding: '1.5rem 2.5rem',
         borderRadius: 'var(--radius-lg)',
-        border: '1px solid var(--glass-border)',
         boxShadow: 'var(--shadow)'
       }}>
         <div style={{ display: 'flex', alignItems: 'center' }}>
@@ -288,7 +287,7 @@ export function Almacen() {
       {showModal && (
           <div style={{ 
               position: 'fixed', inset: 0, backgroundColor: 'rgba(15, 23, 42, 0.4)', 
-              backdropFilter: 'blur(8px)', zIndex: 1000, 
+              backgroundColor: 'rgba(15, 23, 42, 0.75)', zIndex: 1000, 
               display: 'flex', alignItems: 'center', justifyContent: 'center',
               animation: 'fade-in 0.3s ease'
           }}>

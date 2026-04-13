@@ -11,14 +11,14 @@ import {
 } from 'lucide-react';
 import { useNavigate, useParams } from 'react-router-dom';
 
-import SeccionAdministrativa from '../../components/clinico/SeccionAdministrativa';
-import SeccionClinica from '../../components/clinico/SeccionClinica';
-import SeccionEvaluaciones from '../../components/clinico/SeccionEvaluaciones';
+import SeccionAdministrativa from '../../components/medico/SeccionAdministrativa';
+import SeccionMedica from '../../components/medico/SeccionMedica';
+import SeccionEvaluaciones from '../../components/medico/SeccionEvaluaciones';
 
 const ExpedienteDigitalPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const [activeTab, setActiveTab] = useState<'administrativo' | 'clinico' | 'evaluaciones'>('administrativo');
+  const [activeTab, setActiveTab] = useState<'administrativo' | 'medico' | 'evaluaciones'>('administrativo');
   const [expedienteRaw, setExpedienteRaw] = useState<any>(null);
   const [loading, setLoading] = useState(true);
 
@@ -43,7 +43,7 @@ const ExpedienteDigitalPage: React.FC = () => {
 
   const tabs = [
     { id: 'administrativo', label: 'Administrativo', icon: FileText, color: '#3b82f6' },
-    { id: 'clinico', label: 'Clínico', icon: Stethoscope, color: '#10b981' },
+    { id: 'medico', label: 'Médico', icon: Stethoscope, color: '#10b981' },
     { id: 'evaluaciones', label: 'Evaluaciones', icon: ClipboardCheck, color: '#f59e0b' },
   ];
 
@@ -161,8 +161,8 @@ const ExpedienteDigitalPage: React.FC = () => {
           <SeccionAdministrativa pacienteId={paciente.id} />
         )}
 
-        {activeTab === 'clinico' && (
-          <SeccionClinica expediente={expedienteRaw} onRefresh={fetchExpediente} />
+        {activeTab === 'medico' && (
+          <SeccionMedica expediente={expedienteRaw} onRefresh={fetchExpediente} />
         )}
 
         {activeTab === 'evaluaciones' && (

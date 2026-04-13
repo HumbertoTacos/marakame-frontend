@@ -108,15 +108,15 @@ export function Layout() {
             </>
           )}
 
-          {/* Módulo Clínico */}
+          {/* Módulo Médico */}
           {(['AREA_MEDICA', 'ENFERMERIA', 'PSICOLOGIA', 'NUTRICION', 'ADMIN_GENERAL'].includes(usuario?.rol || '')) && (
             <>
               <div style={{ fontSize: '11px', color: '#64748b', textTransform: 'uppercase', letterSpacing: '1.5px', margin: '2rem 0 1rem 0', fontWeight: '700' }}>Área Médica</div>
-              <div style={navItemStyle('clinica')} onClick={() => navigate('/clinica')}
-                   onMouseEnter={(e) => { if (!location.pathname.includes('clinica')) { e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.05)'; e.currentTarget.style.color = '#e2e8f0'; } }}
-                   onMouseLeave={(e) => { if (!location.pathname.includes('clinica')) { e.currentTarget.style.backgroundColor = 'transparent'; e.currentTarget.style.color = '#94a3b8'; } }}
+              <div style={navItemStyle('medica')} onClick={() => navigate('/medica')}
+                   onMouseEnter={(e) => { if (!location.pathname.includes('medica')) { e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.05)'; e.currentTarget.style.color = '#e2e8f0'; } }}
+                   onMouseLeave={(e) => { if (!location.pathname.includes('medica')) { e.currentTarget.style.backgroundColor = 'transparent'; e.currentTarget.style.color = '#94a3b8'; } }}
               >
-                <Stethoscope size={20} style={{ marginRight: '1rem' }}/> Clínica / Expediente
+                <Stethoscope size={20} style={{ marginRight: '1rem' }}/> Médica / Expediente
               </div>
             </>
           )}
@@ -180,9 +180,7 @@ export function Layout() {
         {/* Top Header Premium */}
         <header style={{ 
           height: '80px', 
-          backgroundColor: 'var(--glass-bg)', 
-          backdropFilter: 'blur(16px)',
-          WebkitBackdropFilter: 'blur(16px)',
+          backgroundColor: 'white',
           borderBottom: '1px solid var(--glass-border)', 
           display: 'flex', 
           alignItems: 'center', 

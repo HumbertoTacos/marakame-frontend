@@ -11,7 +11,7 @@ const EstudioSocioeconomicoForm = lazy(() => import('./pages/admisiones/EstudioS
 const Almacen = lazy(() => import('./pages/operativos/Almacen').then(m => ({ default: m.Almacen })));
 const Compras = lazy(() => import('./pages/operativos/Compras').then(m => ({ default: m.Compras })));
 const Nominas = lazy(() => import('./pages/operativos/Nominas').then(m => ({ default: m.Nominas })));
-const AreaClinica = lazy(() => import('./pages/clinica/AreaClinica').then(m => ({ default: m.AreaClinica })));
+const AreaMedica = lazy(() => import('./pages/medica/AreaMedica').then(m => ({ default: m.AreaMedica })));
 const Bitacora = lazy(() => import('./pages/transversal/Bitacora').then(m => ({ default: m.Bitacora })));
 const Reportes = lazy(() => import('./pages/transversal/Reportes').then(m => ({ default: m.Reportes })));
 
@@ -73,10 +73,10 @@ function App() {
               <Route path="estudio" element={<EstudioSocioeconomicoForm pacienteId={1} />} />
             </Route>
             
-            {/* Módulo Clínico - Restringido */}
-            <Route path="clinica" element={
+            {/* Módulo Médico - Restringido */}
+            <Route path="medica" element={
               <ProtectedRoute allowedRoles={['AREA_MEDICA', 'ENFERMERIA', 'PSICOLOGIA', 'NUTRICION', 'ADMIN_GENERAL']}>
-                <AreaClinica />
+                <AreaMedica />
               </ProtectedRoute>
             } />
             

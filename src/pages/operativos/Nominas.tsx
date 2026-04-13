@@ -48,11 +48,10 @@ export function Nominas() {
         justifyContent: 'space-between',
         alignItems: 'center',
         marginBottom: '2.5rem',
-        background: 'var(--glass-bg)',
-        backdropFilter: 'blur(10px)',
+        backgroundColor: '#ffffff',
+        border: '1px solid #e2e8f0',
         padding: '1.5rem 2.5rem',
         borderRadius: 'var(--radius-lg)',
-        border: '1px solid var(--glass-border)',
         boxShadow: 'var(--shadow)'
       }}>
         <div style={{ display: 'flex', alignItems: 'center' }}>
@@ -284,7 +283,7 @@ export function Nominas() {
 
       {/* MODAL EMPLEADO PREMIUM */}
       {showModalEmp && (
-        <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(15, 23, 42, 0.4)', backdropFilter: 'blur(8px)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(15, 23, 42, 0.75)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
           <div style={{ backgroundColor: 'white', padding: '3rem', borderRadius: '32px', width: '90%', maxWidth: '500px', boxShadow: 'var(--shadow-lg)' }}>
             <h2 style={{ fontSize: '24px', fontWeight: '800', marginBottom: '2rem' }}>Registro de Personal</h2>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>

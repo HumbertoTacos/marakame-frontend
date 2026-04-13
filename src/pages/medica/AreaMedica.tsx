@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { 
   Activity, Search, 
-  FileText, ChevronRight, Stethoscope, Clock, Users, Calendar, Folder
+  FileText, ChevronRight, Stethoscope, Clock, Users, Calendar, Folder, X
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import apiClient from '../../services/api';
@@ -21,7 +21,46 @@ const calcularEdad = (fechaNacimiento: string) => {
   return edad;
 };
 
-export function AreaClinica() {
+// ==========================================
+// MODAL: Ver todas las sustancias (Reutilizado de Seguimiento)
+// ==========================================
+const VerSustanciasModal = ({ isOpen, onClose, sustancias, nombrePaciente }: any) => {
+  if (!isOpen) return null;
+
+  return (
+    <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(15, 23, 42, 0.8)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1100, animation: 'fadeIn 0.2s ease' }}>
+      <div style={{ backgroundColor: 'white', borderRadius: '32px', width: '90%', maxWidth: '400px', padding: '2rem', boxShadow: '0 25px 50px -12px rgba(0,0,0,0.25)', border: '1px solid #f1f5f9' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
+          <div>
+            <h3 style={{ margin: 0, fontSize: '18px', fontWeight: '900', color: '#0f172a' }}>Perfil de Sustancias</h3>
+            <p style={{ margin: 0, fontSize: '12px', color: '#64748b', fontWeight: '600' }}>Paciente: {nombrePaciente || 'Sin Nombre'}</p>
+          </div>
+          <button onClick={onClose} style={{ padding: '0.5rem', borderRadius: '12px', border: '1px solid #f1f5f9', backgroundColor: 'white', cursor: 'pointer', color: '#64748b' }}>
+            <X size={18} />
+          </button>
+        </div>
+
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.75rem', marginBottom: '1rem' }}>
+          {sustancias?.map((s: string, i: number) => (
+            <div key={i} style={{ backgroundColor: '#eff6ff', color: '#3b82f6', padding: '0.6rem 1rem', borderRadius: '14px', fontSize: '13px', fontWeight: '800', border: '1px solid #dbeafe', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              <div style={{ width: '6px', height: '6px', backgroundColor: '#3b82f6', borderRadius: '50%' }}></div>
+              {s}
+            </div>
+          ))}
+        </div>
+
+        <button 
+          onClick={onClose} 
+          style={{ width: '100%', padding: '1rem', backgroundColor: '#0f172a', color: 'white', borderRadius: '16px', border: 'none', fontWeight: '800', cursor: 'pointer', marginTop: '1rem' }}
+        >
+          Cerrar Vista
+        </button>
+      </div>
+    </div>
+  );
+};
+
+export function AreaMedica() {
   const { usuario } = useAuthStore();
   const queryClient = useQueryClient();
   const navigate = useNavigate();
@@ -33,6 +72,9 @@ export function AreaClinica() {
   
   // Estados de formulario
   const [nuevaNota, setNuevaNota] = useState('');
+  const [sustanciasModal, setSustanciasModal] = useState<{ isOpen: boolean, sustancias: string[], nombre: string }>({ 
+    isOpen: false, sustancias: [], nombre: '' 
+  });
 
   // 1. Cargar prospectos (Cola de Valoración)
   const { data: prospectos, isLoading: isLoadingProspectos } = useQuery<Paciente[]>({
@@ -75,14 +117,14 @@ export function AreaClinica() {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: 'calc(100vh - 120px)', gap: '1.5rem' }}>
       
-      {/* HEADER DASHBOARD CLINICO */}
+      {/* HEADER DASHBOARD MEDICO */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', backgroundColor: 'white', padding: '1.5rem 2.5rem', borderRadius: '24px', border: '1px solid #e2e8f0', boxShadow: 'var(--shadow)' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
           <div style={{ padding: '0.75rem', backgroundColor: '#3b82f6', color: 'white', borderRadius: '16px' }}>
             <Activity size={32} />
           </div>
           <div>
-            <h1 style={{ fontSize: '24px', fontWeight: '900', color: '#1e293b', margin: 0 }}>Área Clínica</h1>
+            <h1 style={{ fontSize: '24px', fontWeight: '900', color: '#1e293b', margin: 0 }}>Área Médica</h1>
             <p style={{ color: '#64748b', fontSize: '14px', margin: 0, fontWeight: '600' }}>Panel del Médico • {usuario?.nombre}</p>
           </div>
         </div>
@@ -137,7 +179,7 @@ export function AreaClinica() {
           <div style={{ padding: '2rem 2.5rem', borderBottom: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <div>
               <h2 style={{ fontSize: '20px', fontWeight: '900', color: '#1e293b', margin: 0 }}>Cola de Valoración Médica</h2>
-              <p style={{ color: '#64748b', fontSize: '14px', margin: 0 }}>Prospectos registrados pendientes de evaluación clínica inicial.</p>
+              <p style={{ color: '#64748b', fontSize: '14px', margin: 0 }}>Prospectos registrados pendientes de evaluación médica inicial.</p>
             </div>
           </div>
 
@@ -165,14 +207,32 @@ export function AreaClinica() {
                         <div style={{ fontSize: '12px', color: '#64748b' }}>Folio: PC-{prospecto.id}</div>
                       </td>
                       <td style={{ padding: '1.25rem 1.5rem' }}>
-                        <div style={{ fontWeight: '600', color: '#475569' }}>{calcularEdad(prospecto.fechaNacimiento.toString())} años</div>
+                        <div style={{ fontWeight: '600', color: '#475569' }}>
+                          {prospecto.primerContacto?.[0]?.edadPaciente || calcularEdad(prospecto.fechaNacimiento.toString())} años
+                        </div>
                         <div style={{ fontSize: '12px', color: '#94a3b8' }}>{prospecto.sexo === 'M' ? 'Masculino' : 'Femenina'}</div>
                       </td>
                       <td style={{ padding: '1.25rem 1.5rem' }}>
-                        <div style={{ fontSize: '13px', color: '#334155', fontWeight: '600', maxWidth: '200px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                          {prospecto.sustancias && prospecto.sustancias.length > 0 
-                            ? prospecto.sustancias.join(', ')
-                            : 'No especificada'}
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.4rem', alignItems: 'center' }}>
+                          {(() => {
+                            const list = prospecto.primerContacto?.[0]?.sustancias || prospecto.sustancias || [];
+                            return (
+                              <>
+                                {list.slice(0, 2).map((s, i) => (
+                                  <span key={i} style={{ backgroundColor: '#f1f5f9', fontSize: '10px', fontWeight: '700', padding: '0.2rem 0.6rem', borderRadius: '4px', color: '#475569' }}>{s}</span>
+                                ))}
+                                {list.length > 2 && (
+                                  <button 
+                                    onClick={() => setSustanciasModal({ isOpen: true, sustancias: list, nombre: `${prospecto.nombre} ${prospecto.apellidoPaterno}` })}
+                                    style={{ border: 'none', backgroundColor: 'transparent', fontSize: '11px', fontWeight: '900', color: '#3b82f6', cursor: 'pointer', textDecoration: 'underline', padding: 0 }}
+                                  >
+                                    +{list.length - 2}
+                                  </button>
+                                )}
+                                {list.length === 0 && <span style={{ fontSize: '12px', color: '#94a3b8' }}>No especificada</span>}
+                              </>
+                            );
+                          })()}
                         </div>
                       </td>
                       <td style={{ padding: '1.25rem 1.5rem' }}>
@@ -266,14 +326,14 @@ export function AreaClinica() {
                 <div style={{ background: '#f8fafc', padding: '2rem', borderRadius: '50%', marginBottom: '1.5rem' }}>
                   <Users size={64} color="#cbd5e1" />
                 </div>
-                <h3 style={{ color: '#1e293b', fontWeight: '800' }}>Gestión Clínica de Internos</h3>
+                <h3 style={{ color: '#1e293b', fontWeight: '800' }}>Gestión Médica de Internos</h3>
                 <p style={{ maxWidth: '400px', fontSize: '14px', lineHeight: '1.6' }}>
                   Seleccione un paciente de la lista para ver su expediente digital, registrar notas de evolución o toma de signos vitales.
                 </p>
               </div>
             ) : isLoadingExpediente ? (
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%' }}>
-                <p>Cargando información clínica...</p>
+                <p>Cargando información médica...</p>
               </div>
             ) : (
               <>
@@ -319,7 +379,7 @@ export function AreaClinica() {
                   </button>
                 </div>
 
-                {/* Tabs Clínicos */}
+                {/* Tabs Médicos */}
                 <div style={{ display: 'flex', borderBottom: '1px solid #f1f5f9', padding: '0 2.5rem' }}>
                   {[
                     { id: 'NOTAS', label: 'Evolución', icon: FileText, color: '#3b82f6' },
@@ -388,6 +448,14 @@ export function AreaClinica() {
           </div>
         </div>
       )}
+
+      {/* MODALES */}
+      <VerSustanciasModal 
+         isOpen={sustanciasModal.isOpen}
+         onClose={() => setSustanciasModal({ ...sustanciasModal, isOpen: false })}
+         sustancias={sustanciasModal.sustancias}
+         nombrePaciente={sustanciasModal.nombre}
+       />
     </div>
   );
 }

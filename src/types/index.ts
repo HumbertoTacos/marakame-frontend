@@ -199,6 +199,28 @@ export interface Auditoria {
 
 // --- Circular and Dependent Models (Paciente / Cama / Ingreso) ---
 
+export interface PrimerContacto {
+  id: number;
+  pacienteId: number;
+  usuarioId: number;
+  fecha: string | Date;
+  hora?: string;
+  medioEnterado?: string;
+  nombreLlamada?: string;
+  celularLlamada?: string;
+  parentescoLlamada?: string;
+  nombrePaciente?: string;
+  edadPaciente?: number | null;
+  sustancias: string[];
+  sustanciasOtros: string[];
+  acuerdoSeguimiento?: string;
+  fechaAcuerdo?: string | Date | null;
+  medicoValoro?: string;
+  conclusionMedica?: string;
+  activo: boolean;
+  createdAt: string | Date;
+}
+
 export interface Habitacion {
   id: number;
   nombre: string;
@@ -237,6 +259,7 @@ export interface Paciente {
   totalDiasTratamiento?: number;
   cama?: Cama;
   sustancias?: string[];
+  primerContacto?: PrimerContacto[];
   createdAt?: string;
 }
 

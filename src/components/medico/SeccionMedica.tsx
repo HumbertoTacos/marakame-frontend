@@ -8,12 +8,12 @@ import {
   AlertCircle 
 } from 'lucide-react';
 
-interface SeccionClinicaProps {
+interface SeccionMedicaProps {
   expediente: any; // El objeto expediente completo con notas y signos
   onRefresh: () => void;
 }
 
-const SeccionClinica: React.FC<SeccionClinicaProps> = ({ expediente, onRefresh }) => {
+const SeccionMedica: React.FC<SeccionMedicaProps> = ({ expediente, onRefresh }) => {
   const [showModalNota, setShowModalNota] = useState(false);
   const [showModalSignos, setShowModalSignos] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
@@ -42,7 +42,7 @@ const SeccionClinica: React.FC<SeccionClinicaProps> = ({ expediente, onRefresh }
       setNuevaNota({ tipo: 'GENERAL', nota: '' });
       onRefresh();
     } catch (error) {
-      alert('Error al guardar la nota clínica');
+      alert('Error al guardar la nota médica');
     } finally {
       setIsSaving(false);
     }
@@ -143,7 +143,7 @@ const SeccionClinica: React.FC<SeccionClinicaProps> = ({ expediente, onRefresh }
                 />
               </div>
               <button onClick={handleSaveNota} disabled={isSaving} style={btnSaveStyle}>
-                {isSaving ? 'Guardando...' : <><Save size={18} /> Guardar Nota Clinica</>}
+                {isSaving ? 'Guardando...' : <><Save size={18} /> Guardar Nota Médica</>}
               </button>
             </div>
           </div>
@@ -201,7 +201,7 @@ const SeccionClinica: React.FC<SeccionClinicaProps> = ({ expediente, onRefresh }
 };
 
 // Estilos rápidos (pueden venir de un sistema de diseño real)
-const modalOverlayStyle: React.CSSProperties = { position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, backdropFilter: 'blur(4px)' };
+const modalOverlayStyle: React.CSSProperties = { position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 };
 const modalContentStyle: React.CSSProperties = { backgroundColor: 'white', borderRadius: '24px', width: '90%', maxWidth: '600px', boxShadow: '0 25px 50px -12px rgba(0,0,0,0.25)' };
 const modalHeaderStyle: React.CSSProperties = { padding: '1.5rem 2rem', borderBottom: '1px solid #f1f5f9', display: 'flex', justifyContent: 'space-between', alignItems: 'center' };
 const modalBodyStyle: React.CSSProperties = { padding: '2rem' };
@@ -210,4 +210,4 @@ const labelStyle: React.CSSProperties = { display: 'block', fontSize: '13px', fo
 const inputStyle: React.CSSProperties = { width: '100%', padding: '0.75rem 1rem', borderRadius: '12px', border: '1px solid #e2e8f0', outline: 'none', transition: 'border-color 0.2s' };
 const btnSaveStyle: React.CSSProperties = { width: '100%', padding: '1rem', backgroundColor: '#3b82f6', color: 'white', border: 'none', borderRadius: '12px', fontWeight: 'bold', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', marginTop: '1rem' };
 
-export default SeccionClinica;
+export default SeccionMedica;

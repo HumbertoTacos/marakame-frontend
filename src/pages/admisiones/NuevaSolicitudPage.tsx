@@ -209,7 +209,7 @@ const NuevaSolicitudPage: React.FC = () => {
             <p style={{ color: '#64748b', fontSize: '14px', margin: 0 }}>Formalizando estancia de: <strong style={{ color: '#1e293b' }}>{formData.nombre} {formData.apellidoPaterno}</strong></p>
           </div>
         </div>
-        <div style={{ backgroundColor: '#f0fdf4', color: '#16a34a', padding: '0.5rem 1rem', borderRadius: '12px', fontSize: '12px', fontWeight: '900', border: '1px solid #dcfce7' }}>✓ Prospecto Aprobado Clínicamente</div>
+        <div style={{ backgroundColor: '#f0fdf4', color: '#16a34a', padding: '0.5rem 1rem', borderRadius: '12px', fontSize: '12px', fontWeight: '900', border: '1px solid #dcfce7' }}>✓ Prospecto Aprobado Médicamente</div>
       </div>
 
       {/* Stepper */}
@@ -433,7 +433,7 @@ const NuevaSolicitudPage: React.FC = () => {
                   <div style={{ fontSize: '13px', color: '#64748b' }}>Curp: {formData.curp || 'N/A'}</div>
                </div>
                <div style={{ padding: '1.5rem', backgroundColor: '#eff6ff', borderRadius: '20px', border: '1px solid #bfdbfe' }}>
-                  <span style={{ fontSize: '11px', fontWeight: '900', color: '#3b82f6', textTransform: 'uppercase' }}>Asignación Clínica</span>
+                  <span style={{ fontSize: '11px', fontWeight: '900', color: '#3b82f6', textTransform: 'uppercase' }}>Asignación Médica</span>
                   <div style={{ fontSize: '18px', fontWeight: '900', color: '#1e293b' }}>Cama Seleccionada</div>
                   <div style={{ fontSize: '13px', color: '#3b82f6', fontWeight: '800' }}>Habitación {camas.find(c => c.id === formData.camaId)?.habitacion?.nombre || '-'}</div>
                </div>

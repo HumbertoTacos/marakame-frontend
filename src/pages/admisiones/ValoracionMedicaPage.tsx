@@ -13,8 +13,8 @@ const ValoracionMedicaPage: React.FC = () => {
   useEffect(() => {
     const fetchPaciente = async () => {
       try {
-        const response = await apiClient.get(`/expedientes/paciente/${id}`);
-        setPaciente(response.data.data.paciente);
+        const response = await apiClient.get(`/pacientes/${id}`);
+        setPaciente(response.data.data);
       } catch (error) {
         console.error('Error fetching patient for valuation:', error);
       } finally {
@@ -45,7 +45,7 @@ const ValoracionMedicaPage: React.FC = () => {
               </div>
               <div>
                 <h1 style={{ fontSize: '24px', fontWeight: '900', color: '#1e293b', margin: 0 }}>Valoración Médica</h1>
-                <p style={{ color: '#64748b', fontSize: '14px', margin: 0 }}>Historia Clínica de Ingreso</p>
+                <p style={{ color: '#64748b', fontSize: '14px', margin: 0 }}>Historia Médica de Ingreso</p>
               </div>
             </div>
           </div>

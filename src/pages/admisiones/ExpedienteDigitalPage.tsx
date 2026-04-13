@@ -33,6 +33,8 @@ export const ExpedienteDigitalPage: React.FC = () => {
   const [documentos, setDocumentos] = useState<DocumentoExpediente[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [uploadingId, setUploadingId] = useState<number | null>(null);
+  const [valoracionMedica, setValoracionMedica] = useState<any>(null);
+  const [isUploadingFirma, setIsUploadingFirma] = useState(false);
 
   // Lógica de Permisos (RBAC Granular)
   const getCanUpload = (doc: DocumentoExpediente) => {
@@ -69,20 +71,39 @@ export const ExpedienteDigitalPage: React.FC = () => {
     fetchData();
   }, [pacienteId]);
 
-  const fetchData = async () => {
-    try {
-      setIsLoading(true);
-      const [pRes, dRes] = await Promise.all([
+      const [pRes, dRes, vRes] = await Promise.all([
         apiClient.get(`/pacientes/${pacienteId}`),
-        apiClient.get(`/documentos/expediente/${pacienteId}`)
+        apiClient.get(`/documentos/expediente/${pacienteId}`),
+        apiClient.get(`/admisiones/valoracion-medica/paciente/${pacienteId}`)
       ]);
       
       setPaciente(pRes.data.data);
       setDocumentos(dRes.data.data);
+      setValoracionMedica(vRes.data.data);
     } catch (error) {
       console.error('Error fetching expediente data:', error);
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const handleUploadFirma = async (file: File) => {
+    if (!valoracionMedica) return;
+    setIsUploadingFirma(true);
+    const formData = new FormData();
+    formData.append('archivo', file);
+
+    try {
+      await apiClient.post(`/admisiones/valoracion-medica/${valoracionMedica.id}/upload-firma`, formData, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      });
+      alert('Valoración firmada cargada exitosamente.');
+      fetchData(); // Recargar datos
+    } catch (error) {
+      console.error('Error uploading signature:', error);
+      alert('Error al subir la valoración firmada');
+    } finally {
+      setIsUploadingFirma(false);
     }
   };
 
@@ -149,6 +170,49 @@ export const ExpedienteDigitalPage: React.FC = () => {
               <InfoItem icon={<Calendar size={16} />} label="Ingreso" value={paciente?.fechaIngreso ? new Date(paciente.fechaIngreso).toLocaleDateString() : '---'} />
             </div>
           </div>
+
+          {/* ALERTA DE VALORACIÓN PENDIENTE DE FIRMA (FLUJO PHYGITAL) */}
+          {valoracionMedica?.estado === 'COMPLETADA' && usuario?.rol === 'AREA_MEDICA' && (
+            <div style={{ marginTop: '2rem', padding: '1.5rem 2rem', backgroundColor: '#fdf2f8', borderRadius: '24px', border: '2px dashed #db2777', display: 'flex', justifyContent: 'space-between', alignItems: 'center', animation: 'pulse 2s infinite' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '1.5rem' }}>
+                <div style={{ padding: '0.8rem', backgroundColor: '#fce7f3', color: '#db2777', borderRadius: '50%' }}>
+                  <AlertCircle size={24} />
+                </div>
+                <div>
+                  <h3 style={{ margin: 0, fontSize: '15px', fontWeight: '900', color: '#9d174d' }}>Acción Pendiente: Subir Valoración Firmada</h3>
+                  <p style={{ margin: 0, fontSize: '13px', color: '#be185d', fontWeight: '600' }}>
+                    El registro médico ha sido completado digitalmente. Por favor suba el formato oficial con la firma física.
+                  </p>
+                </div>
+              </div>
+              <label style={{ 
+                padding: '0.8rem 1.5rem', 
+                backgroundColor: '#db2777', 
+                color: 'white', 
+                borderRadius: '14px', 
+                fontWeight: '800', 
+                fontSize: '13px', 
+                cursor: isUploadingFirma ? 'not-allowed' : 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '0.5rem',
+                boxShadow: '0 10px 15px -3px rgba(219,39,119,0.3)'
+              }}>
+                {isUploadingFirma ? <Loader2 className="animate-spin" size={18} /> : <Upload size={18} />}
+                Digitalizar Firma
+                <input 
+                  type="file" 
+                  accept=".pdf,image/*" 
+                  style={{ display: 'none' }} 
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (file) handleUploadFirma(file);
+                  }}
+                  disabled={isUploadingFirma}
+                />
+              </label>
+            </div>
+          )}
         </div>
 
         {/* LAYOUT DOS COLUMNAS (CARPETA ABIERTA) */}
@@ -174,11 +238,11 @@ export const ExpedienteDigitalPage: React.FC = () => {
             </div>
           </div>
 
-          {/* COLUMNA DERECHA: CLÍNICA/EVALUACIONES */}
+          {/* COLUMNA DERECHA: MÉDICA/EVALUACIONES */}
           <div style={{ backgroundColor: '#ffffff', padding: '2.5rem', borderRadius: '32px', border: '1px solid #e2e8f0', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.02)', position: 'relative' }}>
             <div style={{ marginBottom: '2rem', display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
               <div style={{ width: '4px', height: '24px', backgroundColor: '#f59e0b', borderRadius: '2px' }}></div>
-              <h2 style={{ fontSize: '18px', fontWeight: '900', color: '#1e293b', margin: 0 }}>Área Clínica y Evaluaciones</h2>
+              <h2 style={{ fontSize: '18px', fontWeight: '900', color: '#1e293b', margin: 0 }}>Área Médica y Evaluaciones</h2>
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', height: '500px', overflowY: 'auto', paddingRight: '0.5rem' }} className="custom-scrollbar">
               {rightDocs.map(doc => (

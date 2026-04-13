@@ -1,13 +1,15 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { 
   Users, Search, Calendar, Phone, 
   ArrowLeft, Clock, CheckCircle2, 
-  AlertCircle, XCircle, CalendarPlus, Stethoscope
+  AlertCircle, XCircle, CalendarPlus, Stethoscope,
+  LayoutGrid, List, X, Info, FileText, PhoneCall, ArrowRight,
+  Trash2, Eye, EyeOff, Archive
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import apiClient from '../../services/api';
-import { format, isPast, isToday, parseISO, isBefore, startOfDay } from 'date-fns';
+import { format, isPast, isToday, parseISO, isBefore, startOfDay, addDays, isWithinInterval, endOfDay } from 'date-fns';
 import { es } from 'date-fns/locale';
 
 // ==========================================
@@ -20,7 +22,7 @@ const AgendarCitaModal = ({ isOpen, onClose, prospecto, onSave }: any) => {
   if (!isOpen) return null;
 
   return (
-    <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(15, 23, 42, 0.6)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, animation: 'fadeIn 0.2s ease' }}>
+    <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(15, 23, 42, 0.8)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, animation: 'fadeIn 0.2s ease' }}>
       <div style={{ backgroundColor: 'white', borderRadius: '24px', width: '90%', maxWidth: '450px', padding: '2rem', boxShadow: '0 25px 50px -12px rgba(0,0,0,0.25)' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '1.5rem' }}>
           <div style={{ padding: '0.75rem', backgroundColor: '#eff6ff', color: '#3b82f6', borderRadius: '12px' }}>
@@ -73,6 +75,45 @@ const AgendarCitaModal = ({ isOpen, onClose, prospecto, onSave }: any) => {
   );
 };
 
+// ==========================================
+// MODAL: Ver todas las sustancias
+// ==========================================
+const VerSustanciasModal = ({ isOpen, onClose, sustancias, nombrePaciente }: any) => {
+  if (!isOpen) return null;
+
+  return (
+    <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(15, 23, 42, 0.8)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1100, animation: 'fadeIn 0.2s ease' }}>
+      <div style={{ backgroundColor: 'white', borderRadius: '32px', width: '90%', maxWidth: '400px', padding: '2rem', boxShadow: '0 25px 50px -12px rgba(0,0,0,0.25)', border: '1px solid #f1f5f9' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
+          <div>
+            <h3 style={{ margin: 0, fontSize: '18px', fontWeight: '900', color: '#0f172a' }}>Perfil de Sustancias</h3>
+            <p style={{ margin: 0, fontSize: '12px', color: '#64748b', fontWeight: '600' }}>Paciente: {nombrePaciente || 'Sin Nombre'}</p>
+          </div>
+          <button onClick={onClose} style={{ padding: '0.5rem', borderRadius: '12px', border: '1px solid #f1f5f9', backgroundColor: 'white', cursor: 'pointer', color: '#64748b' }}>
+            <X size={18} />
+          </button>
+        </div>
+
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.75rem', marginBottom: '1rem' }}>
+          {sustancias?.map((s: string, i: number) => (
+            <div key={i} style={{ backgroundColor: '#eff6ff', color: '#3b82f6', padding: '0.6rem 1rem', borderRadius: '14px', fontSize: '13px', fontWeight: '800', border: '1px solid #dbeafe', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              <div style={{ width: '6px', height: '6px', backgroundColor: '#3b82f6', borderRadius: '50%' }}></div>
+              {s}
+            </div>
+          ))}
+        </div>
+
+        <button 
+          onClick={onClose} 
+          style={{ width: '100%', padding: '1rem', backgroundColor: '#0f172a', color: 'white', borderRadius: '16px', border: 'none', fontWeight: '800', cursor: 'pointer', marginTop: '1rem' }}
+        >
+          Cerrar Vista
+        </button>
+      </div>
+    </div>
+  );
+};
+
 interface ProspectoSeguimiento {
   id: number;
   nombreLlamada: string;
@@ -80,6 +121,7 @@ interface ProspectoSeguimiento {
   parentescoLlamada: string;
   medioEnterado: string;
   nombrePaciente: string;
+  sustancias: string[];
   createdAt: string;
   // Acuerdos 31 puntos
   acuerdoSeguimiento: 'LLAMARLE' | 'ESPERAR_LLAMADA' | 'ESPERAR_VISITA' | 'POSIBLE_INGRESO' | 'RECHAZADO' | 'CITA_PROGRAMADA' | 'OTRO';
@@ -103,11 +145,84 @@ const getAcuerdoChip = (p: ProspectoSeguimiento) => {
       return { label: 'Esperar Llamada', bg: '#fff7ed', color: '#c2410c', border: '#ffedd5', icon: <Clock size={14} /> };
     case 'LLAMARLE':
       return { label: 'Llamarle', bg: '#f1f5f9', color: '#475569', border: '#e2e8f0', icon: <Phone size={14} /> };
+    case 'CITA_PROGRAMADA':
+      return { label: 'Cita Programada', bg: '#eff6ff', color: '#1d4ed8', border: '#dbeafe', icon: <CalendarPlus size={14} /> };
     case 'RECHAZADO':
       return { label: 'Cerrado / Rechazado', bg: '#fef2f2', color: '#991b1b', border: '#fee2e2', icon: <XCircle size={14} /> };
     default:
       return { label: 'Sin Acuerdo', bg: '#f1f5f9', color: '#64748b', border: '#e2e8f0', icon: <AlertCircle size={14} /> };
   }
+};
+
+const DetalleProspectoModal = ({ prospecto, onClose, onEdit }: { prospecto: any, onClose: () => void, onEdit: (id: number) => void }) => {
+  if (!prospecto) return null;
+
+  return (
+    <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(15, 23, 42, 0.85)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: '2rem' }}>
+      <div style={{ backgroundColor: 'white', borderRadius: '32px', width: '100%', maxWidth: '600px', overflow: 'hidden', boxShadow: '0 25px 50px -12px rgba(0,0,0,0.25)' }}>
+        <div style={{ background: 'linear-gradient(135deg, #0f172a 0%, #1e293b 100%)', padding: '2rem', color: 'white', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div>
+            <h3 style={{ margin: 0, fontSize: '20px', fontWeight: '900' }}>Resumen de Prospecto</h3>
+            <p style={{ margin: '4px 0 0', opacity: 0.7, fontSize: '13px' }}>Datos capturados hasta el momento</p>
+          </div>
+          <button onClick={onClose} style={{ background: 'rgba(255,255,255,0.1)', border: 'none', color: 'white', padding: '8px', borderRadius: '12px', cursor: 'pointer' }}>
+            <X size={20} />
+          </button>
+        </div>
+
+        <div style={{ padding: '2rem', maxHeight: '70vh', overflowY: 'auto' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem', marginBottom: '2rem' }}>
+            <div style={{ borderLeft: '4px solid #3b82f6', paddingLeft: '1rem' }}>
+              <p style={{ fontSize: '11px', textTransform: 'uppercase', color: '#64748b', fontWeight: '800', margin: '0 0 4px' }}>Paciente</p>
+              <p style={{ fontSize: '16px', fontWeight: '900', color: '#0f172a', margin: 0 }}>{prospecto.nombrePaciente || 'No especificado'}</p>
+            </div>
+            <div style={{ borderLeft: '4px solid #10b981', paddingLeft: '1rem' }}>
+              <p style={{ fontSize: '11px', textTransform: 'uppercase', color: '#64748b', fontWeight: '800', margin: '0 0 4px' }}>Solicitante</p>
+              <p style={{ fontSize: '16px', fontWeight: '900', color: '#0f172a', margin: 0 }}>{prospecto.nombreLlamada || 'No especificado'}</p>
+            </div>
+          </div>
+
+          <div style={{ backgroundColor: '#f8fafc', borderRadius: '20px', padding: '1.5rem', marginBottom: '1.5rem' }}>
+            <h4 style={{ margin: '0 0 1rem', fontSize: '13px', fontWeight: '900', color: '#475569', display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <Phone size={14} /> CONTACTO Y MEDIOS
+            </h4>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+              <div>
+                <span style={{ fontSize: '11px', color: '#64748b' }}>Celular:</span>
+                <p style={{ fontSize: '14px', fontWeight: '700', margin: '2px 0' }}>{prospecto.celularLlamada || '---'}</p>
+              </div>
+              <div>
+                <span style={{ fontSize: '11px', color: '#64748b' }}>Enterado por:</span>
+                <p style={{ fontSize: '14px', fontWeight: '700', margin: '2px 0' }}>{prospecto.medioEnterado || '---'}</p>
+              </div>
+            </div>
+          </div>
+
+          <div style={{ backgroundColor: '#f0fdf4', borderRadius: '20px', padding: '1.5rem' }}>
+            <h4 style={{ margin: '0 0 1rem', fontSize: '13px', fontWeight: '900', color: '#16a34a', display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <Stethoscope size={14} /> MÉDICA Y CONCLUSIÓN
+            </h4>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem', marginBottom: '1rem' }}>
+              {(prospecto.sustancias || []).map((s: string, i: number) => (
+                <span key={i} style={{ backgroundColor: 'white', border: '1px solid #dcfce7', color: '#16a34a', padding: '4px 10px', borderRadius: '8px', fontSize: '11px', fontWeight: '800' }}>{s}</span>
+              ))}
+            </div>
+            <div>
+              <span style={{ fontSize: '11px', color: '#64748b' }}>Conclusión Médica:</span>
+              <p style={{ fontSize: '14px', color: '#0f172a', margin: '4px 0', lineHeight: '1.5' }}>{prospecto.conclusionMedica || 'Sin diagnóstico registrado aún.'}</p>
+            </div>
+          </div>
+        </div>
+
+        <div style={{ padding: '1.5rem 2rem', borderTop: '1px solid #e2e8f0', display: 'flex', gap: '1rem' }}>
+          <button onClick={() => onEdit(prospecto.id)} style={{ flex: 1, padding: '1rem', backgroundColor: '#3b82f6', color: 'white', borderRadius: '16px', border: 'none', fontWeight: '800', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
+            <FileText size={18} /> Editar Registro Completo
+          </button>
+          <button onClick={onClose} style={{ padding: '1rem 2rem', border: '1px solid #e2e8f0', borderRadius: '16px', fontWeight: '800', cursor: 'pointer' }}>Cerrar</button>
+        </div>
+      </div>
+    </div>
+  );
 };
 
 // ==========================================
@@ -132,14 +247,47 @@ export default function SeguimientoProspectosPage() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [searchTerm, setSearchTerm] = useState('');
+  const [showArchived, setShowArchived] = useState(false);
   const [showAll, setShowAll] = useState(false);
   
-  // Estados para Modal de Agenda
+  // Estados para Modal y Vista de Agenda
   const [agendarModal, setAgendarModal] = useState<{ isOpen: boolean, prospecto: any }>({ isOpen: false, prospecto: null });
+  const [agendaViewMode, setAgendaViewMode] = useState<'grid' | 'table'>('grid');
+  const [sustanciasModal, setSustanciasModal] = useState<{ isOpen: boolean, sustancias: string[], nombre: string }>({ isOpen: false, sustancias: [], nombre: '' });
+  const [selectedDetalle, setSelectedDetalle] = useState<any>(null);
 
-  const { data: prospectos, isLoading } = useQuery<ProspectoSeguimiento[]>({
-    queryKey: ['prospectos_seguimiento'],
-    queryFn: () => apiClient.get('/admisiones/primer-contacto').then(res => res.data.data)
+  // REFS PARA EL GRAB-TO-SCROLL (CARROUSEL)
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const [isDragging, setIsDragging] = useState(false);
+  const [startX, setStartX] = useState(0);
+  const [scrollLeft, setScrollLeft] = useState(0);
+
+  const handleMouseDown = (e: React.MouseEvent) => {
+    if (!scrollRef.current) return;
+    setIsDragging(true);
+    setStartX(e.pageX - scrollRef.current.offsetLeft);
+    setScrollLeft(scrollRef.current.scrollLeft);
+  };
+
+  const handleMouseLeave = () => {
+    setIsDragging(false);
+  };
+
+  const handleMouseUp = () => {
+    setIsDragging(false);
+  };
+
+  const handleMouseMove = (e: React.MouseEvent) => {
+    if (!isDragging || !scrollRef.current) return;
+    e.preventDefault();
+    const x = e.pageX - scrollRef.current.offsetLeft;
+    const walk = (x - startX) * 2; // Multiplicador de velocidad
+    scrollRef.current.scrollLeft = scrollLeft - walk;
+  };
+
+  const { data: prospectos, isLoading } = useQuery<any[]>({
+    queryKey: ['prospectos_crm', showArchived],
+    queryFn: () => apiClient.get(`/admisiones/primer-contacto?incluirInactivos=${showArchived}`).then(res => res.data.data)
   });
 
   // MUTACIÓN: Agendar Cita
@@ -147,7 +295,7 @@ export default function SeguimientoProspectosPage() {
     mutationFn: (data: { id: number, fecha: string }) => 
       apiClient.patch(`/admisiones/primer-contacto/${data.id}/agendar`, { fechaAcuerdo: data.fecha }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['prospectos_seguimiento'] });
+      queryClient.invalidateQueries({ queryKey: ['prospectos_crm'] });
       setAgendarModal({ isOpen: false, prospecto: null });
     }
   });
@@ -157,7 +305,16 @@ export default function SeguimientoProspectosPage() {
     mutationFn: (pacienteId: number) => 
       apiClient.patch(`/admisiones/paciente/${pacienteId}/solicitar-valoracion`),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['prospectos_seguimiento'] });
+      queryClient.invalidateQueries({ queryKey: ['prospectos_crm'] });
+    }
+  });
+
+  // MUTACIÓN: Archivar Prospecto (Borrado Lógico)
+  const mutationArchivar = useMutation({
+    mutationFn: (id: number) => 
+      apiClient.patch(`/admisiones/primer-contacto/${id}/desactivar`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['prospectos_crm'] });
     }
   });
 
@@ -168,6 +325,12 @@ export default function SeguimientoProspectosPage() {
   const handleSolicitarValoracion = (prospecto: any) => {
     if (window.confirm(`¿Seguro que deseas enviar a ${prospecto.nombrePaciente} a valoración médica? El médico podrá verlo inmediatamente en su bandeja de entrada.`)) {
       mutationSolicitar.mutate(prospecto.paciente.id);
+    }
+  };
+
+  const handleArchivar = (id: number, nombre: string) => {
+    if (window.confirm(`¿Seguro que deseas archivar a ${nombre}? El registro no se borrará de la base de datos pero dejará de ser visible en esta tabla principal.`)) {
+      mutationArchivar.mutate(id);
     }
   };
 
@@ -223,82 +386,30 @@ export default function SeguimientoProspectosPage() {
           </div>
         </div>
 
-        <div style={{ position: 'relative' }}>
-          <Search size={18} color="#94a3b8" style={{ position: 'absolute', top: '50%', left: '1rem', transform: 'translateY(-50%)' }} />
-          <input 
-            type="text" 
-            placeholder="Buscar prospecto o familia..." 
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            style={{ 
-              padding: '0.8rem 1rem 0.8rem 2.8rem', borderRadius: '16px', border: '1px solid #e2e8f0', 
-              width: '320px', backgroundColor: 'white', outline: 'none', fontSize: '14px', boxShadow: '0 2px 4px rgba(0,0,0,0.02)'
-            }} 
-          />
+        <div style={{ display: 'flex', alignItems: 'center', gap: '1.5rem' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', backgroundColor: showArchived ? '#fef2f2' : 'white', padding: '0.4rem 1rem', borderRadius: '12px', border: `1px solid ${showArchived ? '#fee2e2' : '#e2e8f0'}`, cursor: 'pointer', transition: 'all 0.2s' }} onClick={() => setShowArchived(!showArchived)}>
+            {showArchived ? <Eye size={18} color="#ef4444" /> : <EyeOff size={18} color="#64748b" />}
+            <span style={{ fontSize: '13px', fontWeight: '800', color: showArchived ? '#ef4444' : '#64748b' }}>
+              {showArchived ? 'Ocultar Archivados' : 'Ver Archivados'}
+            </span>
+          </div>
+          
+          <div style={{ position: 'relative' }}>
+            <Search size={18} color="#94a3b8" style={{ position: 'absolute', top: '50%', left: '1rem', transform: 'translateY(-50%)' }} />
+            <input 
+              type="text" 
+              placeholder="Buscar prospecto o familia..." 
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              style={{ 
+                padding: '0.8rem 1rem 0.8rem 2.8rem', borderRadius: '16px', border: '1px solid #e2e8f0', 
+                width: '320px', backgroundColor: 'white', outline: 'none', fontSize: '14px', boxShadow: '0 2px 4px rgba(0,0,0,0.02)'
+              }} 
+            />
+          </div>
         </div>
       </div>
 
-      {/* SECCIÓN: AGENDA DE CITAS (PREMIUM GRID) */}
-      {proximasCitas.length > 0 && (
-        <div style={{ marginBottom: '3rem' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '1.25rem' }}>
-            <div style={{ width: '8px', height: '24px', backgroundColor: '#3b82f6', borderRadius: '4px' }}></div>
-            <h2 style={{ fontSize: '18px', fontWeight: '900', color: '#1e293b', margin: 0 }}>Próximas Citas Agendadas</h2>
-          </div>
-          
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '1.5rem' }}>
-            {proximasCitas.map((cita) => {
-              const date = safeParseDate(cita.fechaAcuerdo)!;
-              const esHoy = isToday(date);
-              
-              return (
-                <div key={cita.id} style={{ 
-                  backgroundColor: 'white', border: '1px solid #e2e8f0', borderRadius: '24px', padding: '1.5rem', 
-                  boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)', transition: 'transform 0.2s', borderTop: `4px solid ${esHoy ? '#3b82f6' : '#94a3b8'}`
-                }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '1rem' }}>
-                    <div style={{ fontSize: '11px', fontWeight: '900', color: esHoy ? '#3b82f6' : '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                      {esHoy ? 'Hoy' : format(date, "EEEE d 'de' MMMM", { locale: es })}
-                    </div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', backgroundColor: '#f1f5f9', padding: '0.2rem 0.6rem', borderRadius: '8px', fontSize: '12px', fontWeight: '800' }}>
-                      <Clock size={14} /> {format(date, 'HH:mm')}
-                    </div>
-                  </div>
-
-                  <h3 style={{ fontSize: '16px', fontWeight: '800', color: '#0f172a', margin: '0 0 0.25rem 0' }}>{cita.nombrePaciente || 'Anónimo'}</h3>
-                  <div style={{ fontSize: '12px', color: '#64748b', display: 'flex', alignItems: 'center', gap: '0.4rem', marginBottom: '1.25rem' }}>
-                    {cita.nombreLlamada} • <Phone size={12} /> {cita.celularLlamada}
-                  </div>
-
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '1.5rem' }}>
-                    <span style={{ fontSize: '10px', fontWeight: '800', color: '#94a3b8', textTransform: 'uppercase' }}>Impacto:</span>
-                    <div style={{ display: 'flex', gap: '0.3rem', flexWrap: 'wrap' }}>
-                      {cita.paciente?.sustancias?.slice(0, 2).map((s, i) => (
-                        <span key={i} style={{ backgroundColor: '#eff6ff', color: '#3b82f6', fontSize: '10px', fontWeight: '700', padding: '0.2rem 0.5rem', borderRadius: '6px' }}>{s}</span>
-                      ))}
-                    </div>
-                  </div>
-
-                  <div style={{ display: 'flex', gap: '0.75rem' }}>
-                    <a 
-                      href={`tel:${cita.celularLlamada}`}
-                      style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', padding: '0.6rem', backgroundColor: '#3b82f6', color: 'white', borderRadius: '12px', textDecoration: 'none', fontSize: '13px', fontWeight: '700' }}
-                    >
-                      <Phone size={14} /> Confirmar
-                    </a>
-                    <button 
-                      onClick={() => navigate(`/admisiones/primer-contacto/${cita.id}`)}
-                      style={{ padding: '0.6rem 1rem', border: '1px solid #e2e8f0', backgroundColor: 'white', borderRadius: '12px', cursor: 'pointer', color: '#64748b' }}
-                    >
-                      <Search size={16} />
-                    </button>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      )}
       {/* Stats Cards 31 Puntos */}
       <div style={{ 
         display: 'grid', 
@@ -353,7 +464,8 @@ export default function SeguimientoProspectosPage() {
             ) : (
               filteredProspectos?.map((p) => {
                 const chip = getAcuerdoChip(p);
-                const dayStatus = getDayStatus(p.createdAt);
+                const trackingDate = p.acuerdoSeguimiento && ['LLAMARLE', 'ESPERAR_LLAMADA', 'POSIBLE_INGRESO', 'CITA_PROGRAMADA'].includes(p.acuerdoSeguimiento) && p.fechaAcuerdo ? p.fechaAcuerdo : p.createdAt;
+                const dayStatus = getDayStatus(trackingDate);
                 const isAnon = !p.nombrePaciente || p.nombrePaciente === 'Prospecto Anónimo';
 
                 return (
@@ -365,10 +477,25 @@ export default function SeguimientoProspectosPage() {
                       </div>
                     </td>
                     <td style={{ padding: '1.5rem 2rem' }}>
-                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.4rem' }}>
-                        {p.paciente?.sustancias?.slice(0, 2).map((s, i) => (
-                          <span key={i} style={{ backgroundColor: '#f1f5f9', fontSize: '10px', fontWeight: '700', padding: '0.2rem 0.6rem', borderRadius: '4px' }}>{s}</span>
-                        ))}
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.4rem', alignItems: 'center' }}>
+                        {(() => {
+                          const list = p.sustancias || p.paciente?.sustancias || [];
+                          return (
+                            <>
+                              {list.slice(0, 3).map((s, i) => (
+                                <span key={i} style={{ backgroundColor: '#f1f5f9', fontSize: '10px', fontWeight: '700', padding: '0.2rem 0.6rem', borderRadius: '4px' }}>{s}</span>
+                              ))}
+                              {list.length > 3 && (
+                                <button 
+                                  onClick={() => setSustanciasModal({ isOpen: true, sustancias: list, nombre: p.nombrePaciente })}
+                                  style={{ border: 'none', backgroundColor: 'transparent', fontSize: '10px', fontWeight: '900', color: '#3b82f6', cursor: 'pointer', textDecoration: 'underline' }}
+                                >
+                                  +{list.length - 3}
+                                </button>
+                              )}
+                            </>
+                          );
+                        })()}
                       </div>
                     </td>
                     <td style={{ padding: '1.5rem 2rem' }}>
@@ -379,7 +506,7 @@ export default function SeguimientoProspectosPage() {
                     <td style={{ padding: '1.5rem 2rem', textAlign: 'center' }}>
                       <div style={{ fontWeight: '800', fontSize: '13px', color: p.acuerdoSeguimiento === 'POSIBLE_INGRESO' ? '#16a34a' : 'inherit' }}>
                         {(() => {
-                          const dateValue = p.acuerdoSeguimiento && ['LLAMARLE', 'ESPERAR_LLAMADA', 'POSIBLE_INGRESO'].includes(p.acuerdoSeguimiento) && p.fechaAcuerdo ? p.fechaAcuerdo : p.createdAt;
+                          const dateValue = p.acuerdoSeguimiento && ['LLAMARLE', 'ESPERAR_LLAMADA', 'POSIBLE_INGRESO', 'CITA_PROGRAMADA'].includes(p.acuerdoSeguimiento) && p.fechaAcuerdo ? p.fechaAcuerdo : p.createdAt;
                           const parsedDate = safeParseDate(dateValue);
                           return parsedDate ? format(parsedDate, 'dd MMM') : '--';
                         })()}
@@ -403,12 +530,12 @@ export default function SeguimientoProspectosPage() {
                         return dayStatus ? <span style={{ fontSize: '9px', color: dayStatus.color, fontWeight: '900' }}>{dayStatus.label}</span> : null;
                       })()}
                     </td>
-                    <td style={{ padding: '1.5rem 2rem', textAlign: 'center' }}>
-                      <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'center' }}>
+                    <td style={{ padding: '1.25rem 2rem', textAlign: 'center' }}>
+                      <div style={{ display: 'flex', gap: '0.6rem', justifyContent: 'center' }}>
                         <button 
                           onClick={() => setAgendarModal({ isOpen: true, prospecto: p })}
-                          title="Agendar Cita"
-                          style={{ padding: '0.5rem', borderRadius: '8px', border: '1px solid #e2e8f0', backgroundColor: p.acuerdoSeguimiento === 'CITA_PROGRAMADA' ? '#eff6ff' : 'white', cursor: 'pointer', color: p.acuerdoSeguimiento === 'CITA_PROGRAMADA' ? '#3b82f6' : '#64748b' }}
+                          title="Agendar Seguimiento / Cita"
+                          style={{ padding: '0.5rem', borderRadius: '8px', border: '1px solid #e2e8f0', backgroundColor: '#eff6ff', cursor: 'pointer', color: '#3b82f6' }}
                         >
                           <CalendarPlus size={16} />
                         </button>
@@ -416,22 +543,17 @@ export default function SeguimientoProspectosPage() {
                         <button 
                           onClick={() => handleSolicitarValoracion(p)}
                           title="Solicitar Valoración Médica"
-                          style={{ 
-                            padding: '0.5rem', borderRadius: '8px', border: '1px solid #e2e8f0', 
-                            backgroundColor: p.paciente?.estado === 'EN_VALORACION' ? '#ecfdf5' : 'white', 
-                            cursor: 'pointer', 
-                            color: p.paciente?.estado === 'EN_VALORACION' ? '#10b981' : '#64748b' 
-                          }}
+                          style={{ padding: '0.5rem', borderRadius: '8px', border: '1px solid #e2e8f0', backgroundColor: 'white', cursor: 'pointer', color: '#10b981' }}
                         >
                           <Stethoscope size={16} />
                         </button>
 
                         <button 
-                          onClick={() => navigate(`/admisiones/primer-contacto/${p.id}`)}
-                          title="Ver Detalle"
-                          style={{ padding: '0.5rem', borderRadius: '8px', border: '1px solid #e2e8f0', backgroundColor: 'white', cursor: 'pointer', color: '#3b82f6' }}
+                          onClick={() => handleArchivar(p.id, p.nombrePaciente)}
+                          title="Archivar Prospecto"
+                          style={{ padding: '0.5rem', borderRadius: '8px', border: '1px solid #fee2e2', backgroundColor: 'white', cursor: 'pointer', color: '#ef4444' }}
                         >
-                          <Search size={16} />
+                          <Trash2 size={16} />
                         </button>
                       </div>
                     </td>
@@ -443,13 +565,245 @@ export default function SeguimientoProspectosPage() {
         </table>
       </div>
 
-      {/* MODALES */}
-      <AgendarCitaModal 
-        isOpen={agendarModal.isOpen}
-        onClose={() => setAgendarModal({ isOpen: false, prospecto: null })}
-        prospecto={agendarModal.prospecto}
-        onSave={(fecha: string) => handleAgendar(agendarModal.prospecto.id, fecha)}
-      />
+      {/* SECCIÓN MOVIDA: AGENDA DE CITAS (PREMIUM GRID) AL FINAL */}
+      {proximasCitas.length > 0 && (
+        <div style={{ marginTop: '3rem', backgroundColor: '#f8fafc', borderRadius: '32px', padding: '2.5rem', border: '1px solid #e2e8f0' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+              <div style={{ width: '8px', height: '24px', backgroundColor: '#3b82f6', borderRadius: '4px' }}></div>
+              <h2 style={{ fontSize: '18px', fontWeight: '900', color: '#1e293b', margin: 0 }}>Próximas Citas Agendadas</h2>
+            </div>
+            <div style={{ display: 'flex', backgroundColor: 'white', padding: '0.3rem', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
+              <button 
+                onClick={() => setAgendaViewMode('grid')}
+                style={{ 
+                  display: 'flex', alignItems: 'center', gap: '0.4rem', padding: '0.5rem 0.8rem', borderRadius: '8px', border: 'none',
+                  backgroundColor: agendaViewMode === 'grid' ? '#3b82f6' : 'transparent', color: agendaViewMode === 'grid' ? 'white' : '#64748b',
+                  cursor: 'pointer', fontWeight: '800', fontSize: '12px', transition: 'all 0.2s'
+                }}
+              >
+                <LayoutGrid size={16} /> Grid
+              </button>
+              <button 
+                onClick={() => setAgendaViewMode('table')}
+                style={{ 
+                  display: 'flex', alignItems: 'center', gap: '0.4rem', padding: '0.5rem 0.8rem', borderRadius: '8px', border: 'none',
+                  backgroundColor: agendaViewMode === 'table' ? '#3b82f6' : 'transparent', color: agendaViewMode === 'table' ? 'white' : '#64748b',
+                  cursor: 'pointer', fontWeight: '800', fontSize: '12px', transition: 'all 0.2s'
+                }}
+              >
+                <List size={16} /> Tabla
+              </button>
+            </div>
+          </div>
+          
+          {agendaViewMode === 'grid' ? (
+            <div 
+              ref={scrollRef}
+              onMouseDown={handleMouseDown}
+              onMouseLeave={handleMouseLeave}
+              onMouseUp={handleMouseUp}
+              onMouseMove={handleMouseMove}
+              style={{ 
+                display: 'flex', 
+                gap: '1.5rem', 
+                overflowX: 'auto', 
+                paddingBottom: '2rem', 
+                paddingRight: '1rem',
+                scrollSnapType: isDragging ? 'none' : 'x mandatory',
+                WebkitOverflowScrolling: 'touch',
+                cursor: isDragging ? 'grabbing' : 'grab',
+                userSelect: 'none'
+              }} className="custom-scrollbar-h">
+              {proximasCitas.map((cita) => {
+                const date = safeParseDate(cita.fechaAcuerdo)!;
+                const esHoy = isToday(date);
+                
+                return (
+                  <div key={cita.id} style={{ 
+                    flex: '0 0 350px',
+                    scrollSnapAlign: 'start',
+                    backgroundColor: 'white', 
+                    border: '1px solid #e2e8f0', 
+                    borderRadius: '28px', 
+                    padding: '1.75rem', 
+                    boxShadow: '0 10px 15px -3px rgba(0,0,0,0.05)', 
+                    transition: 'all 0.3s ease', 
+                    borderTop: `5px solid ${esHoy ? '#3b82f6' : '#cbd5e1'}`,
+                    display: 'flex',
+                    flexDirection: 'column',
+                    justifyContent: 'space-between'
+                  }}>
+                    <div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '1.25rem' }}>
+                        <div style={{ fontSize: '11px', fontWeight: '900', color: esHoy ? '#3b82f6' : '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                          {esHoy ? 'Hoy' : format(date, "EEEE d 'de' MMMM", { locale: es })}
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', backgroundColor: '#f1f5f9', padding: '0.3rem 0.75rem', borderRadius: '10px', fontSize: '12px', fontWeight: '900', color: '#1e293b' }}>
+                          <Clock size={14} /> {format(date, 'HH:mm')}
+                        </div>
+                      </div>
+
+                      <h3 style={{ fontSize: '18px', fontWeight: '900', color: '#0f172a', margin: '0 0 0.4rem 0' }}>{cita.nombrePaciente || 'Anónimo'}</h3>
+                      <div style={{ fontSize: '13px', color: '#64748b', display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '1.5rem' }}>
+                        <span style={{ fontWeight: '700' }}>{cita.nombreLlamada}</span> • <Phone size={12} /> {cita.celularLlamada}
+                      </div>
+
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', marginBottom: '2rem' }}>
+                        <span style={{ fontSize: '10px', fontWeight: '900', color: '#94a3b8', letterSpacing: '0.05em' }}>IMPACTO:</span>
+                        <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap' }}>
+                          {(() => {
+                            const list = cita.sustancias || cita.paciente?.sustancias || [];
+                            return (
+                              <>
+                                {list.slice(0, 2).map((s, i) => (
+                                  <span key={i} style={{ backgroundColor: '#eff6ff', color: '#3b82f6', fontSize: '10px', fontWeight: '900', padding: '0.3rem 0.6rem', borderRadius: '8px', textTransform: 'uppercase' }}>{s}</span>
+                                ))}
+                                {list.length > 2 && (
+                                  <button 
+                                    onClick={() => setSustanciasModal({ isOpen: true, sustancias: list, nombre: cita.nombrePaciente })}
+                                    style={{ border: 'none', backgroundColor: '#f1f5f9', fontSize: '10px', fontWeight: '900', color: '#64748b', padding: '0.3rem 0.6rem', borderRadius: '8px', cursor: 'pointer' }}
+                                  >
+                                    +{list.length - 2}
+                                  </button>
+                                )}
+                              </>
+                            );
+                          })()}
+                        </div>
+                      </div>
+                    </div>
+
+                    <div style={{ display: 'flex', gap: '1rem' }}>
+                      <a 
+                        href={`tel:${cita.celularLlamada}`}
+                        style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', padding: '0.8rem', backgroundColor: '#3b82f6', color: 'white', borderRadius: '16px', textDecoration: 'none', fontSize: '14px', fontWeight: '800', transition: 'all 0.2s', boxShadow: '0 4px 6px -1px rgba(59, 130, 246, 0.3)' }}
+                      >
+                        <Phone size={16} /> Confirmar
+                      </a>
+                      <button 
+                        onClick={() => setSelectedDetalle(cita)}
+                        style={{ padding: '0.8rem', border: '1px solid #e2e8f0', backgroundColor: 'white', borderRadius: '16px', cursor: 'pointer', color: '#64748b', transition: 'all 0.2s' }}
+                      >
+                        <Search size={20} />
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          ) : (
+            <div style={{ backgroundColor: 'white', borderRadius: '24px', border: '1px solid #e2e8f0', overflow: 'hidden' }}>
+              <div style={{ overflowX: 'auto' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                  <thead>
+                    <tr style={{ backgroundColor: '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
+                      <th style={{ textAlign: 'left', padding: '1rem 2rem', fontSize: '10px', fontWeight: '800', color: '#64748b', textTransform: 'uppercase' }}>Próxima Cita</th>
+                      <th style={{ textAlign: 'left', padding: '1rem 2rem', fontSize: '10px', fontWeight: '800', color: '#64748b', textTransform: 'uppercase' }}>Paciente / Prospecto</th>
+                      <th style={{ textAlign: 'left', padding: '1rem 2rem', fontSize: '10px', fontWeight: '800', color: '#64748b', textTransform: 'uppercase' }}>Contacto / Teléfono</th>
+                      <th style={{ textAlign: 'center', padding: '1rem 2rem', fontSize: '10px', fontWeight: '800', color: '#64748b', textTransform: 'uppercase' }}>Acciones</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {proximasCitas.map((cita) => {
+                      const date = safeParseDate(cita.fechaAcuerdo)!;
+                      const esHoy = isToday(date);
+                      return (
+                        <tr key={cita.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
+                          <td style={{ padding: '1.25rem 2rem' }}>
+                            <div style={{ fontWeight: '800', fontSize: '14px', color: esHoy ? '#3b82f6' : '#0f172a' }}>
+                              {format(date, 'dd MMM, HH:mm')}
+                            </div>
+                            <div style={{ fontSize: '10px', color: esHoy ? '#3b82f6' : '#64748b', fontWeight: '800' }}>
+                              {esHoy ? 'HOY MISMO' : format(date, 'EEEE', { locale: es }).toUpperCase()}
+                            </div>
+                          </td>
+                          <td style={{ padding: '1.25rem 2rem' }}>
+                            <div style={{ fontWeight: '800', color: '#0f172a' }}>{cita.nombrePaciente || 'Anónimo'}</div>
+                            <div style={{ fontSize: '11px', color: '#64748b' }}>Sustancias: {cita.sustancias?.join(', ') || cita.paciente?.sustancias?.join(', ') || 'N/A'}</div>
+                          </td>
+                          <td style={{ padding: '1.25rem 2rem' }}>
+                            <div style={{ fontWeight: '700', fontSize: '13px' }}>{cita.nombreLlamada}</div>
+                            <div style={{ fontSize: '12px', color: '#10b981', fontWeight: '700' }}>{cita.celularLlamada}</div>
+                          </td>
+                          <td style={{ padding: '1.25rem 2rem', textAlign: 'center' }}>
+                            <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'center' }}>
+                              <a href={`tel:${cita.celularLlamada}`} style={{ padding: '0.6rem', borderRadius: '8px', border: '1px solid #e2e8f0', backgroundColor: 'white', color: '#10b981' }}>
+                                <Phone size={14} />
+                              </a>
+                              <button 
+                                onClick={() => setSelectedDetalle(cita)}
+                                style={{ padding: '0.6rem', borderRadius: '8px', border: '1px solid #e2e8f0', backgroundColor: 'white', cursor: 'pointer', color: '#3b82f6' }}
+                              >
+                                <Search size={14} />
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+       {/* MODALES */}
+       <AgendarCitaModal 
+         isOpen={agendarModal.isOpen}
+         onClose={() => setAgendarModal({ isOpen: false, prospecto: null })}
+         prospecto={agendarModal.prospecto}
+         onSave={(fecha: string) => handleAgendar(agendarModal.prospecto.id, fecha)}
+       />
+
+       <VerSustanciasModal 
+         isOpen={sustanciasModal.isOpen}
+         onClose={() => setSustanciasModal({ ...sustanciasModal, isOpen: false })}
+         sustancias={sustanciasModal.sustancias}
+         nombrePaciente={sustanciasModal.nombre}
+       />
+
+       {selectedDetalle && (
+         <DetalleProspectoModal 
+           prospecto={selectedDetalle} 
+           onClose={() => setSelectedDetalle(null)} 
+           onEdit={(id) => navigate(`/admisiones/primer-contacto/${id}`)}
+         />
+       )}
+
+       <style>{`
+        .custom-scrollbar::-webkit-scrollbar {
+          width: 6px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-track {
+          background: rgba(255,255,255,0.05);
+          border-radius: 10px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+          background: rgba(255,255,255,0.15);
+          border-radius: 10px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+          background: rgba(255,255,255,0.25);
+        }
+        .custom-scrollbar-h::-webkit-scrollbar {
+          height: 8px;
+        }
+        .custom-scrollbar-h::-webkit-scrollbar-track {
+          background: #f1f5f9;
+          border-radius: 10px;
+        }
+        .custom-scrollbar-h::-webkit-scrollbar-thumb {
+          background: #cbd5e1;
+          border-radius: 10px;
+          border: 2px solid #f1f5f9;
+        }
+        .custom-scrollbar-h::-webkit-scrollbar-thumb:hover {
+          background: #94a3b8;
+        }
+       `}</style>
     </div>
   );
 }

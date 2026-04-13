@@ -32,7 +32,6 @@ const SolicitudDrawer: React.FC<SolicitudDrawerProps> = ({
           position: 'fixed',
           inset: 0,
           backgroundColor: 'rgba(0,0,0,0.4)',
-          backdropFilter: 'blur(4px)',
           zIndex: 40,
           opacity: isOpen ? 1 : 0,
           visibility: isOpen ? 'visible' : 'hidden',
