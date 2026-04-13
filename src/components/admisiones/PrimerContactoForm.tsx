@@ -18,8 +18,7 @@ import { CustomDatePicker } from '../common/DatePicker';
 import { parseISO, format } from 'date-fns';
 
 const SUSTANCIAS_LIST = [
-  'Cristal', 'Alcohol', 'Cocaína', 'Marihuana', 'Éxtasis', 
-  'Tabaco', 'Medicamentos', 'Heroína', 'Ludopatía', 'TCA'
+  'Alcohol', 'Cristal/Metanfetamina', 'Marihuana', 'Cocaína', 'Ludopatía', 'TCA', 'Otro'
 ];
 
 interface AccordionSectionProps {
@@ -33,37 +32,59 @@ interface AccordionSectionProps {
 const AccordionSection = React.memo<AccordionSectionProps>(({ title, icon, isOpen, onToggle, children }) => (
   <div style={{ 
     border: '1px solid #e2e8f0', 
-    borderRadius: '12px', 
-    marginBottom: '1rem', 
-    overflow: isOpen ? 'visible' : 'hidden',
+    borderRadius: '16px', 
+    marginBottom: '1.25rem', 
+    overflow: 'hidden',
     backgroundColor: 'white',
-    boxShadow: '0 1px 3px rgba(0,0,0,0.05)'
+    boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.06)',
+    transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)'
   }}>
     <button 
       onClick={(e) => { e.preventDefault(); onToggle(); }}
       style={{
         width: '100%',
-        padding: '1.25rem',
+        padding: '1.5rem',
         display: 'flex',
         justifyContent: 'space-between',
         alignItems: 'center',
-        background: isOpen ? '#f8fafc' : 'white',
+        background: isOpen ? 'linear-gradient(to right, #f8fafc, #ffffff)' : 'white',
         border: 'none',
         cursor: 'pointer',
-        transition: 'all 0.2s ease'
+        textAlign: 'left'
       }}
     >
-      <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-        <div style={{ color: '#3b82f6' }}>{icon}</div>
-        <span style={{ fontWeight: '700', fontSize: '15px', color: '#1e293b' }}>{title}</span>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+        <div style={{ 
+          color: '#3b82f6', 
+          backgroundColor: isOpen ? '#eff6ff' : '#f1f5f9',
+          padding: '0.75rem',
+          borderRadius: '12px',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center'
+        }}>{icon}</div>
+        <span style={{ fontWeight: '800', fontSize: '16px', color: '#1e293b', letterSpacing: '-0.025em' }}>{title}</span>
       </div>
-      {isOpen ? <ChevronUp size={20} color="#64748b" /> : <ChevronDown size={20} color="#64748b" />}
+      <div style={{ 
+        transform: isOpen ? 'rotate(180deg)' : 'rotate(0deg)',
+        transition: 'transform 0.3s ease',
+        color: '#64748b'
+      }}>
+        <ChevronDown size={20} />
+      </div>
     </button>
-    {isOpen && (
-      <div style={{ padding: '1.5rem', borderTop: '1px solid #f1f5f9' }}>
-        {children}
+    <div style={{ 
+      maxHeight: isOpen ? '2000px' : '0',
+      opacity: isOpen ? 1 : 0,
+      overflow: 'hidden',
+      transition: 'all 0.4s cubic-bezier(0.4, 0, 0.2, 1)'
+    }}>
+      <div style={{ padding: '0 1.5rem 2rem 1.5rem', borderTop: '1px solid #f1f5f9' }}>
+        <div style={{ paddingTop: '1.5rem' }}>
+          {children}
+        </div>
       </div>
-    )}
+    </div>
   </div>
 ));
 
@@ -71,12 +92,11 @@ export const PrimerContactoForm: React.FC = () => {
   const navigate = useNavigate();
   const { usuario } = useAuthStore();
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [edad, setEdad] = useState<number | null>(null);
 
   // Zustand Store Persistence
   const { 
-    formData, openSection, solicitanteEsPaciente, lastUpdated,
-    setFormData, setOpenSection, setSolicitanteEsPaciente, resetForm 
+    formData, openSection, lastUpdated,
+    setFormData, setOpenSection, resetForm 
   } = usePrimerContactoStore();
 
   // 10-Minute Expiration Logic
@@ -86,36 +106,6 @@ export const PrimerContactoForm: React.FC = () => {
       resetForm();
     }
   }, []);
-
-  // Cálculo de edad automático
-  useEffect(() => {
-    if (formData.fechaNacimiento) {
-      const birth = new Date(formData.fechaNacimiento);
-      const now = new Date();
-      let age = now.getFullYear() - birth.getFullYear();
-      const m = now.getMonth() - birth.getMonth();
-      if (m < 0 || (m === 0 && now.getDate() < birth.getDate())) {
-        age--;
-      }
-      setEdad(age >= 0 ? age : null);
-    }
-  }, [formData.fechaNacimiento]);
-
-  // Lógica de autollenado
-  useEffect(() => {
-    if (solicitanteEsPaciente) {
-      setFormData({
-        nombrePaciente: formData.solicitanteNombre.split(' ')[0] || '',
-        apellidoPaterno: formData.solicitanteNombre.split(' ')[1] || '',
-        apellidoMaterno: formData.solicitanteNombre.split(' ')[2] || '',
-        telefonoPaciente: formData.solicitanteTelefono,
-        celularPaciente: formData.solicitanteCelular,
-        direccionPaciente: formData.solicitanteDireccion,
-        ocupacion: formData.solicitanteOcupacion,
-        relacionPaciente: 'EL MISMO'
-      });
-    }
-  }, [solicitanteEsPaciente, formData.solicitanteNombre, formData.solicitanteTelefono, formData.solicitanteCelular, formData.solicitanteDireccion, formData.solicitanteOcupacion]);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     const { name, value, type } = e.target;
@@ -136,27 +126,46 @@ export const PrimerContactoForm: React.FC = () => {
     e.preventDefault();
     setIsSubmitting(true);
     
-    // Validación de CRM
+    // Validación UI: Teléfono Obligatorio
+    if (!formData.solicitanteTelefono) {
+      alert('El teléfono del solicitante es obligatorio.');
+      setIsSubmitting(false);
+      return;
+    }
+
+    // Validación de CRM: Fecha Seguimiento
     if ((formData.acuerdoSeguimiento === 'LLAMARA_MARAKAME' || formData.acuerdoSeguimiento === 'CITA_PROGRAMADA') && !formData.fechaSeguimiento) {
       alert('Por favor seleccione una fecha de seguimiento para el acuerdo seleccionado.');
       setIsSubmitting(false);
       return;
     }
 
-    // Preparar sustancias finales (incluyendo 'Otros' si aplica)
+    // Aplicar Lógica de "Prospecto Anónimo" antes de enviar
+    const nombreFinal = formData.nombrePaciente?.trim() || 'Prospecto Anónimo';
+    const apPaternoFinal = formData.apellidoPaterno?.trim() || '';
+    const apMaternoFinal = formData.apellidoMaterno?.trim() || '';
+
+    // Preparar sustancias finales
     const sustanciasFinales = [...formData.sustancias];
-    if (formData.otraSustancia) {
-      sustanciasFinales.push(`OTRO: ${formData.otraSustancia}`);
+    if (formData.otraSustancia && formData.sustancias.includes('Otro')) {
+      // Reemplazamos 'Otro' por el valor específico o lo añadimos
+      const index = sustanciasFinales.indexOf('Otro');
+      if (index > -1) sustanciasFinales[index] = `Otro: ${formData.otraSustancia}`;
     }
 
     try {
       await apiClient.post('/admisiones/primer-contacto', {
         ...formData,
-        sustancias: sustanciasFinales
+        nombrePaciente: nombreFinal,
+        apellidoPaterno: apPaternoFinal,
+        apellidoMaterno: apMaternoFinal,
+        sustancias: sustanciasFinales,
+        // Enviar edad como número si existe
+        edad: formData.edad ? parseInt(formData.edad as string, 10) : null
       });
       alert('Registro de Primer Contacto guardado exitosamente');
       resetForm();
-      navigate('/admisiones/dashboard');
+      navigate('/admisiones/seguimiento');
     } catch (error) {
       console.error('Error saving First Contact:', error);
       alert('Hubo un error al guardar el registro');
@@ -167,41 +176,57 @@ export const PrimerContactoForm: React.FC = () => {
 
   const inputStyle = {
     width: '100%',
-    padding: '0.75rem',
-    borderRadius: '8px',
-    border: '1px solid #cbd5e1',
+    padding: '0.75rem 1rem',
+    borderRadius: '10px',
+    border: '1px solid #e2e8f0',
     fontSize: '14px',
-    marginTop: '0.25rem'
+    marginTop: '0.4rem',
+    transition: 'all 0.2s ease',
+    outline: 'none',
+    backgroundColor: '#f8fafc'
   };
 
   const labelStyle = {
     fontSize: '13px',
-    fontWeight: '600',
-    color: '#475569'
+    fontWeight: '700',
+    color: '#475569',
+    marginLeft: '2px'
+  };
+
+  const sectionGridStyle = {
+    display: 'grid',
+    gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))',
+    gap: '1.5rem'
   };
 
   return (
-    <form onSubmit={handleSubmit} style={{ maxWidth: '900px', margin: '0 auto' }}>
+    <form onSubmit={handleSubmit} style={{ maxWidth: '900px', margin: '0 auto', paddingBottom: '4rem' }}>
       
-      {/* SECCIÓN 1: INFORMACIÓN GENERAL */}
+      {/* SECCIÓN 1: CONTACTO INICIAL */}
       <AccordionSection 
-        title="1. Información General" 
-        icon={<ClipboardList size={22} />} 
+        title="1. Contacto Inicial" 
+        icon={<ClipboardList size={20} />} 
         isOpen={openSection === 0} 
         onToggle={() => setOpenSection(openSection === 0 ? -1 : 0)}
       >
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem' }}>
+        <div style={sectionGridStyle}>
           <div>
-            <label style={labelStyle}>Atendido por</label>
+            <label style={labelStyle}>Fecha y Hora de Registro</label>
             <input 
-              style={{ ...inputStyle, backgroundColor: '#f1f5f9' }} 
-              value={`${usuario?.nombre} ${usuario?.apellidos}`} 
+              style={{ ...inputStyle, backgroundColor: '#f1f5f9', color: '#64748b' }} 
+              value={format(new Date(), "dd/MM/yyyy HH:mm")} 
               disabled 
             />
           </div>
           <div>
-            <label style={labelStyle}>Fuente de Referencia</label>
-            <select name="fuenteReferencia" style={inputStyle} onChange={handleChange} required>
+            <label style={labelStyle}>Medio de Referencia</label>
+            <select 
+              name="fuenteReferencia" 
+              style={inputStyle} 
+              onChange={handleChange} 
+              value={formData.fuenteReferencia}
+              required
+            >
               <option value="">Seleccione...</option>
               <option value="INTERNET">Internet / Redes Sociales</option>
               <option value="EX_PACIENTE">Ex-Paciente</option>
@@ -214,246 +239,170 @@ export const PrimerContactoForm: React.FC = () => {
         </div>
       </AccordionSection>
 
-      {/* SECCIÓN 2: DATOS DEL SOLICITANTE */}
+      {/* SECCIÓN 2: SOLICITANTE */}
       <AccordionSection 
         title="2. Datos del Solicitante" 
-        icon={<User size={22} />} 
+        icon={<User size={20} />} 
         isOpen={openSection === 1} 
         onToggle={() => setOpenSection(openSection === 1 ? -1 : 1)}
       >
-        <div style={{ marginBottom: '1.5rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-          <input 
-            type="checkbox" 
-            id="solicitanteEsPaciente" 
-            checked={solicitanteEsPaciente}
-            onChange={(e) => setSolicitanteEsPaciente(e.target.checked)}
-          />
-          <label htmlFor="solicitanteEsPaciente" style={{ fontSize: '14px', fontWeight: 'bold', color: '#3b82f6', cursor: 'pointer' }}>
-            El solicitante es el paciente
-          </label>
-        </div>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem' }}>
+        <div style={sectionGridStyle}>
           <div style={{ gridColumn: 'span 2' }}>
             <label style={labelStyle}>Nombre Completo</label>
-            <input name="solicitanteNombre" style={inputStyle} onChange={handleChange} required />
-          </div>
-          <div>
-            <label style={labelStyle}>Teléfono Local</label>
-            <input name="solicitanteTelefono" style={inputStyle} onChange={handleChange} />
-          </div>
-          <div>
-            <label style={labelStyle}>Celular</label>
-            <input name="solicitanteCelular" style={inputStyle} onChange={handleChange} />
-          </div>
-          <div style={{ gridColumn: 'span 2' }}>
-            <label style={labelStyle}>Dirección</label>
-            <input name="solicitanteDireccion" style={inputStyle} onChange={handleChange} />
-          </div>
-          <div>
-            <label style={labelStyle}>Ocupación</label>
-            <input name="solicitanteOcupacion" style={inputStyle} onChange={handleChange} />
-          </div>
-          <div>
-            <label style={labelStyle}>Relación con el Paciente</label>
-            <input name="relacionPaciente" style={inputStyle} onChange={handleChange} required disabled={solicitanteEsPaciente} value={solicitanteEsPaciente ? 'EL MISMO' : formData.relacionPaciente} />
-          </div>
-        </div>
-      </AccordionSection>
-
-      {/* SECCIÓN 3: DATOS DEL PACIENTE */}
-      <AccordionSection 
-        title="3. Datos del Paciente (Prospecto)" 
-        icon={<User size={22} />} 
-        isOpen={openSection === 2} 
-        onToggle={() => setOpenSection(openSection === 2 ? -1 : 2)}
-      >
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '1.5rem' }}>
-          <div>
-            <label style={labelStyle}>Nombre(s)</label>
-            <input name="nombrePaciente" style={inputStyle} onChange={handleChange} required value={formData.nombrePaciente} />
-          </div>
-          <div>
-            <label style={labelStyle}>Ap. Paterno</label>
-            <input name="apellidoPaterno" style={inputStyle} onChange={handleChange} required value={formData.apellidoPaterno} />
-          </div>
-          <div>
-            <label style={labelStyle}>Ap. Materno</label>
-            <input name="apellidoMaterno" style={inputStyle} onChange={handleChange} value={formData.apellidoMaterno} />
-          </div>
-          <div>
-            <CustomDatePicker 
-              label="F. Nacimiento" 
-              selected={formData.fechaNacimiento ? parseISO(formData.fechaNacimiento) : null} 
-              onChange={(date) => {
-                setFormData({ 
-                  fechaNacimiento: date ? format(date, 'yyyy-MM-dd') : '' 
-                });
-              }} 
+            <input 
+              name="solicitanteNombre" 
+              placeholder="Nombre de la persona que llama..."
+              style={inputStyle} 
+              onChange={handleChange} 
+              value={formData.solicitanteNombre}
               required 
             />
           </div>
           <div>
-            <label style={labelStyle}>Edad Calculada</label>
-            <input style={{ ...inputStyle, backgroundColor: '#f8fafc' }} value={edad !== null ? `${edad} años` : '--'} disabled />
-          </div>
-          <div>
-            <label style={labelStyle}>Sexo</label>
-            <select name="sexo" style={inputStyle} onChange={handleChange} value={formData.sexo}>
-              <option value="M">Masculino</option>
-              <option value="F">Femenino</option>
-            </select>
-          </div>
-          <div>
-            <label style={labelStyle}>Estado Civil</label>
-            <select name="estadoCivil" style={inputStyle} onChange={handleChange}>
-              <option value="">Seleccione...</option>
-              <option value="SOLTERO">Soltero(a)</option>
-              <option value="CASADO">Casado(a)</option>
-              <option value="UNION_LIBRE">Unión Libre</option>
-              <option value="DIVORCIADO">Divorciado(a)</option>
-              <option value="VIUDO">Viudo(a)</option>
-            </select>
-          </div>
-          <div>
-            <label style={labelStyle}>Hijos</label>
-            <input type="number" name="hijos" style={inputStyle} onChange={handleChange} value={formData.hijos} />
-          </div>
-          <div>
-            <label style={labelStyle}>Escolaridad</label>
-            <select name="escolaridad" style={inputStyle} onChange={handleChange}>
-              <option value="">Seleccione...</option>
-              <option value="PRIMARIA">Primaria</option>
-              <option value="SECUNDARIA">Secundaria</option>
-              <option value="PREPARATORIA">Preparatoria</option>
-              <option value="LICENCIATURA">Licenciatura</option>
-              <option value="POSTGRADO">Postgrado</option>
-              <option value="NINGUNA">Ninguna</option>
-            </select>
-          </div>
-        </div>
-      </AccordionSection>
-
-      {/* SECCIÓN 4: SUSTANCIAS */}
-      <AccordionSection 
-        title="4. Sustancias de Consumo" 
-        icon={<Activity size={22} />} 
-        isOpen={openSection === 3} 
-        onToggle={() => setOpenSection(openSection === 3 ? -1 : 3)}
-      >
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: '1rem' }}>
-          {SUSTANCIAS_LIST.map(sustancia => (
-            <div key={sustancia} style={{ 
-              display: 'flex', 
-              alignItems: 'center', 
-              gap: '0.5rem', 
-              padding: '0.5rem',
-              borderRadius: '8px',
-              border: formData.sustancias.includes(sustancia) ? '1px solid #3b82f6' : '1px solid #e2e8f0',
-              backgroundColor: formData.sustancias.includes(sustancia) ? '#eff6ff' : 'white',
-              cursor: 'pointer'
-            }} onClick={() => handleSustanciaToggle(sustancia)}>
-              <input 
-                type="checkbox" 
-                checked={formData.sustancias.includes(sustancia)} 
-                onChange={() => {}} // Manejado por el click en el div
-                style={{ cursor: 'pointer' }}
-              />
-              <span style={{ fontSize: '13px', color: '#334155', fontWeight: '500' }}>{sustancia}</span>
-            </div>
-          ))}
-          <div style={{ gridColumn: 'span 2', marginTop: '1rem' }}>
-            <label style={labelStyle}>Otros (especificar)</label>
-            <input 
-              name="otraSustancia" 
-              placeholder="Ej: Inhalantes, Solventes..." 
+            <label style={labelStyle}>Parentesco / Relación</label>
+            <select 
+              name="relacionPaciente" 
               style={inputStyle} 
               onChange={handleChange} 
-              value={formData.otraSustancia}
+              value={formData.relacionPaciente}
+              required
+            >
+              <option value="">Seleccione...</option>
+              <option value="PADRE_MADRE">Padre / Madre</option>
+              <option value="ESPOSO_A">Esposo(a) / Pareja</option>
+              <option value="HIJO_A">Hijo(a)</option>
+              <option value="HERMANO_A">Hermano(a)</option>
+              <option value="EL_MISMO">El Mismo (Prospecto)</option>
+              <option value="OTRO">Otro</option>
+            </select>
+          </div>
+          <div>
+            <label style={labelStyle}>Teléfono de Contacto*</label>
+            <input 
+              name="solicitanteTelefono" 
+              placeholder="Obligatorio para seguimiento"
+              style={inputStyle} 
+              onChange={handleChange} 
+              value={formData.solicitanteTelefono}
+              required
             />
           </div>
         </div>
       </AccordionSection>
 
-      {/* SECCIÓN 5: EVALUACIÓN RÁPIDA */}
+      {/* SECCIÓN 3: PROSPECTO */}
       <AccordionSection 
-        title="5. Evaluación Rápida" 
-        icon={<ClipboardList size={22} />} 
-        isOpen={openSection === 4} 
-        onToggle={() => setOpenSection(openSection === 4 ? -1 : 4)}
+        title="3. Información del Prospecto" 
+        icon={<Activity size={20} />} 
+        isOpen={openSection === 2} 
+        onToggle={() => setOpenSection(openSection === 2 ? -1 : 2)}
       >
         <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+          <div style={sectionGridStyle}>
+            <div>
+              <label style={labelStyle}>Nombre (Opcional)</label>
+              <input 
+                name="nombrePaciente" 
+                style={inputStyle} 
+                onChange={handleChange} 
+                value={formData.nombrePaciente}
+                placeholder="En blanco para 'Anónimo'"
+              />
+            </div>
+            <div>
+              <label style={labelStyle}>Edad (Opcional)</label>
+              <input 
+                type="number" 
+                name="edad" 
+                style={inputStyle} 
+                onChange={handleChange} 
+                value={formData.edad}
+                placeholder="Ej: 25"
+              />
+            </div>
+          </div>
+
           <div>
-            <label style={labelStyle}>¿Está dispuesto a internarse?</label>
-            <div style={{ display: 'flex', gap: '2rem', marginTop: '0.5rem' }}>
-              {['SI', 'NO', 'DUDA'].map(opt => (
-                <label key={opt} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer', fontSize: '14px' }}>
-                  <input type="radio" name="dispuestoInternarse" value={opt} checked={formData.dispuestoInternarse === opt} onChange={handleChange} /> 
-                  {opt}
-                </label>
+            <label style={labelStyle}>Sustancias de Consumo (Multi-select)</label>
+            <div style={{ 
+              display: 'grid', 
+              gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', 
+              gap: '0.75rem',
+              marginTop: '0.75rem' 
+            }}>
+              {SUSTANCIAS_LIST.map(sustancia => (
+                <div 
+                  key={sustancia} 
+                  style={{ 
+                    display: 'flex', 
+                    alignItems: 'center', 
+                    gap: '0.6rem', 
+                    padding: '0.75rem',
+                    borderRadius: '12px',
+                    border: formData.sustancias.includes(sustancia) ? '2px solid #3b82f6' : '1px solid #e2e8f0',
+                    backgroundColor: formData.sustancias.includes(sustancia) ? '#eff6ff' : 'white',
+                    cursor: 'pointer',
+                    transition: 'all 0.2s ease'
+                  }} 
+                  onClick={() => handleSustanciaToggle(sustancia)}
+                >
+                  <div style={{ 
+                    width: '18px', 
+                    height: '18px', 
+                    borderRadius: '4px', 
+                    border: '2px solid #3b82f6',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    backgroundColor: formData.sustancias.includes(sustancia) ? '#3b82f6' : 'transparent'
+                  }}>
+                    {formData.sustancias.includes(sustancia) && <div style={{ width: '8px', height: '8px', borderRadius: '1px', backgroundColor: 'white' }} />}
+                  </div>
+                  <span style={{ 
+                    fontSize: '13px', 
+                    color: formData.sustancias.includes(sustancia) ? '#1e40af' : '#475569', 
+                    fontWeight: formData.sustancias.includes(sustancia) ? '700' : '500' 
+                  }}>{sustancia}</span>
+                </div>
               ))}
             </div>
           </div>
-          <div style={{ display: 'flex', gap: '3rem' }}>
-            <div>
-              <label style={labelStyle}>¿Requiere intervención?</label>
-              <div style={{ display: 'flex', gap: '1rem', marginTop: '0.5rem' }}>
-                <label style={{ fontSize: '14px' }}><input type="radio" name="requiereIntervencion" value="true" checked={formData.requiereIntervencion === true} onChange={() => setFormData({ requiereIntervencion: true })} /> Sí</label>
-                <label style={{ fontSize: '14px' }}><input type="radio" name="requiereIntervencion" value="false" checked={formData.requiereIntervencion === false} onChange={() => setFormData({ requiereIntervencion: false })} /> No</label>
-              </div>
+
+          {formData.sustancias.includes('Otro') && (
+            <div style={{ animation: 'fadeIn 0.3s ease' }}>
+              <label style={labelStyle}>Especifique otra sustancia</label>
+              <input 
+                name="otraSustancia" 
+                style={inputStyle} 
+                onChange={handleChange} 
+                value={formData.otraSustancia}
+                placeholder="Escriba aquí..."
+              />
             </div>
-            <div>
-              <label style={labelStyle}>¿Tiene tratamiento previo?</label>
-              <div style={{ display: 'flex', gap: '1rem', marginTop: '0.5rem' }}>
-                <label style={{ fontSize: '14px' }}><input type="radio" name="estadoPrevioTratamiento" value="true" checked={formData.estadoPrevioTratamiento === true} onChange={() => setFormData({ estadoPrevioTratamiento: true })} /> Sí</label>
-                <label style={{ fontSize: '14px' }}><input type="radio" name="estadoPrevioTratamiento" value="false" checked={formData.estadoPrevioTratamiento === false} onChange={() => setFormData({ estadoPrevioTratamiento: false })} /> No</label>
-              </div>
-            </div>
+          )}
+
+          <div>
+            <label style={labelStyle}>Observaciones del Caso</label>
+            <textarea 
+              name="observaciones" 
+              rows={4} 
+              style={{ ...inputStyle, resize: 'none' }} 
+              onChange={handleChange} 
+              value={formData.observaciones}
+              placeholder="Describa brevemente la situación o requerimientos especiales..."
+            />
           </div>
         </div>
       </AccordionSection>
 
-      {/* SECCIÓN 6: OBSERVACIONES GENERALES */}
+      {/* SECCIÓN 4: SEGUIMIENTO Y ACUERDOS */}
       <AccordionSection 
-        title="6. Observaciones Generales" 
-        icon={<MessageSquare size={22} />} 
-        isOpen={openSection === 5} 
-        onToggle={() => setOpenSection(openSection === 5 ? -1 : 5)}
+        title="4. Seguimientos y Acuerdos" 
+        icon={<Calendar size={20} />} 
+        isOpen={openSection === 3} 
+        onToggle={() => setOpenSection(openSection === 3 ? -1 : 3)}
       >
-        <label style={labelStyle}>Actitud del solicitante y contexto inicial</label>
-        <textarea 
-          name="observaciones" 
-          rows={4} 
-          style={inputStyle} 
-          onChange={handleChange} 
-          placeholder="Describa la actitud, dudas o peticiones especiales..."
-        />
-      </AccordionSection>
-
-      {/* SECCIÓN 7: PERFIL ECONÓMICO */}
-      <AccordionSection 
-        title="7. Perfil Económico" 
-        icon={<DollarSign size={22} />} 
-        isOpen={openSection === 6} 
-        onToggle={() => setOpenSection(openSection === 6 ? -1 : 6)}
-      >
-        <label style={labelStyle}>Posibilidades de pago / Subsidios</label>
-        <textarea 
-          name="posibilidadesEconomicas" 
-          rows={3} 
-          style={inputStyle} 
-          onChange={handleChange} 
-          placeholder="Mencione si requiere beca, subsidio o si cuenta con recursos propios..."
-        />
-      </AccordionSection>
-
-      {/* SECCIÓN 8: SEGUIMIENTO Y ACUERDOS */}
-      <AccordionSection 
-        title="8. Seguimiento y Acuerdos (CRM)" 
-        icon={<Calendar size={22} />} 
-        isOpen={openSection === 7} 
-        onToggle={() => setOpenSection(openSection === 7 ? -1 : 7)}
-      >
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem' }}>
+        <div style={sectionGridStyle}>
           <div>
             <label style={labelStyle}>Acuerdo de Seguimiento*</label>
             <select 
@@ -465,46 +414,50 @@ export const PrimerContactoForm: React.FC = () => {
             >
               <option value="">Seleccione acuerdo...</option>
               <option value="LLAMARA_PROSPECTO">Prospecto llamará luego</option>
-              <option value="LLAMARA_MARAKAME">Llamaremos al prospecto (Nosotros)</option>
-              <option value="CITA_PROGRAMADA">Cita Programada / Visita</option>
+              <option value="LLAMARA_MARAKAME">Llamaremos Nosotros (Marakame)</option>
+              <option value="CITA_PROGRAMADA">Cita Agendada / Visita</option>
               <option value="RECHAZADO">Rechazado / Descartado</option>
             </select>
           </div>
 
           {(formData.acuerdoSeguimiento === 'LLAMARA_MARAKAME' || formData.acuerdoSeguimiento === 'CITA_PROGRAMADA') && (
-            <div>
-              <label style={labelStyle}>Fecha Programada de Acción*</label>
+            <div style={{ animation: 'fadeIn 0.3s ease' }}>
+              <label style={labelStyle}>Fecha de Seguimiento*</label>
               <CustomDatePicker
                 selected={formData.fechaSeguimiento ? parseISO(formData.fechaSeguimiento) : null}
                 onChange={(date) => setFormData({ fechaSeguimiento: date ? date.toISOString() : '' })}
-                placeholderText="Seleccione fecha..."
+                placeholderText="¿Cuándo realizar la acción?"
               />
             </div>
           )}
         </div>
       </AccordionSection>
 
-
-      {/* BOTONES DE ACCIÓN */}
+      {/* FOOTER: BOTONES DE ACCIÓN */}
       <div style={{ 
-        marginTop: '2rem', 
-        padding: '2rem', 
-        backgroundColor: '#f8fafc', 
-        borderRadius: '16px',
+        marginTop: '2.5rem', 
+        padding: '2.5rem', 
+        backgroundColor: 'rgba(255, 255, 255, 0.5)', 
+        backdropFilter: 'blur(10px)',
+        borderRadius: '24px',
         display: 'flex',
         justifyContent: 'flex-end',
-        gap: '1rem',
-        border: '1px solid #e2e8f0'
+        gap: '1.25rem',
+        border: '1px solid #e2e8f0',
+        boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.05)'
       }}>
         <button 
           type="button"
+          onClick={() => navigate('/admisiones/dashboard')}
           style={{ 
-            padding: '0.75rem 1.5rem', 
-            borderRadius: '10px', 
+            padding: '0.875rem 2rem', 
+            borderRadius: '12px', 
             border: '1px solid #cbd5e1',
             background: 'white',
+            color: '#475569',
             fontWeight: '600',
-            cursor: 'pointer'
+            cursor: 'pointer',
+            transition: 'all 0.2s ease'
           }}
         >
           Cancelar
@@ -513,23 +466,30 @@ export const PrimerContactoForm: React.FC = () => {
           type="submit"
           disabled={isSubmitting}
           style={{ 
-            padding: '0.75rem 2rem', 
-            borderRadius: '10px', 
+            padding: '0.875rem 2.5rem', 
+            borderRadius: '12px', 
             border: 'none',
-            background: isSubmitting ? '#94a3b8' : '#3b82f6',
+            background: isSubmitting ? '#94a3b8' : 'linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)',
             color: 'white',
             fontWeight: '700',
             cursor: isSubmitting ? 'not-allowed' : 'pointer',
             display: 'flex',
             alignItems: 'center',
-            gap: '0.5rem',
-            boxShadow: '0 4px 6px -1px rgba(59, 130, 246, 0.3)'
+            gap: '0.75rem',
+            boxShadow: '0 10px 15px -3px rgba(59, 130, 246, 0.3)',
+            transition: 'all 0.2s ease'
           }}
         >
-          {isSubmitting ? 'Guardando...' : <><Save size={18} /> Guardar Primer Contacto</>}
+          {isSubmitting ? 'Registrando...' : <><Save size={20} /> Finalizar y Programar</>}
         </button>
       </div>
 
+      <style>{`
+        @keyframes fadeIn {
+          from { opacity: 0; transform: translateY(-10px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
+      `}</style>
     </form>
   );
 };
