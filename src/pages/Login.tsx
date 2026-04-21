@@ -19,8 +19,16 @@ export function Login() {
       });
 
       if (data.success) {
-        setAuth(data.data.usuario, data.data.accessToken);
-        navigate('/dashboard');
+        const usuario = data.data.usuario;
+        // Guardamos la sesión en Zustand
+        setAuth(usuario, data.data.accessToken);
+
+        // Verificamos el rol para redirigir
+        if (usuario.rol === 'admisiones' || usuario.rol === 'ADMISIONES') {
+          navigate('/admisiones'); // Asegúrate de que esta ruta existe en tu React Router
+        } else {
+          navigate('/dashboard'); // Ruta por defecto para otros roles
+        }
       }
     } catch (err: unknown) {
       if (axios.isAxiosError(err)) {

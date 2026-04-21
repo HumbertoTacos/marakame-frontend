@@ -66,11 +66,9 @@ export const ExpedienteDigitalPage: React.FC = () => {
     return false;
   };
 
-
-  useEffect(() => {
-    fetchData();
-  }, [pacienteId]);
-
+  // AQUÍ ESTÁ LA CORRECCIÓN: Se reconstruyó la función fetchData completa
+  const fetchData = async () => {
+    try {
       const [pRes, dRes, vRes] = await Promise.all([
         apiClient.get(`/pacientes/${pacienteId}`),
         apiClient.get(`/documentos/expediente/${pacienteId}`),
@@ -86,6 +84,10 @@ export const ExpedienteDigitalPage: React.FC = () => {
       setIsLoading(false);
     }
   };
+
+  useEffect(() => {
+    fetchData();
+  }, [pacienteId]);
 
   const handleUploadFirma = async (file: File) => {
     if (!valoracionMedica) return;
@@ -383,4 +385,3 @@ const EmptyState = () => (
     <p>No se han encontrado registros de documentos para este paciente.</p>
   </div>
 );
-

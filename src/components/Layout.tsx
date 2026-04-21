@@ -1,5 +1,5 @@
 import { Outlet, useNavigate, useLocation } from 'react-router-dom';
-import { LogOut, Search, Bell, HeartPulse, Stethoscope, PackageOpen, ShoppingCart, Banknote, ShieldAlert, FileOutput, ChevronRight, LayoutDashboard, Users, Clock, ClipboardList, Plus } from 'lucide-react';
+import { LogOut, Search, Bell, HeartPulse, Stethoscope, PackageOpen, ShoppingCart, Banknote, ShieldAlert, FileOutput, ChevronRight, Users, Clock, ClipboardList, Plus } from 'lucide-react';
 import { useState } from 'react';
 import { useAuthStore } from '../stores/authStore';
 
@@ -62,19 +62,11 @@ export function Layout() {
         </div>
         
         <div style={{ padding: '0 1.5rem 1.5rem', flex: 1, overflowY: 'auto' }} className="custom-scrollbar">
-          <div style={{ fontSize: '11px', color: '#64748b', textTransform: 'uppercase', letterSpacing: '1.5px', marginBottom: '1rem', fontWeight: '700', marginTop: '1rem' }}>Principal</div>
           
-          <div style={navItemStyle('dashboard')} onClick={() => navigate('/dashboard')}
-               onMouseEnter={(e) => { if (!location.pathname.includes('dashboard')) { e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.05)'; e.currentTarget.style.color = '#e2e8f0'; } }}
-               onMouseLeave={(e) => { if (!location.pathname.includes('dashboard')) { e.currentTarget.style.backgroundColor = 'transparent'; e.currentTarget.style.color = '#94a3b8'; } }}
-          >
-            <LayoutDashboard size={20} style={{ marginRight: '1rem' }}/> Panel de Control
-          </div>
-
           {/* Módulo de Admisiones */}
           {(usuario?.rol === 'ADMISIONES' || usuario?.rol === 'ADMIN_GENERAL') && (
             <>
-              <div style={{ fontSize: '11px', color: '#64748b', textTransform: 'uppercase', letterSpacing: '1.5px', margin: '2rem 0 1rem 0', fontWeight: '700' }}>Admisiones</div>
+              <div style={{ fontSize: '11px', color: '#64748b', textTransform: 'uppercase', letterSpacing: '1.5px', margin: '1rem 0 1rem 0', fontWeight: '700' }}>Admisiones</div>
               <div style={navItemStyle('admisiones/dashboard')} onClick={() => navigate('/admisiones/dashboard')}
                    onMouseEnter={(e) => { if (!location.pathname.includes('admisiones/dashboard')) { e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.05)'; e.currentTarget.style.color = '#e2e8f0'; } }}
                    onMouseLeave={(e) => { if (!location.pathname.includes('admisiones/dashboard')) { e.currentTarget.style.backgroundColor = 'transparent'; e.currentTarget.style.color = '#94a3b8'; } }}
@@ -184,10 +176,12 @@ export function Layout() {
           borderBottom: '1px solid var(--glass-border)', 
           display: 'flex', 
           alignItems: 'center', 
-          justifyContent: 'space-between', 
+          justifyContent: 'space-between', /* ¡AQUÍ ESTABA EL DETALLE! */
           padding: '0 2.5rem', 
           zIndex: 10,
-          boxShadow: '0 4px 30px rgba(0, 0, 0, 0.03)'
+          boxShadow: '0 4px 30px rgba(0, 0, 0, 0.03)',
+          width: '100%', /* Añadido para mayor seguridad */
+          boxSizing: 'border-box' /* Añadido para que el padding no desborde */
         }}>
           
           {/* Breadcrumb / Title area */}
@@ -219,7 +213,8 @@ export function Layout() {
                   fontSize: '14px', 
                   outline: 'none', 
                   transition: 'all 0.3s ease',
-                  color: '#334155'
+                  color: '#334155',
+                  boxSizing: 'border-box'
                 }}
                 onFocus={(e) => {
                   e.target.style.backgroundColor = '#ffffff';
