@@ -10,7 +10,8 @@ import {
   Home,
   X,
   BedDouble,
-  Activity
+  Activity,
+  Phone
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useIngresoStore } from '../../stores/ingresoStore';
@@ -55,7 +56,6 @@ const NuevaSolicitudPage: React.FC = () => {
     camaId: undefined as number | undefined
   });
 
-  // Definición dinámica de pasos (Siempre es aprobado ahora)
   const PASOS = [
     { id: 1, label: 'Solicitante', icon: Users },
     { id: 2, label: 'Paciente', icon: User },
@@ -66,13 +66,21 @@ const NuevaSolicitudPage: React.FC = () => {
 
   const MAX_PASO = 5;
 
+  // Cargar lista de "Posibles Ingresos" desde el CRM
   useEffect(() => {
     if (!pacienteSeleccionado) {
       setIsFetching(true);
-      apiClient.get('/pacientes/aprobados-para-ingreso').then(res => {
-        setListaAprobados(res.data.data);
-        setIsFetching(false);
-      });
+      apiClient.get('/admisiones/primer-contacto?incluirInactivos=false')
+        .then(res => {
+          // Filtramos solo los que tienen el estatus de POSIBLE INGRESO
+          const posiblesIngresos = res.data.data.filter((p: any) => p.acuerdoSeguimiento === 'POSIBLE_INGRESO');
+          setListaAprobados(posiblesIngresos);
+          setIsFetching(false);
+        })
+        .catch(err => {
+          console.error("Error cargando posibles ingresos:", err);
+          setIsFetching(false);
+        });
     }
   }, [pacienteSeleccionado]);
 
@@ -85,28 +93,30 @@ const NuevaSolicitudPage: React.FC = () => {
   const handleNext = () => setPasoActual(prev => Math.min(prev + 1, MAX_PASO));
   const handleBack = () => setPasoActual(prev => Math.max(prev - 1, 1));
 
-  const handleSelectAprobado = (paciente: any) => {
-    setPacienteSeleccionado(paciente);
+  // Adaptado para recibir un objeto "Prospecto" del CRM
+  const handleSelectAprobado = (prospecto: any) => {
+    setPacienteSeleccionado(prospecto);
     
-    const pc = paciente.primerContacto?.[0] || {};
+    // Si ya existe un paciente ligado en la base de datos, usamos sus datos, si no, usamos los del prospecto
+    const paciente = prospecto.paciente || {};
     
     setFormData({
       ...formData,
       pacienteId: paciente.id,
-      nombre: paciente.nombre,
-      apellidoPaterno: paciente.apellidoPaterno,
-      apellidoMaterno: paciente.apellidoMaterno,
+      nombre: paciente.nombre || prospecto.nombrePaciente?.split(' ')[0] || '',
+      apellidoPaterno: paciente.apellidoPaterno || prospecto.nombrePaciente?.split(' ').slice(1).join(' ') || '',
+      apellidoMaterno: paciente.apellidoMaterno || '',
       fechaNacimiento: paciente.fechaNacimiento ? new Date(paciente.fechaNacimiento).toISOString().split('T')[0] : '',
-      sexo: paciente.sexo,
+      sexo: paciente.sexo || 'M',
       curp: paciente.curp || '',
-      solicitanteNombre: pc.solicitanteNombre || '',
-      solicitanteParentesco: pc.relacionPaciente || '',
-      solicitanteTelefono: pc.solicitanteTelefono || pc.solicitanteCelular || '',
+      solicitanteNombre: prospecto.nombreLlamada || '',
+      solicitanteParentesco: prospecto.parentescoLlamada || '',
+      solicitanteTelefono: prospecto.celularLlamada || prospecto.telefonoLlamada || '',
       solicitanteCorreo: paciente.familiar?.correo || '',
       solicitanteMunicipio: paciente.familiar?.municipio || '',
       solicitanteEstado: paciente.familiar?.estado || '',
-      tipoAdiccion: pc.sustancias?.[0] || TipoAdiccion.ALCOHOL,
-      motivoIngreso: pc.observaciones || '',
+      tipoAdiccion: prospecto.sustancias?.[0] || TipoAdiccion.ALCOHOL,
+      motivoIngreso: prospecto.observaciones || `Ingreso derivado de seguimiento. Acuerdo programado para el: ${prospecto.fechaAcuerdo ? new Date(prospecto.fechaAcuerdo).toLocaleDateString() : 'N/A'}`,
       areaDeseada: paciente.areaDeseada || AreaCentro.HOMBRES
     });
     setPasoActual(1);
@@ -147,7 +157,7 @@ const NuevaSolicitudPage: React.FC = () => {
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '3rem' }}>
           <div>
             <h1 style={{ fontSize: '32px', fontWeight: '900', color: '#1e293b', margin: 0 }}>Nueva Solicitud de Ingreso</h1>
-            <p style={{ color: '#64748b', fontSize: '16px' }}>Seleccione un prospecto aprobado por el área médica para formalizar su entrada.</p>
+            <p style={{ color: '#64748b', fontSize: '16px' }}>Seleccione un prospecto marcado como "Posible Ingreso" para formalizar su entrada.</p>
           </div>
           <button onClick={() => navigate('/admisiones/dashboard')} style={{ padding: '0.75rem 1.5rem', borderRadius: '16px', border: '1px solid #e2e8f0', background: 'white', color: '#64748b', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.5rem', fontWeight: '800' }}>
             <Home size={20} /> Dashboard
@@ -158,32 +168,41 @@ const NuevaSolicitudPage: React.FC = () => {
           <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
             <thead style={{ backgroundColor: '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
               <tr>
-                <th style={{ padding: '1.5rem 2rem', fontSize: '12px', fontWeight: '900', color: '#64748b', textTransform: 'uppercase' }}>Paciente</th>
-                <th style={{ padding: '1.5rem 2rem', fontSize: '12px', fontWeight: '900', color: '#64748b', textTransform: 'uppercase' }}>Fecha Valoración</th>
+                <th style={{ padding: '1.5rem 2rem', fontSize: '12px', fontWeight: '900', color: '#64748b', textTransform: 'uppercase' }}>Prospecto (Paciente)</th>
+                <th style={{ padding: '1.5rem 2rem', fontSize: '12px', fontWeight: '900', color: '#64748b', textTransform: 'uppercase' }}>Contacto / Solicitante</th>
+                <th style={{ padding: '1.5rem 2rem', fontSize: '12px', fontWeight: '900', color: '#64748b', textTransform: 'uppercase' }}>Fecha Programada</th>
                 <th style={{ padding: '1.5rem 2rem', fontSize: '12px', fontWeight: '900', color: '#64748b', textTransform: 'uppercase', textAlign: 'right' }}>Acción</th>
               </tr>
             </thead>
             <tbody>
               {isFetching ? (
-                <tr><td colSpan={3} style={{ padding: '4rem', textAlign: 'center', color: '#64748b' }}><Activity className="animate-spin" style={{ margin: '0 auto 1rem' }} /> Cargando prospectos aprobados...</td></tr>
+                <tr><td colSpan={4} style={{ padding: '4rem', textAlign: 'center', color: '#64748b' }}><Activity className="animate-spin" style={{ margin: '0 auto 1rem' }} /> Cargando posibles ingresos...</td></tr>
               ) : listaAprobados.length === 0 ? (
-                <tr><td colSpan={3} style={{ padding: '4rem', textAlign: 'center', color: '#64748b' }}>No hay pacientes aprobados pendientes de ingreso.</td></tr>
+                <tr><td colSpan={4} style={{ padding: '4rem', textAlign: 'center', color: '#64748b' }}>No hay prospectos con estatus de Posible Ingreso.</td></tr>
               ) : (
                 listaAprobados.map(p => (
                   <tr key={p.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
                     <td style={{ padding: '1.5rem 2rem' }}>
-                      <div style={{ fontWeight: '800', color: '#1e293b', fontSize: '16px' }}>{p.nombre} {p.apellidoPaterno} {p.apellidoMaterno}</div>
-                      <div style={{ fontSize: '12px', color: '#3b82f6', fontWeight: '700' }}>CURP: {p.curp || 'S/N'}</div>
+                      <div style={{ fontWeight: '800', color: '#1e293b', fontSize: '16px' }}>{p.nombrePaciente || 'Sin Nombre'}</div>
+                      <div style={{ fontSize: '12px', color: '#3b82f6', fontWeight: '700', marginTop: '0.25rem' }}>
+                        {p.sustancias?.length > 0 ? `Sustancias: ${p.sustancias.slice(0,2).join(', ')}` : 'Sustancias no registradas'}
+                      </div>
                     </td>
-                    <td style={{ padding: '1.5rem 2rem', color: '#475569' }}>
-                      {p.valoracionMedica?.createdAt ? new Date(p.valoracionMedica.createdAt).toLocaleDateString('es-MX', { day: '2-digit', month: 'long', year: 'numeric' }) : 'Fecha no disponible'}
+                    <td style={{ padding: '1.5rem 2rem' }}>
+                      <div style={{ fontWeight: '800', color: '#475569', fontSize: '14px' }}>{p.nombreLlamada}</div>
+                      <div style={{ fontSize: '12px', color: '#64748b', display: 'flex', alignItems: 'center', gap: '0.25rem', marginTop: '0.25rem' }}>
+                        <Phone size={12} /> {p.celularLlamada || 'Sin teléfono'}
+                      </div>
+                    </td>
+                    <td style={{ padding: '1.5rem 2rem', color: '#475569', fontWeight: '700', fontSize: '14px' }}>
+                      {p.fechaAcuerdo ? new Date(p.fechaAcuerdo).toLocaleDateString('es-MX', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : 'No definida'}
                     </td>
                     <td style={{ padding: '1.5rem 2rem', textAlign: 'right' }}>
                       <button 
                         onClick={() => handleSelectAprobado(p)}
-                        style={{ padding: '0.75rem 1.5rem', backgroundColor: '#3b82f6', color: 'white', border: 'none', borderRadius: '14px', fontWeight: '900', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '0.5rem', boxShadow: '0 4px 6px -1px rgba(59,130,246,0.2)' }}
+                        style={{ padding: '0.75rem 1.5rem', backgroundColor: '#8b5cf6', color: 'white', border: 'none', borderRadius: '14px', fontWeight: '900', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '0.5rem', boxShadow: '0 4px 6px -1px rgba(139,92,246,0.2)' }}
                       >
-                        Iniciar Ingreso Formal <ArrowRight size={18} />
+                        Iniciar Ingreso <ArrowRight size={18} />
                       </button>
                     </td>
                   </tr>
@@ -209,7 +228,7 @@ const NuevaSolicitudPage: React.FC = () => {
             <p style={{ color: '#64748b', fontSize: '14px', margin: 0 }}>Formalizando estancia de: <strong style={{ color: '#1e293b' }}>{formData.nombre} {formData.apellidoPaterno}</strong></p>
           </div>
         </div>
-        <div style={{ backgroundColor: '#f0fdf4', color: '#16a34a', padding: '0.5rem 1rem', borderRadius: '12px', fontSize: '12px', fontWeight: '900', border: '1px solid #dcfce7' }}>✓ Prospecto Aprobado Médicamente</div>
+        <div style={{ backgroundColor: '#f5f3ff', color: '#7c3aed', padding: '0.5rem 1rem', borderRadius: '12px', fontSize: '12px', fontWeight: '900', border: '1px solid #ede9fe' }}>✓ Derivado de Posible Ingreso</div>
       </div>
 
       {/* Stepper */}
@@ -249,7 +268,7 @@ const NuevaSolicitudPage: React.FC = () => {
                 <h3 style={{ fontSize: '20px', fontWeight: '900', color: '#1e293b', margin: 0 }}>Datos del Solicitante</h3>
                 <p style={{ color: '#64748b', fontSize: '14px', margin: 0 }}>Familiar responsable o tutor legal.</p>
               </div>
-              <div style={{ backgroundColor: '#f0fdf4', color: '#16a34a', padding: '0.5rem 1rem', borderRadius: '12px', fontSize: '12px', fontWeight: '900' }}>✓ Paciente Precargado</div>
+              <div style={{ backgroundColor: '#eff6ff', color: '#2563eb', padding: '0.5rem 1rem', borderRadius: '12px', fontSize: '12px', fontWeight: '900' }}>ℹ Datos del CRM Precargados</div>
             </div>
             
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '2rem' }}>
@@ -268,8 +287,7 @@ const NuevaSolicitudPage: React.FC = () => {
                 <select 
                   value={formData.solicitanteParentesco} 
                   onChange={e => setFormData({...formData, solicitanteParentesco: e.target.value})}
-                  disabled
-                  style={{ width: '100%', padding: '1rem', borderRadius: '14px', border: '1px solid #e2e8f0', backgroundColor: '#f8fafc' }}
+                  style={{ width: '100%', padding: '1rem', borderRadius: '14px', border: '1px solid #e2e8f0', backgroundColor: '#f8fafc', outline: 'none' }}
                 >
                   <option value="">Seleccione...</option>
                   <option value="Padre/Madre">Padre/Madre</option>
@@ -285,8 +303,7 @@ const NuevaSolicitudPage: React.FC = () => {
                   type="tel" 
                   value={formData.solicitanteTelefono} 
                   onChange={e => setFormData({...formData, solicitanteTelefono: e.target.value})}
-                  disabled
-                  style={{ width: '100%', padding: '1rem', borderRadius: '14px', border: '1px solid #e2e8f0', backgroundColor: '#f8fafc' }} 
+                  style={{ width: '100%', padding: '1rem', borderRadius: '14px', border: '1px solid #e2e8f0', backgroundColor: '#f8fafc', outline: 'none' }} 
                 />
               </div>
               <div className="form-group">
@@ -295,8 +312,7 @@ const NuevaSolicitudPage: React.FC = () => {
                   type="email" 
                   value={formData.solicitanteCorreo} 
                   onChange={e => setFormData({...formData, solicitanteCorreo: e.target.value})}
-                  disabled
-                  style={{ width: '100%', padding: '1rem', borderRadius: '14px', border: '1px solid #e2e8f0', backgroundColor: '#f8fafc' }} 
+                  style={{ width: '100%', padding: '1rem', borderRadius: '14px', border: '1px solid #e2e8f0', backgroundColor: '#f8fafc', outline: 'none' }} 
                 />
               </div>
             </div>
@@ -309,31 +325,31 @@ const NuevaSolicitudPage: React.FC = () => {
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '2rem' }}>
               <div style={{ gridColumn: 'span 1' }}>
                 <label style={{ display: 'block', fontSize: '13px', fontWeight: '800', color: '#475569', marginBottom: '0.6rem', textTransform: 'uppercase' }}>Nombre(s)</label>
-                <input type="text" value={formData.nombre} disabled onChange={e => setFormData({...formData, nombre: e.target.value})} style={{ width: '100%', padding: '1rem', borderRadius: '14px', border: '1px solid #e2e8f0' }} />
+                <input type="text" value={formData.nombre} onChange={e => setFormData({...formData, nombre: e.target.value})} style={{ width: '100%', padding: '1rem', borderRadius: '14px', border: '1px solid #e2e8f0', outline: 'none' }} />
               </div>
               <div>
                 <label style={{ display: 'block', fontSize: '13px', fontWeight: '800', color: '#475569', marginBottom: '0.6rem', textTransform: 'uppercase' }}>Apellido Paterno</label>
-                <input type="text" value={formData.apellidoPaterno} disabled onChange={e => setFormData({...formData, apellidoPaterno: e.target.value})} style={{ width: '100%', padding: '1rem', borderRadius: '14px', border: '1px solid #e2e8f0' }} />
+                <input type="text" value={formData.apellidoPaterno} onChange={e => setFormData({...formData, apellidoPaterno: e.target.value})} style={{ width: '100%', padding: '1rem', borderRadius: '14px', border: '1px solid #e2e8f0', outline: 'none' }} />
               </div>
               <div>
                 <label style={{ display: 'block', fontSize: '13px', fontWeight: '800', color: '#475569', marginBottom: '0.6rem', textTransform: 'uppercase' }}>Apellido Materno</label>
-                <input type="text" value={formData.apellidoMaterno} disabled onChange={e => setFormData({...formData, apellidoMaterno: e.target.value})} style={{ width: '100%', padding: '1rem', borderRadius: '14px', border: '1px solid #e2e8f0' }} />
+                <input type="text" value={formData.apellidoMaterno} onChange={e => setFormData({...formData, apellidoMaterno: e.target.value})} style={{ width: '100%', padding: '1rem', borderRadius: '14px', border: '1px solid #e2e8f0', outline: 'none' }} />
               </div>
               <div>
                 <label style={{ display: 'block', fontSize: '13px', fontWeight: '800', color: '#475569', marginBottom: '0.6rem', textTransform: 'uppercase' }}>CURP / ID Oficial</label>
-                <input type="text" value={formData.curp} disabled onChange={e => setFormData({...formData, curp: e.target.value})} style={{ width: '100%', padding: '1rem', borderRadius: '14px', border: '1px solid #e2e8f0' }} placeholder="Opcional en crisis" />
+                <input type="text" value={formData.curp} onChange={e => setFormData({...formData, curp: e.target.value})} style={{ width: '100%', padding: '1rem', borderRadius: '14px', border: '1px solid #e2e8f0', outline: 'none' }} placeholder="Opcional en crisis" />
               </div>
               <div>
                 <CustomDatePicker 
                   label="Fecha de Nacimiento" 
                   selected={formData.fechaNacimiento ? parseISO(formData.fechaNacimiento) : null} 
-                  onChange={() => {}} 
-                  disabled={true} 
+                  onChange={(date: Date | null) => setFormData({...formData, fechaNacimiento: date ? date.toISOString().split('T')[0] : ''})} 
+                  disabled={false} 
                 />
               </div>
               <div>
                 <label style={{ display: 'block', fontSize: '13px', fontWeight: '800', color: '#475569', marginBottom: '0.6rem', textTransform: 'uppercase' }}>Sexo</label>
-                <select value={formData.sexo} disabled onChange={e => setFormData({...formData, sexo: e.target.value})} style={{ width: '100%', padding: '1rem', borderRadius: '14px', border: '1px solid #e2e8f0' }}>
+                <select value={formData.sexo} onChange={e => setFormData({...formData, sexo: e.target.value})} style={{ width: '100%', padding: '1rem', borderRadius: '14px', border: '1px solid #e2e8f0', outline: 'none' }}>
                   <option value="M">Masculino</option>
                   <option value="F">Femenino</option>
                 </select>
@@ -348,7 +364,7 @@ const NuevaSolicitudPage: React.FC = () => {
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '2rem' }}>
               <div>
                 <label style={{ display: 'block', fontSize: '13px', fontWeight: '800', color: '#475569', marginBottom: '0.6rem', textTransform: 'uppercase' }}>Prioridad de Ingreso</label>
-                <select value={formData.urgencia} onChange={e => setFormData({...formData, urgencia: e.target.value as NivelUrgencia})} style={{ width: '100%', padding: '1rem', borderRadius: '14px', border: '1px solid #e2e8f0' }}>
+                <select value={formData.urgencia} onChange={e => setFormData({...formData, urgencia: e.target.value as NivelUrgencia})} style={{ width: '100%', padding: '1rem', borderRadius: '14px', border: '1px solid #e2e8f0', outline: 'none' }}>
                   <option value={NivelUrgencia.BAJA}>Baja - Programada</option>
                   <option value={NivelUrgencia.MEDIA}>Media - Requerida</option>
                   <option value={NivelUrgencia.ALTA}>Alta - Prioritaria</option>
@@ -357,7 +373,7 @@ const NuevaSolicitudPage: React.FC = () => {
               </div>
               <div>
                 <label style={{ display: 'block', fontSize: '13px', fontWeight: '800', color: '#475569', marginBottom: '0.6rem', textTransform: 'uppercase' }}>Área de Asignación</label>
-                <select value={formData.areaDeseada} onChange={e => setFormData({...formData, areaDeseada: e.target.value as AreaCentro})} style={{ width: '100%', padding: '1rem', borderRadius: '14px', border: '1px solid #e2e8f0' }}>
+                <select value={formData.areaDeseada} onChange={e => setFormData({...formData, areaDeseada: e.target.value as AreaCentro})} style={{ width: '100%', padding: '1rem', borderRadius: '14px', border: '1px solid #e2e8f0', outline: 'none' }}>
                   <option value={AreaCentro.HOMBRES}>Sección Varonil</option>
                   <option value={AreaCentro.MUJERES}>Sección Femenil</option>
                   <option value={AreaCentro.DETOX}>Unidad de Detox (Agudo)</option>
@@ -368,7 +384,7 @@ const NuevaSolicitudPage: React.FC = () => {
                 <textarea 
                   value={formData.motivoIngreso} 
                   onChange={e => setFormData({...formData, motivoIngreso: e.target.value})} 
-                  style={{ width: '100%', padding: '1rem', borderRadius: '14px', border: '1px solid #e2e8f0', minHeight: '120px', resize: 'vertical' }}
+                  style={{ width: '100%', padding: '1rem', borderRadius: '14px', border: '1px solid #e2e8f0', minHeight: '120px', resize: 'vertical', outline: 'none' }}
                   placeholder="Detalles sobre el consumo o crisis actual..."
                 />
               </div>
