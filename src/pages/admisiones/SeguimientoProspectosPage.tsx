@@ -1,15 +1,16 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
-  Users, Search, Calendar, Phone,
-  ArrowLeft, Clock, CheckCircle2,
-  AlertCircle, XCircle, CalendarPlus, Stethoscope,
-  X, Eye, EyeOff, Archive
+  X, Eye, EyeOff, Archive,
+  LayoutGrid, List, ArrowRightCircle, Info, PhoneCall, ArrowRight, Trash2, 
+  ChevronLeft, ChevronRight, Stethoscope, AlertCircle, XCircle, CalendarPlus,
+  Users, Search, Calendar, Phone, ArrowLeft, Clock, CheckCircle2
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import apiClient from '../../services/api';
 import { format, isPast, isToday, parseISO, isBefore, startOfDay } from 'date-fns';
 import { es } from 'date-fns/locale';
+import { useMemo, useRef } from 'react';
 
 // ==========================================
 // MODAL: Agendar Cita de Seguimiento
@@ -75,8 +76,73 @@ const AgendarCitaModal = ({ isOpen, onClose, prospecto, onSave }: any) => {
 };
 
 // ==========================================
-// MODAL: Ver todas las sustancias
+// MODAL: Detalle de Prospecto
 // ==========================================
+const DetalleProspectoModal = ({ prospecto, onClose, onEdit }: any) => {
+  if (!prospecto) return null;
+
+  return (
+    <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(15, 23, 42, 0.8)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1200 }}>
+      <div style={{ backgroundColor: 'white', borderRadius: '32px', width: '90%', maxWidth: '500px', padding: '2.5rem', boxShadow: '0 25px 50px -12px rgba(0,0,0,0.25)' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '2rem' }}>
+          <div>
+            <h2 style={{ margin: 0, fontSize: '24px', fontWeight: '900', color: '#0f172a' }}>{prospecto.nombrePaciente || 'Prospecto Anónimo'}</h2>
+            <p style={{ margin: '0.25rem 0 0', color: '#64748b', fontWeight: '600' }}>Expediente de Primer Contacto</p>
+          </div>
+          <button onClick={onClose} style={{ padding: '0.5rem', borderRadius: '12px', border: '1px solid #f1f5f9', backgroundColor: 'white', cursor: 'pointer', color: '#64748b' }}>
+            <X size={20} />
+          </button>
+        </div>
+
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem', marginBottom: '2rem' }}>
+          <div>
+            <label style={{ display: 'block', fontSize: '11px', fontWeight: '800', color: '#94a3b8', textTransform: 'uppercase', marginBottom: '0.5rem' }}>Informante</label>
+            <p style={{ margin: 0, fontWeight: '700', color: '#1e293b' }}>{prospecto.nombreLlamada}</p>
+            <p style={{ margin: 0, fontSize: '13px', color: '#64748b' }}>{prospecto.celularLlamada}</p>
+          </div>
+          <div>
+            <label style={{ display: 'block', fontSize: '11px', fontWeight: '800', color: '#94a3b8', textTransform: 'uppercase', marginBottom: '0.5rem' }}>Parentesco</label>
+            <p style={{ margin: 0, fontWeight: '700', color: '#1e293b' }}>{prospecto.parentescoLlamada}</p>
+          </div>
+          <div>
+            <label style={{ display: 'block', fontSize: '11px', fontWeight: '800', color: '#94a3b8', textTransform: 'uppercase', marginBottom: '0.5rem' }}>Medio</label>
+            <p style={{ margin: 0, fontWeight: '700', color: '#1e293b' }}>{prospecto.medioEnterado}</p>
+          </div>
+          <div>
+            <label style={{ display: 'block', fontSize: '11px', fontWeight: '800', color: '#94a3b8', textTransform: 'uppercase', marginBottom: '0.5rem' }}>Acuerdo CRM</label>
+            <div style={{ display: 'inline-flex', padding: '0.25rem 0.75rem', borderRadius: '8px', fontSize: '11px', fontWeight: '800', backgroundColor: '#eff6ff', color: '#3b82f6', border: '1px solid #dbeafe' }}>
+              {prospecto.acuerdoSeguimiento}
+            </div>
+          </div>
+        </div>
+
+        <div style={{ marginBottom: '2.5rem' }}>
+          <label style={{ display: 'block', fontSize: '11px', fontWeight: '800', color: '#94a3b8', textTransform: 'uppercase', marginBottom: '0.75rem' }}>Sustancias de Impacto</label>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
+            {(prospecto.sustancias || prospecto.paciente?.sustancias || []).map((s: string, i: number) => (
+              <span key={i} style={{ backgroundColor: '#f8fafc', border: '1px solid #e2e8f0', padding: '0.4rem 0.75rem', borderRadius: '10px', fontSize: '12px', fontWeight: '700', color: '#475569' }}>{s}</span>
+            ))}
+          </div>
+        </div>
+
+        <div style={{ display: 'flex', gap: '1rem' }}>
+          <button
+            onClick={() => onEdit(prospecto.id)}
+            style={{ flex: 1, padding: '1rem', backgroundColor: '#0f172a', color: 'white', borderRadius: '16px', border: 'none', fontWeight: '800', cursor: 'pointer' }}
+          >
+            Editar Información
+          </button>
+          <button
+            onClick={onClose}
+            style={{ flex: 1, padding: '1rem', backgroundColor: 'white', color: '#64748b', borderRadius: '16px', border: '1px solid #e2e8f0', fontWeight: '800', cursor: 'pointer' }}
+          >
+            Cerrar Detalle
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
 const VerSustanciasModal = ({ isOpen, onClose, sustancias, nombrePaciente }: any) => {
   if (!isOpen) return null;
 
@@ -183,11 +249,46 @@ export default function SeguimientoProspectosPage() {
 
   const [agendarModal, setAgendarModal] = useState<{ isOpen: boolean, prospecto: any }>({ isOpen: false, prospecto: null });
   const [sustanciasModal, setSustanciasModal] = useState<{ isOpen: boolean, sustancias: string[], nombre: string }>({ isOpen: false, sustancias: [], nombre: '' });
+  
+  // LÓGICA DE AGENDA Y VISTA
+  const [agendaViewMode, setAgendaViewMode] = useState<'grid' | 'table'>('grid');
+  const [selectedDetalle, setSelectedDetalle] = useState<any>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const [isDragging, setIsDragging] = useState(false);
+  const [startX, setStartX] = useState(0);
+  const [scrollLeft, setScrollLeft] = useState(0);
+
+  const handleMouseDown = (e: React.MouseEvent) => {
+    setIsDragging(true);
+    if (scrollRef.current) {
+      setStartX(e.pageX - scrollRef.current.offsetLeft);
+      setScrollLeft(scrollRef.current.scrollLeft);
+    }
+  };
+
+  const handleMouseLeave = () => setIsDragging(false);
+  const handleMouseUp = () => setIsDragging(false);
+  const handleMouseMove = (e: React.MouseEvent) => {
+    if (!isDragging) return;
+    e.preventDefault();
+    if (scrollRef.current) {
+      const x = e.pageX - scrollRef.current.offsetLeft;
+      const walk = (x - startX) * 2;
+      scrollRef.current.scrollLeft = scrollLeft - walk;
+    }
+  };
 
   const { data: prospectos, isLoading } = useQuery<any[]>({
     queryKey: ['prospectos_crm', showArchived],
     queryFn: () => apiClient.get(`/admisiones/primer-contacto?incluirInactivos=${showArchived}`).then(res => res.data.data)
   });
+
+  const proximasCitas = useMemo(() => {
+    if (!prospectos) return [];
+    return prospectos
+      .filter((p: any) => p.acuerdoSeguimiento === 'CITA_PROGRAMADA' && p.fechaAcuerdo)
+      .sort((a, b) => new Date(a.fechaAcuerdo).getTime() - new Date(b.fechaAcuerdo).getTime());
+  }, [prospectos]);
 
   const mutationAgendar = useMutation({
     mutationFn: (data: { id: number, fecha: string }) =>
