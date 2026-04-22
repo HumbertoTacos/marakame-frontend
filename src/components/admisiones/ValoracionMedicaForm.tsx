@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   FileCheck,
   Save,
@@ -44,6 +45,7 @@ export const ValoracionMedicaForm: React.FC<Props> = ({ pacienteId, onSuccess })
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [preFillData, setPreFillData] = useState<PreFillData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const navigate = useNavigate();
 
   const {
     formData, setFormData, resetForm
@@ -51,15 +53,19 @@ export const ValoracionMedicaForm: React.FC<Props> = ({ pacienteId, onSuccess })
 
   // 1. Cargar datos de Pre-Fill
   useEffect(() => {
+    resetForm();
+
     const fetchPreFill = async () => {
       try {
         const response = await apiClient.get(`/admisiones/valoracion-medica/${pacienteId}/pre-fill`);
+
         if (response.data.success) {
-          setPreFillData(response.data.data);
-          // Opcional: Si el historial de consumo está vacío, pre-llenar con algo del CRM
-          if (!formData.historialConsumo && response.data.data.crm.sustancias.length > 0) {
+          const data = response.data.data;
+          setPreFillData(data);
+
+          if (data.crm.sustancias.length > 0) {
             setFormData({
-              historialConsumo: `Sustancias reportadas en CRM: ${response.data.data.crm.sustancias.join(', ')}.\nEdad de inicio: ${response.data.data.crm.edadInicioConsumo || 'No especificada'}.\nÚltimo consumo: ${response.data.data.crm.ultimoConsumo ? new Date(response.data.data.crm.ultimoConsumo).toLocaleDateString() : 'No especificado'}.`
+              historialConsumo: `Sustancias reportadas en CRM: ${data.crm.sustancias.join(', ')}.\nEdad de inicio: ${data.crm.edadInicioConsumo || 'No especificada'}.\nÚltimo consumo: ${data.crm.ultimoConsumo ? new Date(data.crm.ultimoConsumo).toLocaleDateString() : 'No especificado'}.`
             });
           }
         }
@@ -69,6 +75,7 @@ export const ValoracionMedicaForm: React.FC<Props> = ({ pacienteId, onSuccess })
         setIsLoading(false);
       }
     };
+
     fetchPreFill();
   }, [pacienteId]);
 
@@ -101,7 +108,11 @@ export const ValoracionMedicaForm: React.FC<Props> = ({ pacienteId, onSuccess })
       if (response.data.success) {
         alert('Valoración guardada exitosamente. Ahora proceda a imprimir el documento oficial.');
         window.print(); // Disparar impresión oficial
-        if (onSuccess) onSuccess();
+        if (formData.esAptoParaIngreso) {
+          navigate(`/admisiones/estudio/${pacienteId}`);
+        } else {
+          if (onSuccess) onSuccess();
+        }
       }
     } catch (error) {
       console.error('Error saving valuation:', error);

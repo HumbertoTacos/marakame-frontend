@@ -18,11 +18,14 @@ import { es } from 'date-fns/locale';
 
 interface ProspectoResumen {
   id: number;
+  pacienteId?: number;
   nombrePaciente: string;
   fechaAcuerdo: string;
   celularLlamada?: string;
   nombreLlamada?: string; 
   acuerdoSeguimiento?: string;
+  tieneEstudio?: boolean;
+  estudioCompletado?: boolean;
 }
 
 const safeParseDate = (dateVal: unknown) => {
@@ -67,6 +70,8 @@ const AdmisionesDashboard: React.FC = () => {
   const [fechaAgenda, setFechaAgenda] = useState('');
   const [horaAgenda, setHoraAgenda] = useState('');
 
+  const tieneEstudioLocal = !!selectedEvento?.id;
+
   // 1. Consulta de pacientes (Contadores superiores)
   const { data: pacientes = [] } = useQuery({
     queryKey: ['pacientes_lista'],
@@ -93,7 +98,11 @@ const AdmisionesDashboard: React.FC = () => {
       const dateKey = format(dateObj, 'yyyy-MM-dd');
       
       if (!mapa[dateKey]) mapa[dateKey] = [];
-      mapa[dateKey].push(p);
+      mapa[dateKey].push({
+        ...p,
+        tieneEstudio: p.tieneEstudio ?? false,
+        estudioCompletado: p.estudioCompletado ?? false
+      });
     });
     return mapa;
   }, [prospectos]);
@@ -173,6 +182,8 @@ const AdmisionesDashboard: React.FC = () => {
       );
 
       alert('Enviado a valoración médica');
+
+      navigate('/medica');
       await queryClient.invalidateQueries({
         queryKey: ['prospectos_crm']
       });
@@ -714,6 +725,42 @@ const AdmisionesDashboard: React.FC = () => {
                     <Stethoscope size={18} /> Enviar valoración médica
                   </button>
                 </>
+              )}
+
+              {/* ESTUDIO SOCIOECONÓMICO */}
+              {selectedEvento.acuerdoSeguimiento === 'POSIBLE_INGRESO' && (
+                <button
+                  onClick={() => navigate(`/admisiones/estudio/${selectedEvento?.id}`)}
+                  style={{
+                    padding: '14px 16px',
+                    borderRadius: '16px',
+                    border: '1px solid #10b981',
+                    background: '#ecfdf5',
+                    cursor: 'pointer',
+                    fontWeight: 800,
+                    textAlign: 'left',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '10px',
+                    color: '#065f46',
+                    transition: 'all 0.2s ease'
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.background = '#d1fae5';
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.background = '#ecfdf5';
+                  }}
+                >
+                  <FileText size={18} />
+
+                  {/* TEXTO DINÁMICO */}
+                  {selectedEvento.estudioCompletado
+                    ? 'Ver estudio socioeconómico'
+                    : selectedEvento.tieneEstudio ?? tieneEstudioLocal
+                    ? 'Continuar estudio socioeconómico'
+                    : 'Iniciar estudio socioeconómico'}
+                </button>
               )}
 
               <button

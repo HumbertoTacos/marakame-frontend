@@ -3,6 +3,28 @@ import { BrowserRouter as Router, Routes, Route, Navigate, Outlet } from 'react-
 import { Layout } from './components/Layout';
 import { ProtectedRoute } from './components/ProtectedRoute';
 import { Login } from './pages/Login';
+import { useParams } from 'react-router-dom';
+
+const InventarioPertenenciasForm = lazy(
+  () => import('./pages/admisiones/InventarioPertenenciasForm')
+) as React.LazyExoticComponent<
+  React.ComponentType<{ pacienteId: number }>
+>;
+
+function EstudioWrapper() {
+  const { pacienteId } = useParams();
+  return <EstudioSocioeconomicoForm key={pacienteId} pacienteId={Number(pacienteId)} />;
+}
+
+function InventarioWrapper() {
+  const { pacienteId } = useParams<{ pacienteId: string }>();
+
+  if (!pacienteId || isNaN(Number(pacienteId))) {
+    return <div>ID de paciente inválido</div>;
+  }
+
+  return <InventarioPertenenciasForm pacienteId={Number(pacienteId)} />;
+}
 
 // Implementación de Lazy Loading para optimización de recursos y bundle size
 const Dashboard = lazy(() => import('./pages/Dashboard').then(m => ({ default: m.Dashboard })));
@@ -73,7 +95,8 @@ function App() {
                 </ProtectedRoute>
               } />
               <Route path="ingreso" element={<Ingreso />} />
-              <Route path="estudio" element={<EstudioSocioeconomicoForm pacienteId={1} />} />
+              <Route path="estudio/:pacienteId" element={<EstudioWrapper />} />
+              <Route path="inventario/:pacienteId" element={<InventarioWrapper />} />
             </Route>
             
             {/* Módulo Médico - Restringido */}
