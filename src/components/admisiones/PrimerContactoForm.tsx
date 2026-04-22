@@ -619,7 +619,7 @@ export const PrimerContactoForm: React.FC = () => {
           <div style={{ borderTop: '1px solid #f1f5f9', paddingTop: '1rem' }}>
             <label style={labelStyle}>20. OTROS (AGREGAR MULTIPLES)</label>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', marginTop: '0.5rem' }}>
-              {(formData.sustanciasOtros || []).map((val, idx) => (
+              {(formData.sustanciasOtros || []).map((val: string, idx: number) => (
                 <div key={idx} style={{ display: 'flex', gap: '0.5rem' }}>
                   <input
                     style={inputStyle}
@@ -648,9 +648,9 @@ export const PrimerContactoForm: React.FC = () => {
         </div>
       </AccordionSection>
 
-      {/* SECCIÓN 5: DISPOSICIÓN Y ANTECEDENTES (21-23) */}
+      {/* SECCIÓN 5: DISPOSICIÓN, ANTECEDENTES Y ECONOMÍA (21-24) */}
       <AccordionSection
-        title="5. Disposición y Antecedentes"
+        title="5. Disposición y Antecedentes (21-24)"
         icon={<Activity size={20} />}
         isOpen={openSection === 4}
         onToggle={() => setOpenSection(openSection === 4 ? -1 : 4)}
@@ -718,10 +718,24 @@ export const PrimerContactoForm: React.FC = () => {
               <input name="lugarTratamiento" style={inputStyle} onChange={handleChange} value={formData.lugarTratamiento} />
             </div>
           </div>
+
+          {/* AGREGADO EL PUNTO 24 AQUÍ */}
+          <div style={{ marginTop: '0.5rem' }}>
+            <label style={labelStyle}>24) Posibilidades Económicas</label>
+            <textarea 
+              name="posibilidadesEconomicas" 
+              rows={3} 
+              style={{ ...inputStyle, resize: 'none' }} 
+              onChange={handleChange} 
+              value={formData.posibilidadesEconomicas || ''} 
+              placeholder="Describa la situación económica o posibilidades de pago..." 
+            />
+          </div>
+
         </div>
       </AccordionSection>
 
-      {/* SECCIÓN 6: ACUERDO (24-29) */}
+      {/* SECCIÓN 6: ACUERDO (25-29) */}
       <AccordionSection
         title="6. Acuerdo y Seguimiento"
         icon={<ShieldAlert size={20} />}
@@ -740,12 +754,12 @@ export const PrimerContactoForm: React.FC = () => {
                   onChange={handleChange} 
                   style={inputStyle}
                 >
-                  <option value="LLAMARLE">Llamarle nosotros</option>
-                  <option value="ESPERAR_LLAMADA">Esperar llamada de ellos</option>
-                  <option value="ESPERAR_VISITA">Esperar visita</option>
-                  <option value="POSIBLE_INGRESO">Posible Ingreso (Agendar)</option>
+                  <option value="LLAMARLE"> Llamarle nosotros</option>
+                  <option value="ESPERAR_LLAMADA"> Esperar llamada de ellos</option>
+                  <option value="ESPERAR_VISITA"> Esperar visita</option>
+                  <option value="POSIBLE_INGRESO"> Posible Ingreso (Agendar)</option>
                   <option value="RECHAZADO">No le interesa / Rechazado</option>
-                  <option value="OTRO">Otro (Especifique)</option>
+                  <option value="OTRO"> Otro (Especifique)</option>
                 </select>
               </div>
 

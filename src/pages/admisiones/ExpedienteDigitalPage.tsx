@@ -1,11 +1,11 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { 
-  Folder, 
-  ArrowLeft, 
-  FileText, 
-  Upload, 
-  CheckCircle2, 
+import {
+  Folder,
+  ArrowLeft,
+  FileText,
+  Upload,
+  CheckCircle2,
   AlertCircle,
   User,
   Bed,
@@ -28,7 +28,7 @@ export const ExpedienteDigitalPage: React.FC = () => {
   const { pacienteId } = useParams<{ pacienteId: string }>();
   const navigate = useNavigate();
   const { usuario } = useAuthStore();
-  
+
   const [paciente, setPaciente] = useState<any>(null);
   const [documentos, setDocumentos] = useState<DocumentoExpediente[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -40,7 +40,7 @@ export const ExpedienteDigitalPage: React.FC = () => {
   const getCanUpload = (doc: DocumentoExpediente) => {
     if (!usuario) return false;
     const rol = usuario.rol;
-    
+
     // El administrador general siempre puede
     if (rol === 'ADMIN_GENERAL') return true;
 
@@ -56,7 +56,7 @@ export const ExpedienteDigitalPage: React.FC = () => {
       if (n.includes('psicoló')) return rol === 'PSICOLOGIA';
       if (n.includes('nutricio')) return rol === 'NUTRICION';
       if (n.includes('enfermer')) return rol === 'ENFERMERIA';
-      
+
       // Si no es ninguno de los específicos, permitimos al staff clínico general si es un cuestionario
       if (n.includes('cuestionario') || n.includes('escala')) {
         return ['AREA_MEDICA', 'PSICOLOGIA', 'ENFERMERIA'].includes(rol);
@@ -66,10 +66,7 @@ export const ExpedienteDigitalPage: React.FC = () => {
     return false;
   };
 
-
-  useEffect(() => {
-    fetchData();
-  }, [pacienteId]);
+  // AQUÍ ESTÁ LA CORRECCIÓN: Se reconstruyó la función fetchData completa
   const fetchData = async () => {
     try {
       const [pRes, dRes, vRes] = await Promise.all([
@@ -77,7 +74,7 @@ export const ExpedienteDigitalPage: React.FC = () => {
         apiClient.get(`/documentos/expediente/${pacienteId}`),
         apiClient.get(`/admisiones/valoracion-medica/paciente/${pacienteId}`)
       ]);
-      
+
       setPaciente(pRes.data.data);
       setDocumentos(dRes.data.data);
       setValoracionMedica(vRes.data.data);
@@ -87,6 +84,10 @@ export const ExpedienteDigitalPage: React.FC = () => {
       setIsLoading(false);
     }
   };
+
+  useEffect(() => {
+    fetchData();
+  }, [pacienteId]);
 
   const handleUploadFirma = async (file: File) => {
     if (!valoracionMedica) return;
@@ -143,7 +144,7 @@ export const ExpedienteDigitalPage: React.FC = () => {
   return (
     <div style={{ padding: '2rem', minHeight: '100vh', backgroundColor: '#f1f5f9' }}>
       <div style={{ maxWidth: '1200px', margin: '0 auto' }}>
-        
+
         {/* HEADER */}
         <div style={{ marginBottom: '2rem' }}>
           <button
@@ -186,13 +187,13 @@ export const ExpedienteDigitalPage: React.FC = () => {
                   </p>
                 </div>
               </div>
-              <label style={{ 
-                padding: '0.8rem 1.5rem', 
-                backgroundColor: '#db2777', 
-                color: 'white', 
-                borderRadius: '14px', 
-                fontWeight: '800', 
-                fontSize: '13px', 
+              <label style={{
+                padding: '0.8rem 1.5rem',
+                backgroundColor: '#db2777',
+                color: 'white',
+                borderRadius: '14px',
+                fontWeight: '800',
+                fontSize: '13px',
                 cursor: isUploadingFirma ? 'not-allowed' : 'pointer',
                 display: 'flex',
                 alignItems: 'center',
@@ -201,10 +202,10 @@ export const ExpedienteDigitalPage: React.FC = () => {
               }}>
                 {isUploadingFirma ? <Loader2 className="animate-spin" size={18} /> : <Upload size={18} />}
                 Digitalizar Firma
-                <input 
-                  type="file" 
-                  accept=".pdf,image/*" 
-                  style={{ display: 'none' }} 
+                <input
+                  type="file"
+                  accept=".pdf,image/*"
+                  style={{ display: 'none' }}
                   onChange={(e) => {
                     const file = e.target.files?.[0];
                     if (file) handleUploadFirma(file);
@@ -218,7 +219,7 @@ export const ExpedienteDigitalPage: React.FC = () => {
 
         {/* LAYOUT DOS COLUMNAS (CARPETA ABIERTA) */}
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '3rem', alignItems: 'start' }}>
-          
+
           {/* COLUMNA IZQUIERDA: ADMINISTRATIVA */}
           <div style={{ backgroundColor: '#ffffff', padding: '2.5rem', borderRadius: '32px', border: '1px solid #e2e8f0', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.02)', position: 'relative' }}>
             <div style={{ marginBottom: '2rem', display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
@@ -227,11 +228,11 @@ export const ExpedienteDigitalPage: React.FC = () => {
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', height: '500px', overflowY: 'auto', paddingRight: '0.5rem' }} className="custom-scrollbar">
               {leftDocs.map(doc => (
-                <DocumentCard 
-                  key={doc.id} 
-                  doc={doc} 
-                  onUpload={handleUpload} 
-                  isUploading={uploadingId === doc.id} 
+                <DocumentCard
+                  key={doc.id}
+                  doc={doc}
+                  onUpload={handleUpload}
+                  isUploading={uploadingId === doc.id}
                   canUpload={getCanUpload(doc)}
                 />
               ))}
@@ -247,11 +248,11 @@ export const ExpedienteDigitalPage: React.FC = () => {
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', height: '500px', overflowY: 'auto', paddingRight: '0.5rem' }} className="custom-scrollbar">
               {rightDocs.map(doc => (
-                <DocumentCard 
-                  key={doc.id} 
-                  doc={doc} 
-                  onUpload={handleUpload} 
-                  isUploading={uploadingId === doc.id} 
+                <DocumentCard
+                  key={doc.id}
+                  doc={doc}
+                  onUpload={handleUpload}
+                  isUploading={uploadingId === doc.id}
                   canUpload={getCanUpload(doc)}
                 />
               ))}
@@ -281,24 +282,24 @@ const DocumentCard = ({ doc, onUpload, isUploading, canUpload }: { doc: Document
   const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
 
   return (
-    <div style={{ 
-      display: 'flex', 
-      alignItems: 'center', 
-      justifyContent: 'space-between', 
-      padding: '1.25rem 1.5rem', 
-      borderRadius: '20px', 
+    <div style={{
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      padding: '1.25rem 1.5rem',
+      borderRadius: '20px',
       border: isCompleted ? '1px solid #bbf7d0' : '1px solid #fed7aa',
       backgroundColor: isCompleted ? '#f0fdf4' : '#fff7ed',
       transition: 'all 0.2s ease',
       boxShadow: isCompleted ? 'none' : '0 2px 4px rgba(251, 146, 60, 0.05)'
     }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: '1.25rem' }}>
-        <div style={{ 
-          width: '40px', 
-          height: '40px', 
-          borderRadius: '12px', 
-          display: 'flex', 
-          alignItems: 'center', 
+        <div style={{
+          width: '40px',
+          height: '40px',
+          borderRadius: '12px',
+          display: 'flex',
+          alignItems: 'center',
           justifyContent: 'center',
           backgroundColor: isCompleted ? '#ffffff' : '#ffedd5'
         }}>
@@ -318,16 +319,16 @@ const DocumentCard = ({ doc, onUpload, isUploading, canUpload }: { doc: Document
 
       <div style={{ display: 'flex', gap: '0.6rem' }}>
         {isCompleted && doc.archivoUrl && (
-          <a 
-            href={`${API_URL}/${doc.archivoUrl}`} 
-            target="_blank" 
+          <a
+            href={`${API_URL}/${doc.archivoUrl}`}
+            target="_blank"
             rel="noreferrer"
             title="Ver Documento"
-            style={{ 
-              padding: '0.6rem', 
-              borderRadius: '12px', 
-              backgroundColor: 'white', 
-              color: '#3b82f6', 
+            style={{
+              padding: '0.6rem',
+              borderRadius: '12px',
+              backgroundColor: 'white',
+              color: '#3b82f6',
               border: '1.5px solid #dbeafe',
               display: 'flex',
               alignItems: 'center',
@@ -338,13 +339,13 @@ const DocumentCard = ({ doc, onUpload, isUploading, canUpload }: { doc: Document
             <ExternalLink size={18} />
           </a>
         )}
-        
+
         {canUpload && (
-          <label style={{ 
-            padding: '0.6rem 1rem', 
-            borderRadius: '12px', 
-            backgroundColor: isCompleted ? '#ffffff' : '#f97316', 
-            color: isCompleted ? '#f97316' : 'white', 
+          <label style={{
+            padding: '0.6rem 1rem',
+            borderRadius: '12px',
+            backgroundColor: isCompleted ? '#ffffff' : '#f97316',
+            color: isCompleted ? '#f97316' : 'white',
             border: isCompleted ? '1.5px solid #fed7aa' : 'none',
             fontSize: '13px',
             fontWeight: '800',
@@ -361,10 +362,10 @@ const DocumentCard = ({ doc, onUpload, isUploading, canUpload }: { doc: Document
               <Upload size={16} />
             )}
             {isCompleted ? 'Reemplazar' : 'Subir PDF'}
-            <input 
-              type="file" 
-              accept=".pdf,image/*" 
-              style={{ display: 'none' }} 
+            <input
+              type="file"
+              accept=".pdf,image/*"
+              style={{ display: 'none' }}
               onChange={(e) => {
                 const file = e.target.files?.[0];
                 if (file) onUpload(doc.id, file);
@@ -384,4 +385,3 @@ const EmptyState = () => (
     <p>No se han encontrado registros de documentos para este paciente.</p>
   </div>
 );
-

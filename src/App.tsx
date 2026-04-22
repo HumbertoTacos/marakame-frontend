@@ -57,6 +57,9 @@ function App() {
                 <Outlet />
               </ProtectedRoute>
             }>
+              {/* SOLUCIÓN: Ruta index que redirige al dashboard real */}
+              <Route index element={<Navigate to="dashboard" replace />} />
+              
               <Route path="dashboard" element={<AdmisionesDashboard />} />
               <Route path="nuevo-ingreso" element={<NuevoIngresoPage />} />
               <Route path="asignar-cama/:id" element={<AsignarCamaPage />} />
@@ -112,7 +115,6 @@ function App() {
                 <Reportes />
               </ProtectedRoute>
             } />
-            {/* Añadir más rutas según los módulos */}
           </Route>
           
           {/* Rutas no autorizadas o 404 */}
