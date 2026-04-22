@@ -133,7 +133,7 @@ interface ValoracionMedicaDraft {
   resetForm: () => void;
 }
 
-const INITIAL_VALORACION_MEDICA = {
+const INITIAL_VALORACION_MEDICA: ValoracionMedicaDraft['formData'] = {
   motivoConsulta: '',
   padecimientoActual: '',
   sintomasGenerales: '',
