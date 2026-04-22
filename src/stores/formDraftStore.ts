@@ -126,6 +126,9 @@ interface ValoracionMedicaDraft {
     tipoValoracion: 'PRESENCIAL' | 'TELEFONICA' | '';
     fechaValoracion: string;
     horaValoracion: string;
+    institucionDestino: string;
+    fechaCanalizacion: string;
+    motivoCanalizacion: string;
   };
   lastUpdated: number;
   setFormData: (data: StateUpdater<any>) => void;
@@ -157,6 +160,9 @@ const INITIAL_VALORACION_MEDICA = {
   tipoValoracion: '',
   fechaValoracion: new Date().toISOString().split('T')[0],
   horaValoracion: new Date().toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit', hour12: false }),
+  institucionDestino: '',
+  fechaCanalizacion: '',
+  motivoCanalizacion: '',
 };
 
 export const useValoracionMedicaStore = create<ValoracionMedicaDraft>()(

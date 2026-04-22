@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import { 
   MapPin, 
   Search, 
@@ -12,6 +12,7 @@ import CamaCard from '../../components/admisiones/CamaCard';
 const AreasPage: React.FC = () => {
   const { camas, fetchCamas, isLoading } = useIngresoStore();
   const [activeTab, setActiveTab] = useState<AreaCentro>(AreaCentro.HOMBRES);
+  const [searchTerm, setSearchTerm] = useState('');
 
   useEffect(() => {
     fetchCamas();
@@ -25,6 +26,23 @@ const AreasPage: React.FC = () => {
       ocupadas: areaCamas.filter(c => c.estado === EstadoCama.OCUPADA).length,
     };
   };
+
+  const camasFiltradas = useMemo(() => {
+    return camas
+      .filter(c => c.habitacion?.area === activeTab)
+      .filter(cama => {
+        if (!searchTerm.trim()) return true;
+
+        const texto = searchTerm.toLowerCase();
+
+        return (
+          cama.codigo?.toLowerCase().includes(texto) ||
+          cama.numero?.toString().includes(texto) ||
+          cama.descripcion?.toLowerCase().includes(texto) ||
+          cama.habitacion?.area?.toLowerCase().includes(texto)
+        );
+      });
+  }, [camas, activeTab, searchTerm]);
 
   return (
     <div style={{ padding: '2rem', maxWidth: '1600px', margin: '0 auto' }}>
@@ -91,7 +109,7 @@ const AreasPage: React.FC = () => {
             <div style={{ display: 'flex', background: '#f1f5f9', padding: '4px', borderRadius: '10px' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '6px 12px', background: 'white', borderRadius: '8px', boxShadow: '0 1px 2px rgba(0,0,0,0.05)' }}>
                 <Search size={14} color="#94a3b8" />
-                <input type="text" placeholder="Buscar cama..." style={{ border: 'none', outline: 'none', fontSize: '14px', width: '150px' }} />
+                <input type="text" placeholder="Buscar cama..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} style={{ border: 'none', outline: 'none', fontSize: '14px', width: '150px' }} />
               </div>
             </div>
           </div>
@@ -103,12 +121,12 @@ const AreasPage: React.FC = () => {
         </div>
 
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: '1.5rem' }}>
-          {camas.filter(c => c.habitacion?.area === activeTab).map(cama => (
+          {camasFiltradas.map(cama => (
             <CamaCard key={cama.id} cama={cama} />
           ))}
         </div>
 
-        {!isLoading && camas.filter(c => c.habitacion?.area === activeTab).length === 0 && (
+        {!isLoading && camasFiltradas.length === 0 && (
           <div style={{ textAlign: 'center', padding: '6rem 0', color: '#94a3b8' }}>
             <div style={{ fontSize: '48px', marginBottom: '1rem' }}>🛏️</div>
             <h3 style={{ fontSize: '18px', fontWeight: '800' }}>Sin registros de camas</h3>

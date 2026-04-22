@@ -11,7 +11,9 @@ import {
   Loader2,
   Stethoscope,
   ChevronRight,
-  ArrowRight
+  ArrowRight,
+  ShieldCheck,
+  ShieldX
 } from 'lucide-react';
 import apiClient from '../../services/api';
 import { useValoracionMedicaStore } from '../../stores/formDraftStore';
@@ -84,8 +86,15 @@ export const ValoracionMedicaForm: React.FC<Props> = ({ pacienteId, onSuccess })
 
     setIsSubmitting(true);
     try {
+      const {
+        institucionDestino,
+        fechaCanalizacion,
+        motivoCanalizacion,
+        ...dataSinCanalizacion
+      } = formData;
+
       const response = await apiClient.post('/admisiones/valoracion-medica', {
-        ...formData,
+        ...dataSinCanalizacion,
         pacienteId
       });
 
@@ -382,30 +391,99 @@ export const ValoracionMedicaForm: React.FC<Props> = ({ pacienteId, onSuccess })
         </div>
 
         {/* DICTAMEN FINAL */}
-        <div style={{ backgroundColor: '#0f172a', borderRadius: '32px', padding: '3rem', marginBottom: '3rem', color: 'white', textAlign: 'center' }} className="print:bg-white print:border-2 print:border-slate-800 print:text-black">
-          <h3 style={{ margin: '0 0 2rem', fontSize: '20px', fontWeight: '900', color: 'white' }} className="print:text-black">DICTAMEN MÉDICO DE APTITUD</h3>
-          <div style={{ display: 'flex', gap: '1.5rem', maxWidth: '600px', margin: '0 auto' }} className="print:hidden">
+        <div style={{ background: 'linear-gradient(135deg,#0f172a 0%,#111827 45%,#1e293b 100%)', borderRadius: '36px', padding: '3.2rem', marginBottom: '3rem', color: 'white', textAlign: 'center', border: '1px solid rgba(255,255,255,0.06)', boxShadow: '0 25px 60px rgba(15,23,42,0.28)' }} className="print:bg-white print:border-2 print:border-slate-800 print:text-black">
+          <h3 style={{ margin: '0 0 2.2rem', fontSize: '32px', fontWeight: '900', color: 'white', letterSpacing: '0.04em', textShadow: '0 4px 12px rgba(0,0,0,0.25)' }} className="print:text-black">DICTAMEN MÉDICO DE APTITUD</h3>
+          <div style={{ display: 'flex', gap: '1.5rem', maxWidth: '760px', margin: '0 auto' }} className="print:hidden">
             <button
               type="button"
               onClick={() => setFormData({ esAptoParaIngreso: true })}
-              style={{ flex: 1, padding: '2rem', borderRadius: '24px', border: formData.esAptoParaIngreso === true ? '4px solid #3b82f6' : '1px solid #1e293b', backgroundColor: formData.esAptoParaIngreso === true ? 'rgba(59,130,246,0.2)' : 'transparent', color: 'white', cursor: 'pointer', transition: 'all 0.2s', transform: formData.esAptoParaIngreso === true ? 'scale(1.05)' : 'scale(1)' }}
+              style={{ flex: 1, height: '190px', borderRadius: '28px', border: 'none', background: formData.esAptoParaIngreso === true ? 'linear-gradient(135deg,#10b981,#059669)' : 'rgba(255,255,255,0.03)', color: 'white', cursor: 'pointer', transition: 'all 0.2s', transform: formData.esAptoParaIngreso === true ? 'scale(1.04)' : 'scale(1)', boxShadow: formData.esAptoParaIngreso === true ? '0 18px 35px rgba(16,185,129,.35)' : 'none' }}
             >
-              <div style={{ fontSize: '32px', marginBottom: '0.5rem' }}>✅</div>
-              <div style={{ fontWeight: '900', fontSize: '16px' }}>APTO</div>
+              <div style={{ marginBottom: '0.8rem', display: 'flex', justifyContent: 'center' }}>
+                <ShieldCheck size={58} strokeWidth={2.5} />
+              </div>
+              <div style={{ fontWeight: '900', fontSize: '22px' }}>APTO</div>
             </button>
             <button
               type="button"
               onClick={() => setFormData({ esAptoParaIngreso: false })}
-              style={{ flex: 1, padding: '2rem', borderRadius: '24px', border: formData.esAptoParaIngreso === false ? '4px solid #ef4444' : '1px solid #1e293b', backgroundColor: formData.esAptoParaIngreso === false ? 'rgba(239,68,68,0.2)' : 'transparent', color: 'white', cursor: 'pointer', transition: 'all 0.2s', transform: formData.esAptoParaIngreso === false ? 'scale(1.05)' : 'scale(1)' }}
+              style={{ flex: 1, height: '190px', borderRadius: '28px', border: 'none', background: formData.esAptoParaIngreso === false ? 'linear-gradient(135deg,#ef4444,#dc2626)' : 'rgba(255,255,255,0.03)', color: 'white', cursor: 'pointer', transition: 'all 0.2s', transform: formData.esAptoParaIngreso === false ? 'scale(1.04)' : 'scale(1)', boxShadow: formData.esAptoParaIngreso === false ? '0 18px 35px rgba(239,68,68,.35)' : 'none' }}
             >
-              <div style={{ fontSize: '32px', marginBottom: '0.5rem' }}>❌</div>
-              <div style={{ fontWeight: '900', fontSize: '16px' }}>NO APTO</div>
+              <div style={{ marginBottom: '0.8rem', display: 'flex', justifyContent: 'center' }}>
+                <ShieldX size={58} strokeWidth={2.5} />
+              </div>
+              <div style={{ fontWeight: '900', fontSize: '22px' }}>NO APTO</div>
             </button>
           </div>
           <div className="hidden print:block" style={{ fontSize: '18px', fontWeight: '900', textDecoration: 'underline' }}>
-            {formData.esAptoParaIngreso ? 'EL PACIENTE SE CONSIDERA APTO PARA SU INGRESO' : 'EL PACIENTE NO SE CONSIDERA APTO PARA SU INGRESO'}
+            <div style={{ marginTop: '2rem', padding: '1rem', borderRadius: '18px', background: formData.esAptoParaIngreso === true ? 'rgba(16,185,129,.22)' : 'rgba(239,68,68,.22)', fontSize: '18px', fontWeight: '900', color: 'white', letterSpacing: '0.03em' }} className="print:hidden">
+              {formData.esAptoParaIngreso ? 'EL PACIENTE SE CONSIDERA APTO PARA SU INGRESO' : 'EL PACIENTE NO SE CONSIDERA APTO PARA SU INGRESO'}
+            </div>
           </div>
         </div>
+
+        {formData.esAptoParaIngreso === false && (
+          <div style={{
+            backgroundColor: 'white',
+            borderRadius: '28px',
+            padding: '2rem',
+            marginBottom: '3rem',
+            border: '1px solid #fee2e2',
+            boxShadow: 'var(--shadow)'
+          }}>
+            
+            <h3 style={{
+              margin: '0 0 1.5rem',
+              fontSize: '20px',
+              fontWeight: '900',
+              color: '#dc2626'
+            }}>
+              Canalización a Otra Institución
+            </h3>
+
+            <div style={{
+              display: 'grid',
+              gridTemplateColumns: '1fr 1fr',
+              gap: '1.5rem'
+            }}>
+
+              <div>
+                <label style={labelStyle}>Institución Destino</label>
+                <input
+                  type="text"
+                  name="institucionDestino"
+                  value={formData.institucionDestino || ''}
+                  onChange={handleChange}
+                  style={inputStyle}
+                  placeholder="Hospital General, Psiquiátrico, etc."
+                />
+              </div>
+
+              <div>
+                <label style={labelStyle}>Fecha de Canalización</label>
+                <input
+                  type="date"
+                  name="fechaCanalizacion"
+                  value={formData.fechaCanalizacion || ''}
+                  onChange={handleChange}
+                  style={inputStyle}
+                />
+              </div>
+
+              <div style={{ gridColumn: 'span 2' }}>
+                <label style={labelStyle}>Motivo</label>
+                <textarea
+                  name="motivoCanalizacion"
+                  value={formData.motivoCanalizacion || ''}
+                  onChange={handleChange}
+                  style={{ ...inputStyle, minHeight: '100px' }}
+                  placeholder="Paciente requiere atención especializada..."
+                />
+              </div>
+
+            </div>
+          </div>
+        )}
 
         {/* FIRMA IMPRESIÓN */}
         <div className="hidden print:flex flex-col items-center mt-20">
@@ -414,7 +492,7 @@ export const ValoracionMedicaForm: React.FC<Props> = ({ pacienteId, onSuccess })
         </div>
 
         {/* SUBMIT BUTTON */}
-        <div style={{ textAlign: 'center' }} className="print:hidden">
+        <div style={{ textAlign: 'center', marginTop: '4rem' }} className="print:hidden">
           <button
             type="submit"
             disabled={isSubmitting}

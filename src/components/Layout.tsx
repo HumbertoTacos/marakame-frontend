@@ -1,5 +1,5 @@
 import { Outlet, useNavigate, useLocation } from 'react-router-dom';
-import { LogOut, Search, Bell, HeartPulse, Stethoscope, PackageOpen, ShoppingCart, Banknote, ShieldAlert, FileOutput, ChevronRight, Users, Clock, ClipboardList, Plus } from 'lucide-react';
+import { LogOut, Search, Bell, HeartPulse, Stethoscope, PackageOpen, ShoppingCart, Banknote, ShieldAlert, FileOutput, ChevronRight, Users, Clock, ClipboardList, Plus, Home } from 'lucide-react';
 import { useState } from 'react';
 import { useAuthStore } from '../stores/authStore';
 
@@ -62,6 +62,35 @@ export function Layout() {
         </div>
         
         <div style={{ padding: '0 1.5rem 1.5rem', flex: 1, overflowY: 'auto' }} className="custom-scrollbar">
+
+          <div
+            onClick={() => navigate('/dashboard')}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.9rem',
+              padding: '0.9rem 1rem',
+              marginBottom: '1.5rem',
+              borderRadius: '14px',
+              background: 'rgba(255,255,255,0.06)',
+              color: '#e2e8f0',
+              cursor: 'pointer',
+              fontWeight: '700',
+              transition: 'all 0.2s ease',
+              border: '1px solid rgba(255,255,255,0.05)'
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.background = 'rgba(255,255,255,0.12)';
+              e.currentTarget.style.transform = 'translateX(4px)';
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.background = 'rgba(255,255,255,0.06)';
+              e.currentTarget.style.transform = 'translateX(0)';
+            }}
+          >
+            <Home size={19} />
+            Portal Principal
+          </div>
           
           {/* Módulo de Admisiones */}
           {(usuario?.rol === 'ADMISIONES' || usuario?.rol === 'ADMIN_GENERAL') && (
