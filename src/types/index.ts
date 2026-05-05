@@ -1,6 +1,6 @@
 // Core Type Definitions for Marakame Frontend
 
-// --- Enums and Unions (Base Types) - Converted to Constants + Type Unions for erasableSyntaxOnly ---
+// --- Enums and Unions (Base Types) ---
 
 export type Rol = 'ADMIN_GENERAL' | 'AREA_MEDICA' | 'ENFERMERIA' | 'NUTRICION' | 'PSICOLOGIA' | 'RRHH_FINANZAS' | 'ADMISIONES' | 'ALMACEN';
 
@@ -75,6 +75,11 @@ export type CategoriaProducto = 'MEDICAMENTO' | 'INSUMO_MEDICO' | 'MOBILIARIO' |
 export type EstadoStock = 'NORMAL' | 'BAJO' | 'CRITICO';
 export type EstadoCompra = 'BORRADOR' | 'PENDIENTE_COTIZACION' | 'EN_COMPARATIVO' | 'PENDIENTE_AUTORIZACION' | 'AUTORIZADO' | 'RECHAZADO' | 'ORDEN_GENERADA';
 export type TipoNota = 'MEDICA' | 'PSICOLOGICA' | 'NUTRICIONAL' | 'ENFERMERIA' | 'GENERAL';
+
+// --- NUEVOS ENUMS DE NÓMINA ---
+export type EstadoNomina = 'BORRADOR' | 'PRE_NOMINA' | 'SOLICITUD_SUBSIDIO' | 'EN_REVISION' | 'AUTORIZADO' | 'PAGADO';
+export type RegimenLaboral = 'CONFIANZA' | 'LISTA_RAYA';
+export type TipoIncidencia = 'INASISTENCIA' | 'RETARDO' | 'SALIDA_ANTICIPADA' | 'FALTA_JUSTIFICADA';
 
 // --- Base Interfaces ---
 
@@ -157,34 +162,89 @@ export interface Cotizacion {
   tiempoEntrega?: string;
 }
 
+// --- INTERFACES ACTUALIZADAS DE NÓMINA Y RH ---
+
 export interface Empleado {
   id: number;
+  numeroEmpleado?: string;
   nombre: string;
   apellidos: string;
   puesto: string;
   departamento: string;
+  regimen: RegimenLaboral;
   salarioBase: number;
+  compensacionFija?: number;
   activo: boolean;
+  incidencias?: IncidenciaNomina[];
+}
+
+export interface IncidenciaNomina {
+  id: number;
+  empleadoId: number;
+  fecha: string;
+  tipo: TipoIncidencia;
+  minutosRetardo?: number;
+  justificada: boolean;
+  vistoBuenoJefe: boolean;
+  documentoJustifUrl?: string;
+  descuentoAplicar: number;
+  aplicadoEnNominaId?: number;
+  createdAt: string;
+  empleado?: Empleado;
 }
 
 export interface Nomina {
   id: number;
+  folio: string;
   periodo: string;
   fechaInicio: string;
   fechaFin: string;
-  estado: 'BORRADOR' | 'PENDIENTE' | 'AUTORIZADO' | 'PAGADO';
+  estado: EstadoNomina;
+  usuarioAutorizaId?: number;
+  fechaAutorizacion?: string;
+  
+  firmaRecursosHumanos: boolean;
+  firmaFinanzas: boolean;
+  firmaAdministracion: boolean;
+  firmaDireccion: boolean;
+  
+  fechaSolicitudSubsidio?: string;
+  fechaRecepcionRecurso?: string;
+  
+  totalPercepciones?: number;
+  totalDeducciones?: number;
+  totalNetoPagar?: number;
   totalGeneral?: number;
+  
   prenominas?: PreNomina[];
   createdAt: string;
+  updatedAt?: string;
 }
 
 export interface PreNomina {
   id: number;
-  empleado: Empleado;
-  salarioBase: number;
-  bonos: number;
-  deducciones: number;
+  nominaId: number;
+  empleadoId: number;
+  diasTrabajados: number;
+  horasExtra: number;
+  
+  sueldoBruto: number;
+  compensacion: number;
+  otrasPercepciones: number;
+  totalPercepciones: number;
+  
+  retencionISR: number;
+  descuentoIncidencias: number;
+  otrasDeducciones: number;
+  totalDeducciones: number;
+  
   totalAPagar: number;
+  
+  incidencias?: string;
+  reciboFirmado: boolean;
+  urlReciboFirmado?: string;
+  
+  empleado?: Empleado;
 }
 
 export interface Auditoria {
@@ -242,7 +302,7 @@ export interface Cama {
 
 export interface Paciente {
   id: number;
-  claveUnica?: string;
+  claveUnica?: number; // <-- Corregido de string a number para que empate con Prisma
   nombre?: string;
   apellidoPaterno?: string;
   apellidoMaterno?: string;
