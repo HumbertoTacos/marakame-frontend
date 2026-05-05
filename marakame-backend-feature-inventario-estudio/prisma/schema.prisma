@@ -1,0 +1,1057 @@
+// Prisma Schema — Sistema Marakame
+// Centro de Rehabilitación de Adicciones
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================================
+// AUTENTICACIÓN Y ROLES
+// ============================================================
+
+enum Rol {
+  ADMIN_GENERAL
+  AREA_MEDICA
+  ENFERMERIA
+  NUTRICION
+  PSICOLOGIA
+  RRHH_FINANZAS
+  ADMISIONES
+  ALMACEN
+}
+
+model Usuario {
+  id           Int       @id @default(autoincrement())
+  nombre       String
+  apellidos    String
+  correo       String    @unique
+  passwordHash String
+  rol          Rol
+  activo       Boolean   @default(true)
+  ultimoAcceso DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  deletedAt    DateTime?
+
+  // Relaciones
+  primerContacto     PrimerContacto[]
+  valoraciones       ValoracionDiagnostica[]
+  bitacoraEntradas   BitacoraEntrada[]
+  documentos         Documento[]
+  almacenMovimientos AlmacenMovimiento[]
+  comprasCreadas     CompraRequisicion[]
+  nominasAutorizadas Nomina[]
+  auditoria          Auditoria[]
+
+  // Relaciones Clínicas
+  notasEvolucion        NotaEvolucion[]
+  signosTomados         SignoVital[]
+  tratamientosRecetados TratamientoMedico[]
+  suministrosAplicados  SuministroTratamiento[]
+
+  // Relaciones Financieras y Citas
+  pagosRecibidos  PagoPaciente[]
+  cargosAplicados CargoPaciente[]
+  citasAsignadas  CitaAgenda[]
+  ingresos        Ingreso[]
+
+  @@map("usuarios")
+}
+
+// ============================================================
+// PACIENTES (entidad central)
+// ============================================================
+
+enum EstadoPaciente {
+  PROSPECTO // Primer contacto / pre-ingreso
+  EN_VALORACION // Valoración diagnóstica en curso
+  PENDIENTE_INGRESO
+  INTERNADO
+  EGRESADO
+  CANALIZADO // No apto, enviado a otro servicio
+}
+
+enum TipoAdiccion {
+  ALCOHOL
+  COCAINA
+  METANFETAMINA
+  MARIHUANA
+  HEROINA
+  BENZODIACEPINAS
+  MULTIPLE
+  OTRO
+}
+
+// Nuevos Enums para Expediente Físico e Ingreso
+enum UbicacionFisica {
+  LADO_IZQ
+  LADO_DER
+  EVALUACIONES
+}
+
+enum EstadoDocumentoExpediente {
+  PENDIENTE
+  ENTREGADO
+  COMPLETADO
+}
+
+model Paciente {
+  id              Int            @id @default(autoincrement())
+  // Datos básicos
+  claveUnica Int?               @unique // Número cronológico simple (null hasta ser formalizado)
+  nombre          String
+  apellidoPaterno String
+  apellidoMaterno String
+  fechaNacimiento DateTime
+  sexo            String // M / F
+  curp            String?        @unique
+  estadoCivil     String?
+  hijos           Int?
+  escolaridad     String?
+  lugarOrigen     String?
+  ocupacion       String?
+  // Contacto
+  telefono        String?
+  celular         String?
+  direccion       String?
+  // Estado
+  estado          EstadoPaciente @default(PROSPECTO)
+  // Datos Médicos / Ingreso
+  tipoAdiccion    TipoAdiccion?  @default(ALCOHOL)
+  tiempoConsumo   String?
+  ultimoConsumo   DateTime?
+  motivoIngreso   String?        @db.Text
+  antecedentesMedicos String?    @db.Text
+  tratamientosPrevios Boolean    @default(false)
+  detallesTratamientos String?   @db.Text
+  areaDeseada         AreaCentro?
+  // Sustancias (del primer contacto)
+  // Sustancias (del primer contacto)
+  sustancias      String[]
+  
+  // Nuevos campos de Gestión de Ingreso
+  nivelTratamiento     Int            @default(1)
+  fechaIngreso         DateTime?
+  fechaEgresoPrevista  DateTime?
+  totalDiasTratamiento Int?
+
+  // Timestamps
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+  deletedAt       DateTime?
+
+  // Relaciones
+  familiar               FamiliarResponsable?
+  primerContacto         PrimerContacto[]
+  valoraciones           ValoracionDiagnostica[]
+  solicitudes            SolicitudIngreso[]
+  expediente             Expediente?
+  estudioSocioeconomico  EstudioSocioeconomico?
+  inventarioPertenencias InventarioPertenencias?
+  documentos             Documento[]
+  expedienteFisico       DocumentoExpediente[]
+  valoracionMedica       ValoracionMedica?
+  programaReforzamiento  ProgramaReforzamiento?
+
+  // Cama (1 to 1)
+  cama Cama?
+
+  // Relaciones Modulo Finanzas y Agenda
+  pagos  PagoPaciente[]
+  cargos CargoPaciente[]
+  citas  CitaAgenda[]
+  ingresos Ingreso[]
+
+  @@map("pacientes")
+}
+
+model FamiliarResponsable {
+  id          Int      @id @default(autoincrement())
+  pacienteId  Int      @unique
+  nombre      String
+  parentesco  String
+  telefono    String?
+  telefonoAlt String?
+  celular     String?
+  correo      String?
+  direccion   String?
+  municipio   String?
+  estado      String?
+  ocupacion   String?
+
+  paciente    Paciente @relation(fields: [pacienteId], references: [id])
+  solicitudes SolicitudIngreso[]
+
+  @@map("familiares_responsables")
+}
+
+// ============================================================
+// FLUJO DE ADMISIÓN
+// ============================================================
+
+enum FuenteReferencia {
+  INTERNET
+  EX_PACIENTE
+  FAMILIAR
+  REVISTA
+  ANUNCIO
+  PROFESIONAL_SALUD
+  OTRO
+}
+
+enum TipoAcuerdoSeguimiento {
+  LLAMARLE
+  ESPERAR_LLAMADA
+  ESPERAR_VISITA
+  POSIBLE_INGRESO
+  RECHAZADO
+  OTRO
+  CITA_PROGRAMADA
+}
+
+enum EstadoValoracion {
+  BORRADOR
+  COMPLETADA
+  FIRMADA
+}
+
+model Sustancia {
+  id     Int     @id @default(autoincrement())
+  nombre String  @unique
+  activo Boolean @default(true)
+
+  @@map("sustancias")
+}
+
+model PrimerContacto {
+  id                      Int               @id @default(autoincrement())
+  pacienteId              Int
+  usuarioId               Int
+  // 1-3. Generales
+  fecha                   DateTime          @default(now())
+  hora                    String?
+  medioEnterado           String?
+  // 4-9. Datos del Solicitante
+  nombreLlamada           String?           // 4) Nombre
+  lugarLlamada            String?           // 5) Lugar
+  domicilioLlamada        String?           // 6) Dirección
+  telCasaLlamada          String?           // 7) Tel Casa
+  celularLlamada          String?           // 8) Celular
+  ocupacionLlamada        String?           // 9) Ocupación
+  // 10-19. Datos del Prospecto
+  parentescoLlamada       String?           // 10) Relación (Select)
+  parentescoOtro          String?           // 10) Especificar si es OTRO
+  nombrePaciente          String?           // 11) Nombre
+  edadPaciente            Int?              // 12) Edad
+  estadoCivilPaciente     String?           // 13) Edo Civil
+  hijosPaciente           Int?              // 14) Hijos
+  direccionPaciente       String?           // 15) Dirección
+  escolaridadPaciente     String?           // 16) Escolaridad
+  origenPaciente          String?           // 17) Origen
+  telefonoPaciente        String?           // 18) Tel
+  ocupacionPaciente       String?           // 19) Ocupación
+  // 20. Sustancias
+  sustancias              String[]          // Array de nombres del catálogo
+  sustanciasOtros         String[]          // Array dinámico de otros
+  // 21-23. Disposición y Antecedentes
+  dispuestoInternarse     String?           // 21) SI/NO/DUDA
+  realizoIntervencion     String?           // 22) SI/NO
+  conclusionIntervencion  String?           // 22) Conclusión
+  tratamientoPrevio       String?           // 23) SI/NO
+  lugarTratamiento        String?           // 23) Donde
+  // 24. Otros
+  posibilidadesEconomicas String?           // 24) Posibilidades
+  // 25-29. Acuerdos Literales
+  acuerdoLlamarle         Boolean           @default(false) // 25
+  acuerdoOtro             String?           // 26
+  acuerdoEsperarLlamada   Boolean           @default(false) // 27
+  acuerdoEsperarVisita    Boolean           @default(false) // 28
+  acuerdoPosibleIngreso   Boolean           @default(false) // 29
+  // CRM Tracking
+  acuerdoSeguimiento      TipoAcuerdoSeguimiento? @default(ESPERAR_LLAMADA)
+  fechaAcuerdo            DateTime?
+  // 30-31. Cierre Médico
+  medicoValoro      String?           // 30
+  conclusionMedica  String?           @db.Text // 31
+  esApto            Boolean?          @default(true)
+  
+  // Datos clínicos para herencia a valoración
+  edadInicioConsumo       Int?
+  sintomasReportados      String?           @db.Text
+  
+  // Timestamps, Estado y Relaciones
+  activo                  Boolean           @default(true)
+  createdAt               DateTime          @default(now())
+  paciente   Paciente    @relation(fields: [pacienteId], references: [id])
+  usuario    Usuario     @relation(fields: [usuarioId], references: [id])
+  documentos Documento[]
+
+  @@map("primer_contacto")
+}
+
+model ValoracionDiagnostica {
+  id                           Int       @id @default(autoincrement())
+  pacienteId                   Int
+  usuarioId                    Int
+  fecha                        DateTime  @default(now())
+  // Evaluación clínica
+  sustanciasConsume            String[]
+  descripcionSustancias        String?
+  cumpleCriteriosInternamiento Boolean   @default(false)
+  // Aceptación
+  aceptaInternarse             Boolean   @default(false)
+  requiereIntervencion         Boolean   @default(false)
+  internacionPrevia            Boolean   @default(false)
+  // Evaluación económica
+  posibilidadesEconomicas      String?
+  // Seguimiento
+  acuerdos                     String?
+  fechaTentativaIngreso        DateTime?
+  // Validación médica
+  medicoNombre                 String?
+  observacionesMedicas         String?
+  createdAt                    DateTime  @default(now())
+
+  paciente   Paciente    @relation(fields: [pacienteId], references: [id])
+  usuario    Usuario     @relation(fields: [usuarioId], references: [id])
+  documentos Documento[]
+
+  @@map("valoraciones_diagnosticas")
+}
+
+model ValoracionMedica {
+  id                            Int               @id @default(autoincrement())
+  pacienteId                    Int               @unique
+  paciente                      Paciente          @relation(fields: [pacienteId], references: [id])
+  
+  estado                        EstadoValoracion  @default(BORRADOR)
+  documentoFirmadoUrl           String?
+  
+  // Datos de Control de la Valoración
+  residente                     String?
+  tipoValoracion                String?           // PRESENCIAL o TELEFONICA
+  fechaValoracion               DateTime?
+  horaValoracion                String?
+  
+  // Historia Clínica (Captura Extensa)
+  motivoConsulta                String?           @db.Text
+  padecimientoActual             String?           @db.Text
+  sintomasGenerales             String?           @db.Text
+  tratamientosPrevios           String?           @db.Text
+  
+  antecedentesHeredofamiliares  String?           @db.Text
+  antecedentesPatologicos       String?           @db.Text
+  antecedentesNoPatologicos     String?           @db.Text
+  
+  // Historia de Consumo
+  historialConsumo              String?           @db.Text
+  
+  // Exploración Física (Signos Vitales Granulares)
+  tensionArterial               String?
+  frecuenciaCardiaca            String?
+  frecuenciaRespiratoria        String?
+  temperatura                   String?
+  peso                          String?
+  talla                         String?
+  exploracionFisicaDesc         String?           @db.Text
+  
+  // Examen Mental y Conclusión
+  examenMental                  String?           @db.Text
+  impresionDiagnostica           String?           @db.Text
+  pronostico                    String?           @db.Text
+  planTratamiento               String?           @db.Text
+  
+  esAptoParaIngreso             Boolean           @default(false)
+  
+  createdAt                     DateTime          @default(now())
+  updatedAt                     DateTime          @updatedAt
+
+  @@map("valoraciones_medicas")
+}
+
+// ============================================================
+// PROGRAMA DE REFORZAMIENTO
+// ============================================================
+
+enum EstadoProgramaReforzamiento {
+  ACTIVO
+  ABANDONO
+  COMPLETADO
+}
+
+model ProgramaReforzamiento {
+  id                Int                         @id @default(autoincrement())
+  pacienteId        Int                         @unique
+  fechaInicio       DateTime
+  fechaFinEstimada  DateTime
+  estado            EstadoProgramaReforzamiento @default(ACTIVO)
+  observaciones     String?                     @db.Text
+  
+  createdAt         DateTime                    @default(now())
+  updatedAt         DateTime                    @updatedAt
+
+  paciente          Paciente                    @relation(fields: [pacienteId], references: [id])
+
+  @@map("programas_reforzamiento")
+}
+
+// ============================================================
+// NUEVO FLUJO DE SOLICITUDES DE INGRESO
+// ============================================================
+
+enum NivelUrgencia {
+  BAJA
+  MEDIA
+  ALTA
+  CRITICA
+}
+
+enum EstadoSolicitud {
+  PENDIENTE
+  EN_PROCESO
+  APROBADA
+  RECHAZADA
+  EN_ESPERA
+}
+
+enum EstadoIngreso {
+  EN_PROCESO
+  COMPLETADO
+  CANCELADO
+}
+
+model SolicitudIngreso {
+  id              Int             @id @default(autoincrement())
+  folio           String          @unique // Generado ADM-YYYY-NNN
+  estado          EstadoSolicitud @default(PENDIENTE)
+  urgencia        NivelUrgencia   @default(BAJA)
+  observaciones   String?         @db.Text
+  motivoRechazo   String?         @db.Text
+
+  // Relaciones
+  solicitante     FamiliarResponsable @relation(fields: [solicitanteId], references: [id])
+  solicitanteId   Int
+  paciente        Paciente            @relation(fields: [pacienteId], references: [id])
+  pacienteId      Int
+  creadoPorId     Int                 // ID del usuario (staff) que registró la solicitud
+
+  asignacionCama  AsignacionCama?
+
+  createdAt       DateTime            @default(now())
+  updatedAt       DateTime            @updatedAt
+
+  @@map("solicitudes_ingreso")
+}
+
+model AsignacionCama {
+  id                   Int      @id @default(autoincrement())
+  fechaIngresoEstimada DateTime
+  observaciones        String?  @db.Text
+  medicoResponsableId  Int
+  medicoResponsableNom String
+
+  // Relaciones
+  solicitud            SolicitudIngreso @relation(fields: [solicitudId], references: [id])
+  solicitudId          Int              @unique
+  cama                 Cama             @relation(fields: [camaId], references: [id])
+  camaId               Int
+
+  createdAt            DateTime         @default(now())
+
+  @@map("asignaciones_cama")
+}
+
+model Ingreso {
+  id                      Int            @id @default(autoincrement())
+  pacienteId              Int
+  usuarioId               Int
+  motivoIngreso           String?        @db.Text
+  estado                  EstadoIngreso  @default(EN_PROCESO)
+  pasoActual              Int            @default(1)
+  
+  // Datos de la cita / valoración (Wizard steps)
+  fechaCita               DateTime?
+  horaCita                String?
+  medicoAsignado          String?
+  resultadoValoracion     String?        @db.Text
+  observacionesValoracion String?        @db.Text
+  esApto                  Boolean?
+  motivoNoApto            String?        @db.Text
+  
+  // Asignación final (Step 8)
+  habitacionAsignada      String?
+  areaAsignada            String?
+  fechaIngreso            DateTime?
+  
+  createdAt               DateTime       @default(now())
+  updatedAt               DateTime       @updatedAt
+
+  paciente                Paciente       @relation(fields: [pacienteId], references: [id])
+  usuario                 Usuario        @relation(fields: [usuarioId], references: [id])
+
+  @@map("ingresos")
+}
+
+// ============================================================
+// ESTUDIO SOCIOECONÓMICO
+// ============================================================
+
+model EstudioSocioeconomico {
+  id                  Int      @id @default(autoincrement())
+  pacienteId          Int      @unique
+  seccionActual       Int      @default(1)
+  completado          Boolean  @default(false)
+  datos               Json // Todas las 16 secciones en JSON flexible
+  
+  // Campos obligatorios para lógica institucional y reportes
+  ingresoMensualRango String?
+  numeroHabitacionesRango String?
+  tieneMasDeUnaVivienda Boolean?  @default(false)
+  pisoMaterial        String?
+  murosMaterial       String?
+  techoMaterial       String?
+  totalEgresosCalculado Float?
+
+  nivelSocioeconomico String?
+  puntajeCalculado    Float?
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  paciente   Paciente    @relation(fields: [pacienteId], references: [id])
+  documentos Documento[]
+
+  @@map("estudio_socioeconomico")
+}
+
+// ============================================================
+// INVENTARIO DE PERTENENCIAS DEL PACIENTE
+// ============================================================
+
+model InventarioPertenencias {
+  id            Int      @id @default(autoincrement())
+  pacienteId    Int      @unique
+  articulos     Json // Lista dinámica de artículos
+  validado      Boolean  @default(false)
+  firmaRecibido Boolean  @default(false)
+  createdAt     DateTime @default(now())
+
+  paciente   Paciente    @relation(fields: [pacienteId], references: [id])
+  documentos Documento[]
+
+  @@map("inventario_pertenencias")
+}
+
+// ============================================================
+// EXPEDIENTE CLÍNICO
+// ============================================================
+
+model Expediente {
+  id                    Int     @id @default(autoincrement())
+  pacienteId            Int     @unique
+  // Pestaña Clínica
+  diagnosticoPrincipal  String?
+  diagnosticoSecundario String?
+  // Pestaña Finanzas
+  cuotaAsignada         Float?
+  saldoPendiente        Float?
+  // Nutrición
+  indiceBMI             Float?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  paciente Paciente @relation(fields: [pacienteId], references: [id])
+
+  // Nuevas tablas relacionales clínicas
+  notasEvolucion NotaEvolucion[]
+  signosVitales  SignoVital[]
+  tratamientos   TratamientoMedico[]
+
+  @@map("expedientes")
+}
+
+// NUEVOS MODELOS CLÍNICOS
+enum TipoNota {
+  MEDICA
+  PSICOLOGICA
+  NUTRICIONAL
+  ENFERMERIA
+  GENERAL
+}
+
+model NotaEvolucion {
+  id           Int      @id @default(autoincrement())
+  expedienteId Int
+  usuarioId    Int
+  tipo         TipoNota @default(GENERAL)
+  nota         String   @db.Text
+  fecha        DateTime @default(now())
+
+  expediente Expediente @relation(fields: [expedienteId], references: [id])
+  usuario    Usuario    @relation(fields: [usuarioId], references: [id])
+
+  @@map("notas_evolucion")
+}
+
+model SignoVital {
+  id                     Int      @id @default(autoincrement())
+  expedienteId           Int
+  usuarioId              Int // Quién tomó los signos
+  fecha                  DateTime @default(now())
+  presionArterial        String? // ej. 120/80
+  temperatura            Float? // en °C
+  frecuenciaCardiaca     Int? // lpm
+  frecuenciaRespiratoria Int? // rpm
+  oxigenacion            Int? // % SpO2
+  glucosa                Float? // mg/dL
+  peso                   Float? // kg
+  observaciones          String?
+
+  expediente Expediente @relation(fields: [expedienteId], references: [id])
+  usuario    Usuario    @relation(fields: [usuarioId], references: [id])
+
+  @@map("signos_vitales")
+}
+
+model TratamientoMedico {
+  id           Int       @id @default(autoincrement())
+  expedienteId Int
+  medicoId     Int
+  medicamento  String
+  dosis        String
+  frecuencia   String // ej. Cada 8 horas
+  fechaInicio  DateTime
+  fechaFin     DateTime?
+  activo       Boolean   @default(true)
+  indicaciones String?
+  createdAt    DateTime  @default(now())
+
+  expediente  Expediente              @relation(fields: [expedienteId], references: [id])
+  medico      Usuario                 @relation(fields: [medicoId], references: [id])
+  suministros SuministroTratamiento[]
+
+  @@map("tratamientos_medicos")
+}
+
+model SuministroTratamiento {
+  id              Int      @id @default(autoincrement())
+  tratamientoId   Int
+  enfermeroId     Int // Quien suministró
+  fechaSuministro DateTime @default(now())
+  dosisAplicada   String
+  observaciones   String?
+
+  tratamiento TratamientoMedico @relation(fields: [tratamientoId], references: [id])
+  enfermero   Usuario           @relation(fields: [enfermeroId], references: [id])
+
+  @@map("suministros_tratamientos")
+}
+
+// ============================================================
+// DOCUMENTOS Y ARCHIVOS
+// ============================================================
+
+enum TipoDocumento {
+  IDENTIFICACION
+  ACTA_NACIMIENTO
+  CURP
+  COMPROBANTE_DOMICILIO
+  ESTUDIO_LABORATORIO
+  FOTOGRAFIA
+  CONSENTIMIENTO
+  FACTURA
+  CFDI
+  ORDEN_COMPRA
+  RECIBO_NOMINA
+  OTRO
+}
+
+model Documento {
+  id               Int           @id @default(autoincrement())
+  usuarioId        Int
+  tipoDocumento    TipoDocumento @default(OTRO)
+  nombre           String
+  descripcion      String?
+  rutaArchivo      String // Ruta local en el servidor
+  mimeType         String
+  tamanoBytes      Int
+  // Pertenece a (uno o ninguno de estos)
+  pacienteId       Int?
+  primerContactoId Int?
+  valoracionId     Int?
+  estudioId        Int?
+  inventarioId     Int?
+  createdAt        DateTime      @default(now())
+
+  usuario        Usuario                 @relation(fields: [usuarioId], references: [id])
+  paciente       Paciente?               @relation(fields: [pacienteId], references: [id])
+  primerContacto PrimerContacto?         @relation(fields: [primerContactoId], references: [id])
+  valoracion     ValoracionDiagnostica?  @relation(fields: [valoracionId], references: [id])
+  estudio        EstudioSocioeconomico?  @relation(fields: [estudioId], references: [id])
+  inventario     InventarioPertenencias? @relation(fields: [inventarioId], references: [id])
+
+  @@map("documentos")
+}
+
+// Control de Expediente Físico
+model DocumentoExpediente {
+  id         Int                       @id @default(autoincrement())
+  nombre     String
+  ubicacion  UbicacionFisica
+  estado     EstadoDocumentoExpediente @default(PENDIENTE)
+  archivoUrl String?
+  pacienteId Int
+  paciente   Paciente                  @relation(fields: [pacienteId], references: [id])
+
+  @@map("documentos_expediente_fisico")
+}
+
+// ============================================================
+// FINANZAS Y PAGOS
+// ============================================================
+
+enum MetodoPago {
+  EFECTIVO
+  TRANSFERENCIA
+  TARJETA
+  OTRO
+}
+
+model PagoPaciente {
+  id              Int        @id @default(autoincrement())
+  pacienteId      Int
+  usuarioRecibeId Int
+  monto           Float
+  fechaPago       DateTime   @default(now())
+  metodoPago      MetodoPago
+  concepto        String
+  comprobanteUrl  String?
+  facturado       Boolean    @default(false)
+  createdAt       DateTime   @default(now())
+
+  paciente      Paciente @relation(fields: [pacienteId], references: [id])
+  usuarioRecibe Usuario  @relation(fields: [usuarioRecibeId], references: [id])
+
+  @@map("pagos_paciente")
+}
+
+model CargoPaciente {
+  id             Int      @id @default(autoincrement())
+  pacienteId     Int
+  usuarioCargaId Int
+  monto          Float
+  concepto       String
+  fechaCargo     DateTime @default(now())
+  pagado         Boolean  @default(false)
+
+  paciente     Paciente @relation(fields: [pacienteId], references: [id])
+  usuarioCarga Usuario  @relation(fields: [usuarioCargaId], references: [id])
+
+  @@map("cargos_paciente")
+}
+
+// ============================================================
+// AGENDA Y CITAS
+// ============================================================
+
+enum EstadoCita {
+  PROGRAMADA
+  COMPLETADA
+  CANCELADA
+  NO_ASISTIO
+}
+
+model CitaAgenda {
+  id             Int        @id @default(autoincrement())
+  pacienteId     Int
+  especialistaId Int
+  fechaHora      DateTime
+  motivo         String
+  estado         EstadoCita @default(PROGRAMADA)
+  observaciones  String?
+  createdAt      DateTime   @default(now())
+  updatedAt      DateTime   @updatedAt
+
+  paciente     Paciente @relation(fields: [pacienteId], references: [id])
+  especialista Usuario  @relation(fields: [especialistaId], references: [id])
+
+  @@map("citas_agenda")
+}
+
+// ============================================================
+// BITÁCORA
+// ============================================================
+
+model BitacoraEntrada {
+  id         Int      @id @default(autoincrement())
+  usuarioId  Int
+  pacienteId Int?
+  modulo     String
+  texto      String
+  archivoUrl String?
+  createdAt  DateTime @default(now())
+
+  usuario Usuario @relation(fields: [usuarioId], references: [id])
+
+  @@map("bitacora")
+}
+
+// ============================================================
+// CAMAS Y ÁREAS
+// ============================================================
+
+enum AreaCentro {
+  MUJERES
+  HOMBRES
+  DETOX
+}
+
+enum EstadoCama {
+  DISPONIBLE
+  OCUPADA
+  MANTENIMIENTO
+  RESERVADA
+}
+
+model Habitacion {
+  id           Int        @id @default(autoincrement())
+  nombre       String     @unique // A, B, C, D
+  capacidadMax Int        @default(4)
+  area         AreaCentro
+  camas        Cama[]
+
+  @@map("habitaciones")
+}
+
+model Cama {
+  id            Int         @id @default(autoincrement())
+  codigo        String?     @unique // Ej: "H-01", "M-05"
+  numero        String      @unique
+  estado        EstadoCama  @default(DISPONIBLE)
+  descripcion   String?
+  pacienteId    Int?        @unique
+  habitacionId  Int?
+  
+  habitacion    Habitacion?  @relation(fields: [habitacionId], references: [id])
+  paciente      Paciente?   @relation(fields: [pacienteId], references: [id])
+  asignaciones  AsignacionCama[]
+
+  @@map("camas")
+}
+
+// ============================================================
+// ALMACÉN
+// ============================================================
+
+enum CategoriaProducto {
+  MEDICAMENTO
+  INSUMO_MEDICO
+  MOBILIARIO
+  PAPELERIA
+  LIMPIEZA
+  OTRO
+}
+
+enum EstadoStock {
+  NORMAL
+  BAJO
+  CRITICO
+}
+
+model AlmacenProducto {
+  id          Int               @id @default(autoincrement())
+  codigo      String            @unique
+  nombre      String
+  descripcion String?
+  categoria   CategoriaProducto
+  unidad      String // piezas, cajas, ml, etc.
+  stockActual Int               @default(0)
+  stockMinimo Int               @default(5)
+  estadoStock EstadoStock       @default(NORMAL)
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+
+  movimientos AlmacenMovimiento[]
+
+  @@map("almacen_productos")
+}
+
+enum TipoMovimiento {
+  ENTRADA
+  SALIDA
+}
+
+model AlmacenMovimiento {
+  id                 Int            @id @default(autoincrement())
+  productoId         Int
+  usuarioId          Int
+  tipo               TipoMovimiento
+  cantidad           Int
+  // Entrada
+  proveedor          String?
+  numeroFactura      String?
+  validadoFactura    Boolean        @default(false)
+  // Salida
+  areaSolicitante    String?
+  motivo             String?
+  nombreRecibe       String?
+  confirmadoRecibido Boolean        @default(false)
+  observaciones      String?
+  createdAt          DateTime       @default(now())
+
+  producto AlmacenProducto @relation(fields: [productoId], references: [id])
+  usuario  Usuario         @relation(fields: [usuarioId], references: [id])
+
+  @@map("almacen_movimientos")
+}
+
+// ============================================================
+// COMPRAS
+// ============================================================
+
+enum EstadoCompra {
+  BORRADOR
+  PENDIENTE_COTIZACION
+  EN_COMPARATIVO
+  PENDIENTE_AUTORIZACION
+  AUTORIZADO
+  RECHAZADO
+  ORDEN_GENERADA
+}
+
+model CompraRequisicion {
+  id                  Int          @id @default(autoincrement())
+  folio               String       @unique
+  usuarioId           Int
+  areaSolicitante     String
+  descripcion         String
+  justificacion       String
+  presupuestoEstimado Float?
+  estado              EstadoCompra @default(BORRADOR)
+  usuarioAutorizaId   Int?
+  observacionesVoBo   String?
+  fechaAutorizacion   DateTime?
+  createdAt           DateTime     @default(now())
+  updatedAt           DateTime     @updatedAt
+
+  usuario      Usuario            @relation(fields: [usuarioId], references: [id])
+  cotizaciones CompraCotizacion[]
+  ordenCompra  CompraOrden?
+
+  @@map("compras_requisiciones")
+}
+
+model CompraCotizacion {
+  id            Int      @id @default(autoincrement())
+  requisicionId Int
+  proveedor     String
+  precio        Float
+  tiempoEntrega String?
+  esMejorOpcion Boolean  @default(false)
+  documentoUrl  String?
+  createdAt     DateTime @default(now())
+
+  requisicion CompraRequisicion @relation(fields: [requisicionId], references: [id])
+
+  @@map("compras_cotizaciones")
+}
+
+model CompraOrden {
+  id            Int      @id @default(autoincrement())
+  requisicionId Int      @unique
+  proveedor     String
+  total         Float
+  documentoUrl  String?
+  createdAt     DateTime @default(now())
+
+  requisicion CompraRequisicion @relation(fields: [requisicionId], references: [id])
+
+  @@map("compras_ordenes")
+}
+
+// ============================================================
+// NÓMINAS
+// ============================================================
+
+enum EstadoNomina {
+  BORRADOR
+  PENDIENTE
+  AUTORIZADO
+  PAGADO
+}
+
+model Empleado {
+  id           Int       @id @default(autoincrement())
+  nombre       String
+  apellidos    String
+  puesto       String
+  departamento String
+  salarioBase  Float
+  activo       Boolean   @default(true)
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  prenominas PreNomina[]
+
+  @@map("empleados")
+}
+
+model Nomina {
+  id                Int          @id @default(autoincrement())
+  folio             String       @unique
+  periodo           String // Ej: "Primera Quincena Marzo 2024"
+  fechaInicio       DateTime
+  fechaFin          DateTime
+  estado            EstadoNomina @default(BORRADOR)
+  usuarioAutorizaId Int?
+  fechaAutorizacion DateTime?
+  totalGeneral      Float?       @default(0)
+  createdAt         DateTime     @default(now())
+  updatedAt         DateTime     @updatedAt
+
+  usuarioAutoriza Usuario?    @relation(fields: [usuarioAutorizaId], references: [id])
+  prenominas      PreNomina[]
+
+  @@map("nominas")
+}
+
+model PreNomina {
+  id             Int   @id @default(autoincrement())
+  nominaId       Int
+  empleadoId     Int
+  diasTrabajados Float @default(15)
+  horasExtra     Float @default(0)
+  salarioBase    Float
+  bonos          Float @default(0)
+  deducciones    Float @default(0)
+  totalAPagar    Float
+  incidencias    String? @db.Text
+
+  nomina   Nomina   @relation(fields: [nominaId], references: [id])
+  empleado Empleado @relation(fields: [empleadoId], references: [id])
+
+  @@map("prenominas")
+}
+
+// ============================================================
+// AUDITORIA
+// ============================================================
+
+model Auditoria {
+  id        Int      @id @default(autoincrement())
+  usuarioId Int
+  accion    String // LOGIN, CREATE, UPDATE, DELETE, EXPORT
+  modulo    String
+  detalle   Json?
+  ip        String?
+  createdAt DateTime @default(now())
+
+  usuario Usuario @relation(fields: [usuarioId], references: [id])
+
+  @@map("auditoria")
+}

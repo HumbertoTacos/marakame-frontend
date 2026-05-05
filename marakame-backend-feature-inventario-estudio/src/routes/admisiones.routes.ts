@@ -1,0 +1,76 @@
+import { Router } from 'express';
+import { authenticate } from '../middlewares/auth';
+import {
+  createPrimerContacto, updatePrimerContacto, getPrimerContactos, getPrimerContactoById, getPrimerContactoByPacienteId, getSustancias,
+  desactivarPrimerContacto, archivarPorPacienteId,
+  agendarCitaProspecto, solicitarValoracionMedica, registrarLlegadaCita,
+  createValoracionDiagnostica, getValoraciones, getValoracionById,
+  createIngreso, updateIngreso, getIngresos, getIngresoById,
+  // Gestión de Camas y Solicitudes
+  getCamas, getSolicitudes, getSolicitudByFolio, createSolicitud, updateEstadoSolicitud, asignarCama
+} from '../controllers/admisiones.controller';
+import { 
+  crearValoracionMedica, 
+  getValoracionMedicaByPaciente,
+  preFillValoracionMedica,
+  uploadFirmaValoracionMedica
+} from '../controllers/valoracionMedica.controller';
+import { upsertEstudioSocioeconomico, getEstudioByPaciente } from '../controllers/estudioSocioeconomico.controller';
+import { uploadValoracion } from '../utils/multerConfig';
+import inventarioRoutes from './inventarioPertenencias.routes';
+
+const router = Router();
+
+// ── Catálogos Públicos (No sensibles) ───────────────────────
+router.get('/sustancias', getSustancias);
+
+// ── Rutas Protegidas (Solo autenticados) ─────────────────────
+router.use(authenticate);
+
+// Inventario de pertenencias
+router.use('/', inventarioRoutes);
+
+// Gestión de Camas
+router.get('/camas', getCamas);
+
+// Gestión de Solicitudes (Nuevo Flujo)
+router.get('/solicitudes', getSolicitudes);
+router.get('/solicitudes/:folio', getSolicitudByFolio);
+router.post('/solicitudes', createSolicitud);
+router.patch('/solicitudes/:id/estado', updateEstadoSolicitud);
+router.post('/solicitudes/:id/asignar-cama', asignarCama);
+
+// Primer Contacto
+router.post('/primer-contacto', createPrimerContacto);
+router.get('/primer-contacto', getPrimerContactos);
+router.get('/primer-contacto/:id', getPrimerContactoById);
+router.put('/primer-contacto/:id', updatePrimerContacto);
+router.patch('/primer-contacto/:id/desactivar', desactivarPrimerContacto);
+router.patch('/primer-contacto/:id/agendar', agendarCitaProspecto);
+router.patch('/paciente/:id/solicitar-valoracion', solicitarValoracionMedica);
+router.patch('/paciente/:id/confirmar-llegada', registrarLlegadaCita);
+router.patch('/paciente/:id/archivar', archivarPorPacienteId);
+router.get('/paciente/:pacienteId/primer-contacto', getPrimerContactoByPacienteId);
+
+// Valoracion Diagnostica
+router.post('/valoracion', createValoracionDiagnostica);
+router.get('/valoracion', getValoraciones);
+router.get('/valoracion/:id', getValoracionById);
+
+// Valoración Médica (Historia Clínica Granular)
+router.get('/valoracion-medica/:pacienteId/pre-fill', preFillValoracionMedica);
+router.post('/valoracion-medica', crearValoracionMedica);
+router.post('/valoracion-medica/:id/upload-firma', uploadValoracion.single('archivo'), uploadFirmaValoracionMedica);
+router.get('/valoracion-medica/paciente/:pacienteId', getValoracionMedicaByPaciente);
+
+// Ingreso Wizard
+router.post('/ingreso', createIngreso);
+router.get('/ingreso', getIngresos);
+router.get('/ingreso/:id', getIngresoById);
+router.put('/ingreso/:id', updateIngreso);
+
+// Estudio Socioeconómico (Trabajo Social)
+router.post('/estudio', upsertEstudioSocioeconomico);
+router.get('/estudio/paciente/:pacienteId', getEstudioByPaciente);
+
+export default router;
