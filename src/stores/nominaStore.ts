@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import apiClient from '../services/api';
-import { Nomina, Empleado } from '../types';
+import type { Nomina, Empleado } from '../types';
+
 
 interface NominaState {
   // Estado

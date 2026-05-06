@@ -7,7 +7,7 @@ import { useNavigate } from 'react-router-dom';
 
 // 1. Importamos el Store y los Tipos que creamos
 import { useNominaStore } from '../../stores/nominaStore';
-import { Nomina } from '../../types/index.ts';
+import type { Nomina } from '../../types'; 
 
 // Configuración visual según el estado de la nómina
 const getNominaStatusConfig = (estado: string) => {

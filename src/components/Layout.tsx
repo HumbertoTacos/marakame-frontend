@@ -125,15 +125,18 @@ export function Layout() {
           {(usuario?.rol === 'RRHH_FINANZAS' || usuario?.rol === 'ADMIN_GENERAL') && (
             <>
               <div style={{ fontSize: '11px', color: '#64748b', textTransform: 'uppercase', letterSpacing: '1.5px', margin: '2rem 0 1rem 0', fontWeight: '700' }}>Administración</div>
+              
               <div style={navItemStyle('compras')} onClick={() => navigate('/compras')}
-                   onMouseEnter={(e) => { if (!location.pathname.includes('compras')) { e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.05)'; e.currentTarget.style.color = '#e2e8f0'; } }}
-                   onMouseLeave={(e) => { if (!location.pathname.includes('compras')) { e.currentTarget.style.backgroundColor = 'transparent'; e.currentTarget.style.color = '#94a3b8'; } }}
+                  onMouseEnter={(e) => { if (!location.pathname.includes('compras')) { e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.05)'; e.currentTarget.style.color = '#e2e8f0'; } }}
+                  onMouseLeave={(e) => { if (!location.pathname.includes('compras')) { e.currentTarget.style.backgroundColor = 'transparent'; e.currentTarget.style.color = '#94a3b8'; } }}
               >
                 <ShoppingCart size={20} style={{ marginRight: '1rem' }}/> Control de Compras
               </div>
-              <div style={navItemStyle('rrhh-nominas')} onClick={() => navigate('/rrhh-nominas')}
-                   onMouseEnter={(e) => { if (!location.pathname.includes('rrhh-nominas') && !location.pathname.includes('rrhh')) { e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.05)'; e.currentTarget.style.color = '#e2e8f0'; } }}
-                   onMouseLeave={(e) => { if (!location.pathname.includes('rrhh-nominas') && !location.pathname.includes('rrhh')) { e.currentTarget.style.backgroundColor = 'transparent'; e.currentTarget.style.color = '#94a3b8'; } }}
+
+              {/* RUTA CORREGIDA: Apunta a /nominas para cargar el nuevo Dashboard */}
+              <div style={navItemStyle('nominas')} onClick={() => navigate('/nominas')}
+                  onMouseEnter={(e) => { if (!location.pathname.includes('nominas')) { e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.05)'; e.currentTarget.style.color = '#e2e8f0'; } }}
+                  onMouseLeave={(e) => { if (!location.pathname.includes('nominas')) { e.currentTarget.style.backgroundColor = 'transparent'; e.currentTarget.style.color = '#94a3b8'; } }}
               >
                 <Banknote size={20} style={{ marginRight: '1rem' }}/> Nóminas y RRHH
               </div>
