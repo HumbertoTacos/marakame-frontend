@@ -73,7 +73,65 @@ export type UbicacionFisica = (typeof UbicacionFisica)[keyof typeof UbicacionFis
 
 export type CategoriaProducto = 'MEDICAMENTO' | 'INSUMO_MEDICO' | 'MOBILIARIO' | 'PAPELERIA' | 'LIMPIEZA' | 'OTRO';
 export type EstadoStock = 'NORMAL' | 'BAJO' | 'CRITICO';
-export type EstadoCompra = 'BORRADOR' | 'PENDIENTE_COTIZACION' | 'EN_COMPARATIVO' | 'PENDIENTE_AUTORIZACION' | 'AUTORIZADO' | 'RECHAZADO' | 'ORDEN_GENERADA';
+
+export const EstadoCompra = {
+  REQUISICION_CREADA: 'REQUISICION_CREADA',
+  REQUISICION_REVISADA: 'REQUISICION_REVISADA',
+  COTIZACIONES_CARGADAS: 'COTIZACIONES_CARGADAS',
+  PROVEEDOR_SELECCIONADO: 'PROVEEDOR_SELECCIONADO',
+  NEGOCIACION_COMPLETADA: 'NEGOCIACION_COMPLETADA',
+  EN_REVISION_ADMIN: 'EN_REVISION_ADMIN',
+  EN_AUTORIZACION_DIRECCION: 'EN_AUTORIZACION_DIRECCION',
+  AUTORIZADA: 'AUTORIZADA',
+  ORDEN_GENERADA: 'ORDEN_GENERADA',
+  FACTURAS_RECIBIDAS: 'FACTURAS_RECIBIDAS',
+  PAGO_GENERADO: 'PAGO_GENERADO',
+  FINALIZADO: 'FINALIZADO',
+  RECHAZADO: 'RECHAZADO'
+} as const;
+
+export type EstadoCompra =
+  (typeof EstadoCompra)[keyof typeof EstadoCompra];
+
+export const EstadoCompraLabel: { [key in EstadoCompra]: string } = {
+  REQUISICION_CREADA: 'Creada',
+  REQUISICION_REVISADA: 'Revisada',
+  COTIZACIONES_CARGADAS: 'Cotizaciones cargadas',
+  PROVEEDOR_SELECCIONADO: 'Proveedor seleccionado',
+  NEGOCIACION_COMPLETADA: 'Negociación completada',
+  EN_REVISION_ADMIN: 'En revisión admin',
+  EN_AUTORIZACION_DIRECCION: 'Autorización dirección',
+  AUTORIZADA: 'Autorizada',
+  ORDEN_GENERADA: 'Orden generada',
+  FACTURAS_RECIBIDAS: 'Facturas recibidas',
+  PAGO_GENERADO: 'Pago generado',
+  FINALIZADO: 'Finalizado',
+  RECHAZADO: 'Rechazado'
+};
+
+export const EstadoCompraColor: { [key in EstadoCompra]: string } = {
+  REQUISICION_CREADA: 'gray',
+  REQUISICION_REVISADA: 'blue',
+  COTIZACIONES_CARGADAS: 'orange',
+  PROVEEDOR_SELECCIONADO: 'purple',
+  NEGOCIACION_COMPLETADA: 'cyan',
+  EN_REVISION_ADMIN: 'yellow',
+  EN_AUTORIZACION_DIRECCION: 'amber',
+  AUTORIZADA: 'green',
+  ORDEN_GENERADA: 'teal',
+  FACTURAS_RECIBIDAS: 'indigo',
+  PAGO_GENERADO: 'pink',
+  FINALIZADO: 'green',
+  RECHAZADO: 'red'
+};
+
+export const getEstadoCompraUI = (estado: EstadoCompra) => {
+  return {
+    label: EstadoCompraLabel[estado] ?? estado,
+    color: EstadoCompraColor[estado] ?? 'gray',
+  };
+};
+  
 export type TipoNota = 'MEDICA' | 'PSICOLOGICA' | 'NUTRICIONAL' | 'ENFERMERIA' | 'GENERAL';
 
 // --- NUEVOS ENUMS DE NÓMINA ---
@@ -143,16 +201,43 @@ export interface Movimiento {
   usuario: Usuario;
 }
 
+export type TipoCompra = 'ORDINARIA' | 'EXTRAORDINARIA';
+
 export interface Requisicion {
   id: number;
   folio: string;
+
   areaSolicitante: string;
   descripcion: string;
   justificacion: string;
+
   presupuestoEstimado?: number;
+
   estado: EstadoCompra;
-  usuario: Usuario;
+  tipo: TipoCompra;
+
+  usuario?: Pick<Usuario, 'nombre' | 'apellidos'>;
+
   cotizaciones?: Cotizacion[];
+
+  ordenCompra?: OrdenCompra;
+
+  facturas?: {
+    id: number;
+    numero: string;
+    documentoUrl?: string;
+    monto: number;
+  }[];
+
+  detalles?: {
+    id: number;
+    numero: number;
+    producto: string;
+    unidad: string;
+    cantidad: number;
+  }[];
+
+  createdAt: string;
 }
 
 export interface Cotizacion {
@@ -160,6 +245,46 @@ export interface Cotizacion {
   proveedor: string;
   precio: number;
   tiempoEntrega?: string;
+  requisicionId?: number;
+  esMejorOpcion?: boolean;
+}
+
+export interface OrdenCompra {
+  id: number;
+
+  requisicionId: number;
+
+  folio: string;
+
+  fecha: string;
+
+  proveedor: string;
+
+  total: number;
+
+  elaboradoPorId?: number;
+  revisadoPorId?: number;
+  autorizadoPorId?: number;
+
+  elaboradoPor?: {
+    id: number;
+    nombre: string;
+    apellidos: string;
+  };
+
+  revisadoPor?: {
+    id: number;
+    nombre: string;
+    apellidos: string;
+  };
+
+  autorizadoPor?: {
+    id: number;
+    nombre: string;
+    apellidos: string;
+  };
+
+  createdAt?: string;
 }
 
 // --- INTERFACES ACTUALIZADAS DE NÓMINA Y RH ---
