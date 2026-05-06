@@ -1,4 +1,0 @@
--- AlterTable
-ALTER TABLE "prenominas" ADD COLUMN     "diasTrabajados" DOUBLE PRECISION NOT NULL DEFAULT 15,
-ADD COLUMN     "horasExtra" DOUBLE PRECISION NOT NULL DEFAULT 0,
-ADD COLUMN     "incidencias" TEXT;
