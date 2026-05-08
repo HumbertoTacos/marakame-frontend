@@ -25,13 +25,20 @@ const ROL_CONFIG: Record<RolMedico, { titulo: string; descripcion: string; acent
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-const calcularEdad = (fechaNacimiento: string | Date) => {
+const calcularEdad = (fechaNacimiento: string | Date | null | undefined): number => {
+  if (!fechaNacimiento) return 0;
   const hoy = new Date();
   const cumple = new Date(fechaNacimiento as string);
+  if (isNaN(cumple.getTime())) return 0;
   let edad = hoy.getFullYear() - cumple.getFullYear();
   const m = hoy.getMonth() - cumple.getMonth();
   if (m < 0 || (m === 0 && hoy.getDate() < cumple.getDate())) edad--;
-  return edad;
+  return (edad < 0 || edad > 120) ? 0 : edad;
+};
+
+const edadDisplay = (fecNac: string | Date | null | undefined): string => {
+  const e = calcularEdad(fecNac);
+  return e > 0 ? `${e} años` : 'N/A';
 };
 
 const AREA_CONFIG: Record<string, { color: string; light: string; border: string; label: string }> = {
@@ -791,7 +798,7 @@ export function AreaMedica() {
                           <p style={{ fontSize: '11px', color: '#94a3b8', margin: 0 }}>#{pac.id}</p>
                         </td>
                         <td style={{ padding: '1.1rem 1.25rem' }}>
-                          <p style={{ fontWeight: '600', color: '#475569', margin: 0 }}>{calcularEdad(pac.fechaNacimiento)} años</p>
+                          <p style={{ fontWeight: '600', color: '#475569', margin: 0 }}>{edadDisplay(pac.fechaNacimiento)}</p>
                           <p style={{ fontSize: '11px', color: '#94a3b8', margin: 0 }}>{pac.sexo === 'M' ? 'Masculino' : 'Femenino'}</p>
                         </td>
                         <td style={{ padding: '1.1rem 1.25rem' }}>
@@ -896,7 +903,7 @@ export function AreaMedica() {
                             {pac.nombre} {pac.apellidoPaterno}
                           </p>
                           <p style={{ fontSize: '12px', color: '#64748b', margin: 0, fontWeight: '600' }}>
-                            Cama {pac.cama?.numero ?? 'S/A'} · {calcularEdad(pac.fechaNacimiento)} años · {pac.sexo === 'M' ? 'Masculino' : 'Femenino'}
+                            Cama {pac.cama?.numero ?? 'S/A'} · {edadDisplay(pac.fechaNacimiento)} · {pac.sexo === 'M' ? 'Masculino' : 'Femenino'}
                           </p>
                         </div>
 
