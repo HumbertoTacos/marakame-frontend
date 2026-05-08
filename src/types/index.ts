@@ -164,13 +164,58 @@ export interface FamiliarResponsable {
 
 export interface SignoVital {
   id: number;
+  expedienteId: number;
   fecha: string;
   presionArterial?: string;
   temperatura?: number;
   frecuenciaCardiaca?: number;
+  frecuenciaRespiratoria?: number;
   oxigenacion?: number;
+  glucosa?: number;
   peso?: number;
+  observaciones?: string;
   usuario?: Usuario;
+}
+
+export interface TratamientoMedico {
+  id: number;
+  expedienteId: number;
+  medicoId: number;
+  medicamento: string;
+  dosis: string;
+  frecuencia: string;
+  fechaInicio: string;
+  fechaFin?: string;
+  activo: boolean;
+  indicaciones?: string;
+  createdAt: string;
+  medico?: Usuario;
+  suministros?: SuministroTratamiento[];
+}
+
+export interface SuministroTratamiento {
+  id: number;
+  tratamientoId: number;
+  enfermeroId: number;
+  fechaSuministro: string;
+  dosisAplicada: string;
+  observaciones?: string;
+  enfermero?: Usuario;
+}
+
+export type EstadoCita = 'PROGRAMADA' | 'COMPLETADA' | 'CANCELADA' | 'NO_ASISTIO';
+
+export interface CitaAgenda {
+  id: number;
+  pacienteId: number;
+  especialistaId: number;
+  fechaHora: string;
+  motivo: string;
+  estado: EstadoCita;
+  observaciones?: string;
+  createdAt: string;
+  paciente?: Paciente;
+  especialista?: Usuario;
 }
 
 export interface NotaEvolucion {
@@ -479,6 +524,7 @@ export interface Expediente {
   diagnosticoPrincipal?: string;
   notasEvolucion?: NotaEvolucion[];
   signosVitales?: SignoVital[];
+  tratamientos?: TratamientoMedico[];
   createdAt: string;
 }
 

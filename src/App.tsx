@@ -15,6 +15,7 @@ const Nominas = lazy(() => import('./pages/nominas/NominasDashboard'));
 const GenerarPreNomina = lazy(() => import('./pages/nominas/GenerarPrenomina'));
 
 const AreaMedica = lazy(() => import('./pages/medica/AreaMedica').then(m => ({ default: m.AreaMedica })));
+const MedicoExpedienteDigitalPage = lazy(() => import('./pages/medico/ExpedienteDigitalPage'));
 const Bitacora = lazy(() => import('./pages/transversal/Bitacora').then(m => ({ default: m.Bitacora })));
 const Reportes = lazy(() => import('./pages/transversal/Reportes').then(m => ({ default: m.Reportes })));
 
@@ -80,6 +81,13 @@ function App() {
             <Route path="medica" element={
               <ProtectedRoute allowedRoles={['AREA_MEDICA', 'ENFERMERIA', 'PSICOLOGIA', 'NUTRICION', 'ADMIN_GENERAL']}>
                 <AreaMedica />
+              </ProtectedRoute>
+            } />
+
+            {/* Expediente Clínico Completo (todas las pestañas clínicas) */}
+            <Route path="medica/expediente/:id" element={
+              <ProtectedRoute allowedRoles={['AREA_MEDICA', 'ENFERMERIA', 'PSICOLOGIA', 'NUTRICION', 'ADMIN_GENERAL']}>
+                <MedicoExpedienteDigitalPage />
               </ProtectedRoute>
             } />
             

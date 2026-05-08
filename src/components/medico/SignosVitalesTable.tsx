@@ -58,7 +58,7 @@ const SignosVitalesTable: React.FC<SignosVitalesTableProps> = ({ signos, onAddSi
         boxShadow: '0 1px 3px rgba(0,0,0,0.02)'
       }}>
         <div style={{ overflowX: 'auto' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
+          <table style={{ width: '100%', minWidth: '700px', borderCollapse: 'collapse', textAlign: 'left' }}>
             <thead>
               <tr style={{ backgroundColor: '#f8fafc', borderBottom: '2px solid #e2e8f0' }}>
                 <th style={{ padding: '12px 16px', fontSize: '11px', fontWeight: '800', color: '#64748b', textTransform: 'uppercase' }}>Fecha y Hora</th>
@@ -109,7 +109,7 @@ const SignosVitalesTable: React.FC<SignosVitalesTableProps> = ({ signos, onAddSi
       </div>
       
       {/* At-a-glance Icons Legend (Optional but professional) */}
-      <div style={{ display: 'flex', gap: '1.5rem', marginTop: '0.5rem', padding: '1rem', background: '#f8fafc', borderRadius: '12px' }}>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.75rem', marginTop: '0.5rem', padding: '0.75rem 1rem', background: '#f8fafc', borderRadius: '12px' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '11px', color: '#64748b' }}><Heart size={14} color="#f43f5e" /> Cardiaca</div>
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '11px', color: '#64748b' }}><Thermometer size={14} color="#ef4444" /> Temperatura</div>
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '11px', color: '#64748b' }}><Wind size={14} color="#3b82f6" /> Oxigenación</div>
