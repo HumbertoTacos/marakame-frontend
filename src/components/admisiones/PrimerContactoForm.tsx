@@ -282,7 +282,20 @@ export const PrimerContactoForm: React.FC = () => {
     setIsSubmitting(true);
 
     const submissionData = { ...formData };
-    
+
+    // Convierte un valor Sí/No (boolean o string) + comentario opcional a String
+    const toSiNoStr = (val: string | boolean | undefined, comentario?: string): string => {
+      const base = (val === true || val === 'SI') ? 'SÍ'
+        : val === 'DUDA' ? 'DUDA'
+        : 'NO';
+      const txt = (comentario ?? '').trim();
+      return txt ? `${base}: ${txt}` : base;
+    };
+
+    submissionData.dispuestoInternarse = toSiNoStr(submissionData.dispuestoInternarse, submissionData.comentariosInternamiento);
+    submissionData.realizoIntervencion = toSiNoStr(submissionData.realizoIntervencion, submissionData.conclusionIntervencion);
+    submissionData.tratamientoPrevio   = toSiNoStr(submissionData.tratamientoPrevio,   submissionData.lugarTratamiento);
+
     // Mapeo Inteligente de "OTRO" antes de enviar a la BD
     if (submissionData.medioEnterado === 'OTRO') {
       submissionData.medioEnterado = formData.medioEnteradoOtro;
@@ -766,16 +779,17 @@ export const PrimerContactoForm: React.FC = () => {
               {['LLAMARLE', 'ESPERAR_LLAMADA', 'POSIBLE_INGRESO'].includes(formData.acuerdoSeguimiento) && (
                 <div style={{ animation: 'fadeIn 0.3s ease' }}>
                   <label style={{ ...labelStyle, color: '#2563eb' }}>📅 Fecha Programada *</label>
-                  <input 
-                    type="date" 
-                    name="fechaAcuerdo" 
-                    value={formData.fechaAcuerdo} 
-                    onChange={handleChange} 
-                    style={{ 
-                      ...inputStyle, 
-                      borderColor: errors.fechaAcuerdo ? '#ef4444' : '#3b82f6', 
-                      backgroundColor: errors.fechaAcuerdo ? '#fef2f2' : '#eff6ff' 
-                    }} 
+                  <input
+                    type="date"
+                    name="fechaAcuerdo"
+                    value={formData.fechaAcuerdo}
+                    min={new Date().toISOString().split('T')[0]}
+                    onChange={handleChange}
+                    style={{
+                      ...inputStyle,
+                      borderColor: errors.fechaAcuerdo ? '#ef4444' : '#3b82f6',
+                      backgroundColor: errors.fechaAcuerdo ? '#fef2f2' : '#eff6ff'
+                    }}
                   />
                   {errors.fechaAcuerdo && <div style={errorTextStyle}>{errors.fechaAcuerdo}</div>}
                 </div>

@@ -68,6 +68,8 @@ export default function UsuariosPage() {
   const { data: usuarios = [], isLoading } = useQuery<UsuarioItem[]>({
     queryKey: ['usuarios'],
     queryFn: () => apiClient.get('/usuarios').then(r => r.data.data),
+    refetchOnWindowFocus: true,
+    refetchInterval: 30000, // Refrescar cada 30s para ver accesos en tiempo casi-real
   });
 
   const crear = useMutation({
@@ -228,9 +230,37 @@ export default function UsuariosPage() {
                     </span>
                   </td>
                   <td style={{ padding: '1rem 1.25rem', fontSize: '13px', color: '#64748b' }}>
-                    {u.ultimoAcceso
-                      ? new Date(u.ultimoAcceso).toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: 'numeric' })
-                      : 'Nunca'}
+                    {(() => {
+                      if (!u.ultimoAcceso) return 'Nunca';
+                      const date = new Date(u.ultimoAcceso);
+                      const now = new Date();
+                      const diffMs = now.getTime() - date.getTime();
+                      const diffMins = Math.floor(diffMs / 60000);
+
+                      if (diffMins < 5) {
+                        return (
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', color: '#16a34a', fontWeight: '600' }}>
+                            <div style={{ width: '6px', height: '6px', borderRadius: '50%', backgroundColor: '#16a34a', boxShadow: '0 0 8px #16a34a' }}></div>
+                            En línea
+                          </div>
+                        );
+                      }
+
+                      if (diffMins < 60) return `Hace ${diffMins} min`;
+                      
+                      const isToday = date.toDateString() === now.toDateString();
+                      if (isToday) {
+                        return `Hoy, ${date.toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' })}`;
+                      }
+
+                      const yesterday = new Date(now);
+                      yesterday.setDate(now.getDate() - 1);
+                      if (date.toDateString() === yesterday.toDateString()) {
+                        return `Ayer, ${date.toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' })}`;
+                      }
+
+                      return date.toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: 'numeric' });
+                    })()}
                   </td>
                   <td style={{ padding: '1rem 1.25rem' }}>
                     <span style={{

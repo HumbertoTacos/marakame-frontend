@@ -2,9 +2,9 @@ import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   X, Eye, EyeOff, Archive,
-  LayoutGrid, List, ArrowRightCircle, Info, PhoneCall, ArrowRight, Trash2, 
+  LayoutGrid, List, ArrowRightCircle, Info, PhoneCall, ArrowRight, Trash2,
   ChevronLeft, ChevronRight, Stethoscope, AlertCircle, XCircle, CalendarPlus,
-  Users, Search, Calendar, Phone, ArrowLeft, Clock, CheckCircle2
+  Users, Search, Calendar, Phone, ArrowLeft, Clock, CheckCircle2, ClipboardList
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import apiClient from '../../services/api';
@@ -542,6 +542,8 @@ export default function SeguimientoProspectosPage() {
                         </button>
 
                         {p.acuerdoSeguimiento === 'CITA_PROGRAMADA' &&
+                          p.paciente?.estado !== 'EN_VALORACION_SOCIOECONOMICA' &&
+                          p.paciente?.estado !== 'PENDIENTE_VALORACION_MEDICA' &&
                           p.paciente?.estado !== 'EN_VALORACION' &&
                           isToday(safeParseDate(p.fechaAcuerdo)) && (
                             <button
@@ -552,6 +554,16 @@ export default function SeguimientoProspectosPage() {
                               <CheckCircle2 size={16} />
                             </button>
                           )}
+
+                        {p.paciente?.estado === 'EN_VALORACION_SOCIOECONOMICA' && (
+                          <button
+                            onClick={() => navigate(`/admisiones/estudio-socioeconomico/${p.paciente.id}`)}
+                            title="Iniciar Estudio Socioeconómico"
+                            style={{ padding: '0.5rem', borderRadius: '8px', border: '1px solid #f59e0b', backgroundColor: '#fffbeb', cursor: 'pointer', color: '#d97706' }}
+                          >
+                            <ClipboardList size={16} />
+                          </button>
+                        )}
 
 
 
@@ -697,7 +709,9 @@ export default function SeguimientoProspectosPage() {
                     </div>
 
                     <div style={{ display: 'flex', gap: '0.75rem', marginTop: '1rem' }}>
-                      {cita.paciente?.estado !== 'EN_VALORACION' ? (
+                      {cita.paciente?.estado !== 'EN_VALORACION_SOCIOECONOMICA' &&
+                       cita.paciente?.estado !== 'PENDIENTE_VALORACION_MEDICA' &&
+                       cita.paciente?.estado !== 'EN_VALORACION' ? (
                         <button
                           onClick={() => handleRegistrarLlegada(cita)}
                           disabled={!isToday(safeParseDate(cita.fechaAcuerdo))}
@@ -711,6 +725,18 @@ export default function SeguimientoProspectosPage() {
                           }}
                         >
                           <CheckCircle2 size={16} /> {isToday(safeParseDate(cita.fechaAcuerdo)) ? 'Registrar Llegada' : 'No es hoy'}
+                        </button>
+                      ) : cita.paciente?.estado === 'EN_VALORACION_SOCIOECONOMICA' ? (
+                        <button
+                          onClick={() => navigate(`/admisiones/estudio-socioeconomico/${cita.paciente.id}`)}
+                          style={{
+                            flex: 2, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', padding: '0.8rem',
+                            backgroundColor: '#f59e0b', color: 'white',
+                            borderRadius: '16px', border: 'none', fontSize: '14px', fontWeight: '800',
+                            cursor: 'pointer', boxShadow: '0 4px 6px -1px rgba(245, 158, 11, 0.3)'
+                          }}
+                        >
+                          <ClipboardList size={16} /> Iniciar Estudio Socioeconómico
                         </button>
                       ) : (
                         <div style={{ flex: 2, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', padding: '0.8rem', backgroundColor: '#f0fdf4', color: '#10b981', borderRadius: '16px', fontSize: '13px', fontWeight: '800', border: '1px solid #dcfce7' }}>

@@ -30,8 +30,14 @@ const SeccionMedica: React.FC<SeccionMedicaProps> = ({ expediente, onRefresh }) 
 
   const [nuevaNota, setNuevaNota] = useState({ tipo: 'GENERAL', nota: '' });
   const [nuevosSignos, setNuevosSignos] = useState({
-    presionArterial: '', temperatura: '', frecuenciaCardiaca: '',
-    frecuenciaRespiratoria: '', oxigenacion: '', glucosa: '', peso: '', observaciones: ''
+    presionArterial: '',
+    temperatura: '',
+    frecuenciaCardiaca: '',
+    frecuenciaRespiratoria: '',
+    oxigenacion: '',
+    glucosa: '',
+    peso: '',
+    observaciones: '',
   });
 
   const handleSaveNota = async () => {
@@ -55,8 +61,14 @@ const SeccionMedica: React.FC<SeccionMedicaProps> = ({ expediente, onRefresh }) 
       await apiClient.post(`/expedientes/${expediente.id}/signos`, nuevosSignos);
       setShowModalSignos(false);
       setNuevosSignos({
-        presionArterial: '', temperatura: '', frecuenciaCardiaca: '',
-        frecuenciaRespiratoria: '', oxigenacion: '', glucosa: '', peso: '', observaciones: ''
+        presionArterial: '',
+        temperatura: '',
+        frecuenciaCardiaca: '',
+        frecuenciaRespiratoria: '',
+        oxigenacion: '',
+        glucosa: '',
+        peso: '',
+        observaciones: '',
       });
       onRefresh();
     } catch {
@@ -65,8 +77,6 @@ const SeccionMedica: React.FC<SeccionMedicaProps> = ({ expediente, onRefresh }) 
       setIsSaving(false);
     }
   };
-
-  const activeColor = SUB_TABS.find(t => t.id === subTab)?.color ?? '#10b981';
 
   return (
     <div style={{ animation: 'fadeIn 0.3s ease' }}>
@@ -173,14 +183,14 @@ const SeccionMedica: React.FC<SeccionMedicaProps> = ({ expediente, onRefresh }) 
             <div style={{ padding: '2rem' }}>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
                 {[
-                  { label: 'Presión Arterial',      key: 'presionArterial',        ph: '120/80',  type: 'text'   },
-                  { label: 'Temperatura (°C)',        key: 'temperatura',            ph: '36.5',    type: 'number' },
-                  { label: 'Frec. Cardíaca (lpm)',   key: 'frecuenciaCardiaca',     ph: '70',      type: 'number' },
-                  { label: 'Frec. Respiratoria (rpm)',key: 'frecuenciaRespiratoria', ph: '16',     type: 'number' },
-                  { label: 'Oxigenación (%)',         key: 'oxigenacion',            ph: '98',      type: 'number' },
-                  { label: 'Glucosa (mg/dL)',         key: 'glucosa',               ph: '90',      type: 'number' },
-                  { label: 'Peso (kg)',               key: 'peso',                  ph: '70',      type: 'number' },
-                  { label: 'Observaciones',           key: 'observaciones',         ph: 'Opcional', type: 'text'  },
+                  { label: 'Presión Arterial',         key: 'presionArterial',        ph: '120/80', type: 'text'   },
+                  { label: 'Temperatura (°C)',           key: 'temperatura',            ph: '36.5',   type: 'number' },
+                  { label: 'Frec. Cardíaca (lpm)',       key: 'frecuenciaCardiaca',     ph: '70',     type: 'number' },
+                  { label: 'Frec. Respiratoria (rpm)',   key: 'frecuenciaRespiratoria', ph: '16',     type: 'number' },
+                  { label: 'Oxigenación (%)',             key: 'oxigenacion',            ph: '98',     type: 'number' },
+                  { label: 'Glucosa (mg/dL)',             key: 'glucosa',                ph: '90',     type: 'number' },
+                  { label: 'Peso (kg)',                   key: 'peso',                   ph: '70',     type: 'number' },
+                  { label: 'Observaciones',               key: 'observaciones',          ph: 'Opcional', type: 'text' },
                 ].map(({ label, key, ph, type }) => (
                   <div key={key} style={groupStyle}>
                     <label style={labelStyle}>{label}</label>

@@ -15,6 +15,11 @@ const Nominas = lazy(() => import('./pages/nominas/NominasDashboard'));
 const GenerarPreNomina = lazy(() => import('./pages/nominas/GenerarPrenomina'));
 
 const AreaMedica = lazy(() => import('./pages/medica/AreaMedica').then(m => ({ default: m.AreaMedica })));
+const DashboardMedico = lazy(() => import('./pages/medico/DashboardMedico').then(m => ({ default: m.DashboardMedico })));
+const DesintoxicacionPage = lazy(() => import('./pages/medica/DesintoxicacionPage'));
+const LaboratorioPage = lazy(() => import('./pages/medica/LaboratorioPage'));
+const PersonalPage = lazy(() => import('./pages/medica/PersonalPage'));
+const SolicitudesPage = lazy(() => import('./pages/medica/SolicitudesPage'));
 const EgresoPacientePage = lazy(() => import('./pages/medica/EgresoPacientePage'));
 const MedicoExpedienteDigitalPage = lazy(() => import('./pages/medico/ExpedienteDigitalPage'));
 const Bitacora = lazy(() => import('./pages/transversal/Bitacora').then(m => ({ default: m.Bitacora })));
@@ -29,19 +34,20 @@ const PrimerContactoPage = lazy(() => import('./pages/admisiones/PrimerContactoP
 const ValoracionMedicaPage = lazy(() => import('./pages/admisiones/ValoracionMedicaPage'));
 const ExpedienteDigitalPage = lazy(() => import('./pages/admisiones/ExpedienteDigitalPage').then(m => ({ default: m.ExpedienteDigitalPage })));
 const SeguimientoProspectosPage = lazy(() => import('./pages/admisiones/SeguimientoProspectosPage'));
+const WizardPertenencias = lazy(() => import('./pages/admisiones/WizardPertenencias'));
 const DetalleNomina = lazy(() => import('./pages/nominas/DetalleNomina').then(m => ({ default: m.DetalleNomina })));
 
 const UsuariosPage = lazy(() => import('./pages/admin/UsuariosPage'));
 const DashboardDirectora = lazy(() => import('./pages/admin/DashboardDirectora'));
 // Loader Premium para Suspense
 const PageLoader = () => (
-  <div style={{ 
-    display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', 
-    height: '60vh', width: '100%', gap: '1.5rem' 
+  <div style={{
+    display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+    height: '60vh', width: '100%', gap: '1.5rem'
   }}>
-    <div className="animate-spin" style={{ 
-      width: '40px', height: '40px', border: '3px solid #f3f3f3', 
-      borderTop: '3px solid #3b82f6', borderRadius: '50%' 
+    <div className="animate-spin" style={{
+      width: '40px', height: '40px', border: '3px solid #f3f3f3',
+      borderTop: '3px solid #3b82f6', borderRadius: '50%'
     }}></div>
     <span style={{ color: '#64748b', fontWeight: '600', fontSize: '14px' }}>Optimizando recursos...</span>
   </div>
@@ -53,15 +59,15 @@ function App() {
       <Suspense fallback={<PageLoader />}>
         <Routes>
           <Route path="/login" element={<Login />} />
-          
+
           {/* Rutas protegidas */}
           <Route path="/" element={<ProtectedRoute><Layout /></ProtectedRoute>}>
             <Route index element={<Navigate to="/dashboard" replace />} />
             <Route path="dashboard" element={<Dashboard />} />
-            
+
             {/* Módulo de Admisiones */}
             <Route path="admisiones" element={
-              <ProtectedRoute allowedRoles={['ADMISIONES', 'ADMIN_GENERAL', 'AREA_MEDICA', 'PSICOLOGIA']}>
+              <ProtectedRoute allowedRoles={['ADMISIONES', 'ADMIN_GENERAL', 'AREA_MEDICA', 'JEFE_MEDICO', 'PSICOLOGIA']}>
                 <Outlet />
               </ProtectedRoute>
             }>
@@ -74,33 +80,47 @@ function App() {
               <Route path="valoracion-medica/:id" element={<ValoracionMedicaPage />} />
               <Route path="seguimiento" element={<SeguimientoProspectosPage />} />
               <Route path="expediente/:pacienteId" element={
-                <ProtectedRoute allowedRoles={['ADMIN_GENERAL', 'AREA_MEDICA', 'ENFERMERIA', 'PSICOLOGIA', 'NUTRICION', 'ADMISIONES']}>
+                <ProtectedRoute allowedRoles={['ADMIN_GENERAL', 'AREA_MEDICA', 'JEFE_MEDICO', 'ENFERMERIA', 'PSICOLOGIA', 'NUTRICION', 'ADMISIONES']}>
                   <ExpedienteDigitalPage />
                 </ProtectedRoute>
               } />
               <Route path="ingreso" element={<Ingreso />} />
               <Route path="estudio-socioeconomico/:id" element={<EstudioSocioeconomicoPage />} />
+              <Route path="pertenencias/:pacienteId" element={<WizardPertenencias />} />
             </Route>
-            
+
+            <Route path="medico/dashboard" element={
+              <ProtectedRoute allowedRoles={['AREA_MEDICA', 'JEFE_MEDICO', 'ENFERMERIA', 'PSICOLOGIA', 'NUTRICION', 'ADMIN_GENERAL']}>
+                <DashboardMedico />
+              </ProtectedRoute>
+            } />
+
+            {/* Módulo Área Médica */}
             <Route path="medica" element={
-              <ProtectedRoute allowedRoles={['AREA_MEDICA', 'ENFERMERIA', 'PSICOLOGIA', 'NUTRICION', 'ADMIN_GENERAL']}>
-                <AreaMedica />
+              <ProtectedRoute allowedRoles={['AREA_MEDICA', 'JEFE_MEDICO', 'ENFERMERIA', 'PSICOLOGIA', 'NUTRICION', 'ADMIN_GENERAL']}>
+                <Outlet />
               </ProtectedRoute>
-            } />
+            }>
+              <Route path="pacientes" element={<AreaMedica />} />
+              <Route path="desintoxicacion" element={<DesintoxicacionPage />} />
+              <Route path="laboratorio" element={<LaboratorioPage />} />
+              <Route path="expediente/:id" element={<MedicoExpedienteDigitalPage />} />
+              <Route path="egreso/:id" element={
+                <ProtectedRoute allowedRoles={['AREA_MEDICA', 'ADMIN_GENERAL']}>
+                  <EgresoPacientePage />
+                </ProtectedRoute>
+              } />
+            </Route>
 
-            {/* Expediente Clínico Completo (todas las pestañas clínicas) */}
-            <Route path="medica/expediente/:id" element={
-              <ProtectedRoute allowedRoles={['AREA_MEDICA', 'ENFERMERIA', 'PSICOLOGIA', 'NUTRICION', 'ADMIN_GENERAL']}>
-                <MedicoExpedienteDigitalPage />
+            {/* Módulo Jefatura */}
+            <Route path="jefatura" element={
+              <ProtectedRoute allowedRoles={['JEFE_MEDICO', 'ADMIN_GENERAL']}>
+                <Outlet />
               </ProtectedRoute>
-            } />
-
-            {/* Proceso de Egreso */}
-            <Route path="medica/egreso/:id" element={
-              <ProtectedRoute allowedRoles={['AREA_MEDICA', 'ADMIN_GENERAL']}>
-                <EgresoPacientePage />
-              </ProtectedRoute>
-            } />
+            }>
+              <Route path="personal" element={<PersonalPage />} />
+              <Route path="solicitudes" element={<SolicitudesPage />} />
+            </Route>
 
             <Route path="almacen" element={
               <ProtectedRoute allowedRoles={['ALMACEN', 'ADMIN_GENERAL']}>
@@ -113,20 +133,25 @@ function App() {
                 <Compras />
               </ProtectedRoute>
             } />
-            
+
             {/* Módulo de Nóminas Protegido */}
             <Route path="nominas" element={
               <ProtectedRoute allowedRoles={['RRHH_FINANZAS', 'ADMIN_GENERAL']}>
-                <Outlet /> {/* El Outlet permite renderizar las rutas hijas aquí abajo */}
+                <Outlet />
               </ProtectedRoute>
             }>
-              <Route index element={<Nominas />} /> {/* Dashboard */}
-              <Route path="nueva" element={<GenerarPreNomina />} /> {/* Captura de archivo */}
-              
-              {/* 👇 NUEVA RUTA PARA EL DETALLE 👇 */}
-              <Route path=":id" element={<DetalleNomina />} /> 
+              <Route index element={<Nominas />} />
+              <Route path="nueva" element={<GenerarPreNomina />} />
+              <Route path=":id" element={<DetalleNomina />} />
             </Route>
-            
+
+            <Route path="auditoria" element={
+              <ProtectedRoute allowedRoles={['ADMIN_GENERAL']}>
+                <Bitacora />
+              </ProtectedRoute>
+            } />
+
+
             <Route path="exportaciones" element={
               <ProtectedRoute allowedRoles={['ADMIN_GENERAL']}>
                 <Reportes />
@@ -144,8 +169,9 @@ function App() {
                 <DashboardDirectora />
               </ProtectedRoute>
             } />
+
           </Route>
-          
+
           <Route path="/unauthorized" element={<h2>No tienes permisos para ver esta página</h2>} />
           <Route path="*" element={<h2>Página no encontrada</h2>} />
         </Routes>
