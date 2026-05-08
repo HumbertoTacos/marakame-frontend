@@ -3,14 +3,12 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   Activity, Search, Stethoscope, Users, Calendar, X,
   Trash2, Folder, ClipboardList, HeartPulse, Building2, History,
-  ChevronDown, Download, FilePen, Brain, Apple, Heart, ExternalLink, Droplets, LogOut,
+  Brain, Apple, Heart, Droplets, LogOut,
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import apiClient from '../../services/api';
 import { useAuthStore } from '../../stores/authStore';
 import type { Paciente, Expediente } from '../../types';
-import { ExpedienteFormModal } from './ExpedienteFormModal';
-import { generarExpedientePDF } from '../../utils/expedientePDF';
 
 // ── Configuración por rol ─────────────────────────────────────────────────────
 
@@ -460,30 +458,7 @@ export function AreaMedica() {
   const [searchQuery, setSearchQuery] = useState('');
   const [sustanciasModal, setSustanciasModal] = useState({ isOpen: false, sustancias: [] as string[], nombre: '' });
   const [valoracionModal, setValoracionModal] = useState<{ isOpen: boolean; paciente: Paciente | null }>({ isOpen: false, paciente: null });
-  const [expedienteFormModal, setExpedienteFormModal] = useState<{ isOpen: boolean; paciente: Paciente | null }>({ isOpen: false, paciente: null });
   const [detoxModal, setDetoxModal] = useState<{ isOpen: boolean; paciente: Paciente | null }>({ isOpen: false, paciente: null });
-  const [openDropdown, setOpenDropdown] = useState<number | null>(null);
-  const [isDownloading, setIsDownloading] = useState<number | null>(null);
-
-  useEffect(() => {
-    const close = () => setOpenDropdown(null);
-    document.addEventListener('click', close);
-    return () => document.removeEventListener('click', close);
-  }, []);
-
-  const handleDescargar = async (pac: Paciente) => {
-    if (!pac.expediente?.id) return;
-    setIsDownloading(pac.id);
-    try {
-      const res = await apiClient.get(`/expedientes/paciente/${pac.id}`);
-      const exp = res.data.data;
-      generarExpedientePDF(pac, exp.historiaClinica ?? null, usuario?.nombre ?? 'Médico', exp.id);
-    } catch {
-      alert('Error al generar el PDF. Intente de nuevo.');
-    } finally {
-      setIsDownloading(null);
-    }
-  };
 
   // ── Queries ───────────────────────────────────────────────────────────────
 
@@ -773,75 +748,14 @@ export function AreaMedica() {
                               <LogOut size={13} /> Egreso
                             </button>
                           )}
-                          {/* Expediente dropdown */}
-                          <div style={{ position: 'relative' }}>
-                            <button
-                              onClick={e => { e.stopPropagation(); setOpenDropdown(o => o === pac.id ? null : pac.id); }}
-                              style={{ ...actionBtn('#10b981'), gap: '0.3rem' }}
-                              title="Opciones de expediente"
-                            >
-                              <Folder size={13} /> Expediente <ChevronDown size={11} />
-                            </button>
-                            {openDropdown === pac.id && (
-                              <div
-                                onClick={e => e.stopPropagation()}
-                                style={{
-                                  position: 'absolute', top: 'calc(100% + 6px)', right: 0,
-                                  backgroundColor: 'white', borderRadius: '14px',
-                                  border: '1.5px solid #e2e8f0',
-                                  boxShadow: '0 10px 25px -5px rgba(0,0,0,0.14)',
-                                  zIndex: 300, minWidth: '220px', overflow: 'hidden',
-                                }}
-                              >
-                                <button
-                                  onClick={() => { navigate(`/medica/expediente/${pac.id}`); setOpenDropdown(null); }}
-                                  style={{
-                                    width: '100%', display: 'flex', alignItems: 'center', gap: '0.75rem',
-                                    padding: '0.85rem 1.1rem', border: 'none', backgroundColor: 'transparent',
-                                    cursor: 'pointer', fontSize: '13px', fontWeight: '700', color: '#1e293b',
-                                    textAlign: 'left',
-                                  }}
-                                >
-                                  <ExternalLink size={14} color="#0ea5e9" />
-                                  Ver Expediente Completo
-                                </button>
-                                <div style={{ height: '1px', backgroundColor: '#f1f5f9', margin: '0 1rem' }} />
-                                <button
-                                  onClick={() => { setExpedienteFormModal({ isOpen: true, paciente: pac }); setOpenDropdown(null); }}
-                                  style={{
-                                    width: '100%', display: 'flex', alignItems: 'center', gap: '0.75rem',
-                                    padding: '0.85rem 1.1rem', border: 'none', backgroundColor: 'transparent',
-                                    cursor: 'pointer', fontSize: '13px', fontWeight: '700', color: '#1e293b',
-                                    textAlign: 'left',
-                                  }}
-                                >
-                                  <FilePen size={14} color="#10b981" />
-                                  {pac.expediente?.id ? 'Editar Historia Clínica' : 'Crear Historia Clínica'}
-                                </button>
-                                <div style={{ height: '1px', backgroundColor: '#f1f5f9', margin: '0 1rem' }} />
-                                <button
-                                  onClick={() => { handleDescargar(pac); setOpenDropdown(null); }}
-                                  disabled={!pac.expediente?.id || isDownloading === pac.id}
-                                  style={{
-                                    width: '100%', display: 'flex', alignItems: 'center', gap: '0.75rem',
-                                    padding: '0.85rem 1.1rem', border: 'none',
-                                    backgroundColor: 'transparent',
-                                    cursor: pac.expediente?.id && isDownloading !== pac.id ? 'pointer' : 'not-allowed',
-                                    fontSize: '13px', fontWeight: '700',
-                                    color: pac.expediente?.id ? '#1e293b' : '#94a3b8',
-                                    textAlign: 'left',
-                                    opacity: !pac.expediente?.id || isDownloading === pac.id ? 0.5 : 1,
-                                  }}
-                                >
-                                  <Download size={14} color={pac.expediente?.id ? '#3b82f6' : '#94a3b8'} />
-                                  {isDownloading === pac.id ? 'Generando PDF...' : 'Descargar PDF'}
-                                  {!pac.expediente?.id && (
-                                    <span style={{ fontSize: '10px', color: '#94a3b8', marginLeft: 'auto' }}>Sin expediente</span>
-                                  )}
-                                </button>
-                              </div>
-                            )}
-                          </div>
+                          {/* Expediente directo */}
+                          <button
+                            onClick={() => navigate(`/medico/expediente/${pac.id}`)}
+                            style={actionBtn('#10b981')}
+                            title="Ver expediente digital completo"
+                          >
+                            <Folder size={13} /> Expediente
+                          </button>
                           <button
                             onClick={() => setValoracionModal({ isOpen: true, paciente: pac })}
                             style={actionBtn('#3b82f6')}
@@ -883,11 +797,6 @@ export function AreaMedica() {
         paciente={detoxModal.paciente}
         onConfirm={() => detoxModal.paciente && detoxMutation.mutate(detoxModal.paciente.id)}
         isPending={detoxMutation.isPending}
-      />
-      <ExpedienteFormModal
-        isOpen={expedienteFormModal.isOpen}
-        onClose={() => setExpedienteFormModal({ isOpen: false, paciente: null })}
-        paciente={expedienteFormModal.paciente}
       />
       <VerSustanciasModal
         isOpen={sustanciasModal.isOpen}

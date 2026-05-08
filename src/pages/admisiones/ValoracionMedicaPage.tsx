@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { ValoracionMedicaForm } from '../../components/admisiones/ValoracionMedicaForm';
+import { AsignacionCamaModal } from '../../components/admisiones/AsignacionCamaModal';
 import { Stethoscope, ArrowLeft, UserCircle } from 'lucide-react';
 import apiClient from '../../services/api';
 
@@ -9,6 +10,7 @@ const ValoracionMedicaPage: React.FC = () => {
   const navigate = useNavigate();
   const [paciente, setPaciente] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [showCamaModal, setShowCamaModal] = useState(false);
 
   useEffect(() => {
     const fetchPaciente = async () => {
@@ -66,13 +68,30 @@ const ValoracionMedicaPage: React.FC = () => {
         {/* Formulario Principal */}
         <ValoracionMedicaForm
           pacienteId={parseInt(id!, 10)}
-          onSuccess={() => navigate('/admisiones/dashboard')}
+          onSuccess={(esApto) => {
+            if (esApto) {
+              setShowCamaModal(true);
+            } else {
+              navigate('/admisiones/dashboard');
+            }
+          }}
         />
 
         <div style={{ marginTop: '2rem', textAlign: 'center', color: '#94a3b8', fontSize: '12px' }}>
           Este documento forma parte del expediente clínico legal del paciente.
         </div>
       </div>
+
+      {showCamaModal && (
+        <AsignacionCamaModal
+          pacienteId={parseInt(id!, 10)}
+          onSuccess={() => navigate(`/admisiones/pertenencias/${id}`)}
+          onCancel={() => {
+            setShowCamaModal(false);
+            navigate('/admisiones/dashboard');
+          }}
+        />
+      )}
     </div>
   );
 };

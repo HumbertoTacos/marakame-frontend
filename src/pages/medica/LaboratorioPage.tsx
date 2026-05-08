@@ -67,7 +67,7 @@ const SolicitudModal = ({ isOpen, onClose, paciente }: SolicitudModalProps) => {
     );
   };
 
-  const handleGuardar = () => {
+  const handleGuardar = async () => {
     const examenesFinales = examenes
       .filter(e => e !== 'Otro')
       .concat(examenes.includes('Otro') && otroTexto.trim() ? [otroTexto.trim()] : []);
@@ -77,17 +77,22 @@ const SolicitudModal = ({ isOpen, onClose, paciente }: SolicitudModalProps) => {
       return;
     }
 
-    const solicitud = {
-      pacienteId: paciente?.id,
-      paciente: `${paciente?.nombre} ${paciente?.apellidoPaterno}`,
-      examenes: examenesFinales,
-      fechaToma: fecha || null,
-      laboratorio: laboratorio.trim() || null,
-      creadoEn: new Date().toISOString(),
-    };
+    const fechaHoraCita = fecha
+      ? new Date(`${fecha}T08:00:00`).toISOString()
+      : new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
 
-    console.log('[Laboratorio] Solicitud registrada:', solicitud);
-    setGuardado(true);
+    try {
+      await apiClient.post('/clinica/citas', {
+        pacienteId: paciente?.id,
+        fechaHora: fechaHoraCita,
+        motivo: `Laboratorio: ${examenesFinales.join(', ')}`,
+        observaciones: laboratorio.trim() || null,
+      });
+      setGuardado(true);
+    } catch (err) {
+      console.error('[Laboratorio] Error al registrar cita:', err);
+      alert('Error al guardar la solicitud de laboratorio.');
+    }
   };
 
   if (!isOpen || !paciente) return null;

@@ -18,7 +18,7 @@ import { useValoracionMedicaStore } from '../../stores/formDraftStore';
 
 interface Props {
   pacienteId: number;
-  onSuccess?: () => void;
+  onSuccess?: (esApto: boolean) => void;
 }
 
 interface PreFillData {
@@ -42,6 +42,12 @@ export const ValoracionMedicaForm: React.FC<Props> = ({ pacienteId, onSuccess })
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [preFillData, setPreFillData] = useState<PreFillData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+
+  const edadDisplay = React.useMemo(() => {
+    const e = preFillData?.identificacion.edad;
+    if (e == null || typeof e !== 'number' || e <= 0 || e > 120) return 'N/A';
+    return `${e} años`;
+  }, [preFillData]);
 
   const {
     formData, setFormData, resetForm
@@ -123,9 +129,9 @@ export const ValoracionMedicaForm: React.FC<Props> = ({ pacienteId, onSuccess })
       const response = await apiClient.post('/admisiones/valoracion-medica', payload);
 
       if (response.data.success) {
-        alert('Valoración guardada exitosamente. Ahora proceda a imprimir el documento oficial.');
-        window.print(); // Disparar impresión oficial
-        if (onSuccess) onSuccess();
+        const esApto = formData.esAptoParaIngreso === true;
+        window.print();
+        if (onSuccess) onSuccess(esApto);
       }
     } catch (error) {
       console.error('Error saving valuation:', error);
@@ -249,7 +255,7 @@ export const ValoracionMedicaForm: React.FC<Props> = ({ pacienteId, onSuccess })
             </div>
             <div>
               <label style={labelStyle}>Edad</label>
-              <div style={{ ...inputStyle, backgroundColor: '#f1f5f9' }}>{preFillData?.identificacion.edad} años</div>
+              <div style={{ ...inputStyle, backgroundColor: '#f1f5f9' }}>{edadDisplay}</div>
             </div>
             <div>
               <label style={labelStyle}>Estado Civil</label>

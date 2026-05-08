@@ -58,12 +58,21 @@ const ExpedienteDigitalPage: React.FC = () => {
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState<TabId>('preAdmision');
   const [expedienteRaw, setExpedienteRaw] = useState<any>(null);
+  const [pacienteLocal, setPacienteLocal] = useState<any>(null);
   const [loading, setLoading] = useState(true);
 
   const fetchExpediente = async () => {
     try {
-      const res = await apiClient.get(`/expedientes/paciente/${id}`);
-      if (res.data.success) setExpedienteRaw(res.data.data);
+      const [expRes, pacRes] = await Promise.allSettled([
+        apiClient.get(`/expedientes/paciente/${id}`),
+        apiClient.get(`/pacientes/${id}`),
+      ]);
+      if (expRes.status === 'fulfilled' && expRes.value.data.success) {
+        setExpedienteRaw(expRes.value.data.data);
+      }
+      if (pacRes.status === 'fulfilled' && pacRes.value.data.data) {
+        setPacienteLocal(pacRes.value.data.data);
+      }
     } catch (error) {
       console.error('Error fetching expediente:', error);
     } finally {
@@ -78,13 +87,14 @@ const ExpedienteDigitalPage: React.FC = () => {
       Cargando expediente clínico...
     </div>
   );
-  if (!expedienteRaw?.paciente) return (
+
+  const paciente = expedienteRaw?.paciente ?? pacienteLocal;
+
+  if (!paciente) return (
     <div style={{ padding: '4rem', textAlign: 'center', color: '#94a3b8' }}>
-      No se encontró el expediente del paciente.
+      No se encontró el paciente.
     </div>
   );
-
-  const { paciente } = expedienteRaw;
   const activeColor = TABS.find(t => t.id === activeTab)?.color ?? '#0891b2';
 
   return (
@@ -183,11 +193,11 @@ const ExpedienteDigitalPage: React.FC = () => {
           <SeccionHistoriaClinica pacienteId={paciente.id} />
         )}
 
-        {activeTab === 'areaMedica' && (
+        {activeTab === 'areaMedica' && expedienteRaw && (
           <SeccionMedica expediente={expedienteRaw} onRefresh={fetchExpediente} />
         )}
 
-        {activeTab === 'tratamientos' && (
+        {activeTab === 'tratamientos' && expedienteRaw && (
           <SeccionTratamientos expedienteId={expedienteRaw.id} />
         )}
 
@@ -199,24 +209,30 @@ const ExpedienteDigitalPage: React.FC = () => {
           <SeccionCitas pacienteId={paciente.id} />
         )}
 
-        {activeTab === 'nutricion' && (
+        {activeTab === 'nutricion' && expedienteRaw && (
           <SeccionPlanNutricional expedienteId={expedienteRaw.id} />
         )}
 
-        {activeTab === 'psicologia' && (
+        {activeTab === 'psicologia' && expedienteRaw && (
           <SeccionSesiones expedienteId={expedienteRaw.id} tipo="PSICOLOGIA" />
         )}
 
-        {activeTab === 'consejeria' && (
+        {activeTab === 'consejeria' && expedienteRaw && (
           <SeccionSesiones expedienteId={expedienteRaw.id} tipo="CONSEJERIA" />
         )}
 
-        {activeTab === 'familia' && (
+        {activeTab === 'familia' && expedienteRaw && (
           <SeccionSesiones expedienteId={expedienteRaw.id} tipo="FAMILIA" />
         )}
 
-        {activeTab === 'seguimiento' && (
+        {activeTab === 'seguimiento' && expedienteRaw && (
           <SeccionSesiones expedienteId={expedienteRaw.id} tipo="SEGUIMIENTO" />
+        )}
+
+        {!expedienteRaw && ['areaMedica','tratamientos','nutricion','psicologia','consejeria','familia','seguimiento'].includes(activeTab) && (
+          <div style={{ padding: '3rem', textAlign: 'center', color: '#94a3b8', border: '1px dashed #e2e8f0', borderRadius: '20px' }}>
+            El expediente clínico está siendo generado. Recarga la página en un momento.
+          </div>
         )}
       </div>
 

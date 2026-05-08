@@ -11,13 +11,15 @@ interface PacienteBasico {
   claveUnica?: number;
 }
 
-function calcularEdad(fechaNacimiento: string | Date): number {
-  const hoy = new Date();
+function calcularEdad(fechaNacimiento: string | Date | null | undefined): number {
+  if (!fechaNacimiento) return 0;
   const d = new Date(fechaNacimiento as string);
+  if (isNaN(d.getTime())) return 0;
+  const hoy = new Date();
   let a = hoy.getFullYear() - d.getFullYear();
   const m = hoy.getMonth() - d.getMonth();
   if (m < 0 || (m === 0 && hoy.getDate() < d.getDate())) a--;
-  return a;
+  return (a < 0 || a > 120) ? 0 : a;
 }
 
 export function generarExpedientePDF(
@@ -131,8 +133,9 @@ export function generarExpedientePDF(
   doc.setFont('helvetica', 'normal');
   doc.setTextColor(71, 85, 105);
   const sexoLabel = paciente.sexo === 'M' ? 'Masculino' : 'Femenino';
+  const edadCalculada = calcularEdad(paciente.fechaNacimiento);
   doc.text(
-    `Edad: ${calcularEdad(paciente.fechaNacimiento)} años  ·  Sexo: ${sexoLabel}  ·  Expediente #${expedienteId}  ·  ID Paciente: ${paciente.id}`,
+    `Edad: ${edadCalculada > 0 ? `${edadCalculada} años` : 'N/A'}  ·  Sexo: ${sexoLabel}  ·  Expediente #${expedienteId}  ·  ID Paciente: ${paciente.id}`,
     M + 7, y + 14,
   );
   y += 25;

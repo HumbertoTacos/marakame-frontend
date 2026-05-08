@@ -109,7 +109,7 @@ export default function WizardPertenencias() {
         firmaRecibido: true,
       });
       alert('Paciente internado correctamente. Redirigiendo al módulo médico...');
-      navigate('/medico');
+      navigate('/medico/dashboard');
     } catch (err) {
       console.error(err);
       alert('Error al confirmar el inventario.');
