@@ -4,14 +4,19 @@ import { Layout } from './components/Layout';
 import { ProtectedRoute } from './components/ProtectedRoute';
 import { Login } from './pages/Login';
 
-// Implementación de Lazy Loading para optimización de recursos y bundle size
+// Implementación de Lazy Loading
 const Dashboard = lazy(() => import('./pages/Dashboard').then(m => ({ default: m.Dashboard })));
 const Ingreso = lazy(() => import('./pages/admisiones/Ingreso').then(m => ({ default: m.Ingreso })));
 const EstudioSocioeconomicoPage = lazy(() => import('./pages/admisiones/EstudioSocioeconomicoPage'));
 const Almacen = lazy(() => import('./pages/operativos/Almacen').then(m => ({ default: m.Almacen })));
 const Compras = lazy(() => import('./pages/operativos/Compras').then(m => ({ default: m.Compras })));
-const Nominas = lazy(() => import('./pages/operativos/Nominas').then(m => ({ default: m.Nominas })));
+
+const Nominas = lazy(() => import('./pages/nominas/NominasDashboard'));
+const GenerarPreNomina = lazy(() => import('./pages/nominas/GenerarPrenomina'));
+
 const AreaMedica = lazy(() => import('./pages/medica/AreaMedica').then(m => ({ default: m.AreaMedica })));
+const EgresoPacientePage = lazy(() => import('./pages/medica/EgresoPacientePage'));
+const MedicoExpedienteDigitalPage = lazy(() => import('./pages/medico/ExpedienteDigitalPage'));
 const Bitacora = lazy(() => import('./pages/transversal/Bitacora').then(m => ({ default: m.Bitacora })));
 const Reportes = lazy(() => import('./pages/transversal/Reportes').then(m => ({ default: m.Reportes })));
 
@@ -24,7 +29,10 @@ const PrimerContactoPage = lazy(() => import('./pages/admisiones/PrimerContactoP
 const ValoracionMedicaPage = lazy(() => import('./pages/admisiones/ValoracionMedicaPage'));
 const ExpedienteDigitalPage = lazy(() => import('./pages/admisiones/ExpedienteDigitalPage').then(m => ({ default: m.ExpedienteDigitalPage })));
 const SeguimientoProspectosPage = lazy(() => import('./pages/admisiones/SeguimientoProspectosPage'));
+const DetalleNomina = lazy(() => import('./pages/nominas/DetalleNomina').then(m => ({ default: m.DetalleNomina })));
 
+const UsuariosPage = lazy(() => import('./pages/admin/UsuariosPage'));
+const DashboardDirectora = lazy(() => import('./pages/admin/DashboardDirectora'));
 // Loader Premium para Suspense
 const PageLoader = () => (
   <div style={{ 
@@ -51,15 +59,13 @@ function App() {
             <Route index element={<Navigate to="/dashboard" replace />} />
             <Route path="dashboard" element={<Dashboard />} />
             
-            {/* Módulo de Admisiones - Restringido */}
+            {/* Módulo de Admisiones */}
             <Route path="admisiones" element={
               <ProtectedRoute allowedRoles={['ADMISIONES', 'ADMIN_GENERAL', 'AREA_MEDICA', 'PSICOLOGIA']}>
                 <Outlet />
               </ProtectedRoute>
             }>
-              {/* SOLUCIÓN: Ruta index que redirige al dashboard real */}
               <Route index element={<Navigate to="dashboard" replace />} />
-              
               <Route path="dashboard" element={<AdmisionesDashboard />} />
               <Route path="nuevo-ingreso" element={<NuevoIngresoPage />} />
               <Route path="asignar-cama/:id" element={<AsignarCamaPage />} />
@@ -76,48 +82,70 @@ function App() {
               <Route path="estudio-socioeconomico/:id" element={<EstudioSocioeconomicoPage />} />
             </Route>
             
-            {/* Módulo Médico - Restringido */}
             <Route path="medica" element={
               <ProtectedRoute allowedRoles={['AREA_MEDICA', 'ENFERMERIA', 'PSICOLOGIA', 'NUTRICION', 'ADMIN_GENERAL']}>
                 <AreaMedica />
               </ProtectedRoute>
             } />
-            
-            {/* Almacén - Restringido */}
+
+            {/* Expediente Clínico Completo (todas las pestañas clínicas) */}
+            <Route path="medica/expediente/:id" element={
+              <ProtectedRoute allowedRoles={['AREA_MEDICA', 'ENFERMERIA', 'PSICOLOGIA', 'NUTRICION', 'ADMIN_GENERAL']}>
+                <MedicoExpedienteDigitalPage />
+              </ProtectedRoute>
+            } />
+
+            {/* Proceso de Egreso */}
+            <Route path="medica/egreso/:id" element={
+              <ProtectedRoute allowedRoles={['AREA_MEDICA', 'ADMIN_GENERAL']}>
+                <EgresoPacientePage />
+              </ProtectedRoute>
+            } />
+
             <Route path="almacen" element={
               <ProtectedRoute allowedRoles={['ALMACEN', 'ADMIN_GENERAL']}>
                 <Almacen />
               </ProtectedRoute>
             } />
 
-            {/* Compras y Nóminas - Restringido */}
             <Route path="compras" element={
               <ProtectedRoute allowedRoles={['RRHH_FINANZAS', 'ADMIN_GENERAL']}>
                 <Compras />
               </ProtectedRoute>
             } />
             
-            <Route path="rrhh-nominas" element={
+            {/* Módulo de Nóminas Protegido */}
+            <Route path="nominas" element={
               <ProtectedRoute allowedRoles={['RRHH_FINANZAS', 'ADMIN_GENERAL']}>
-                <Nominas />
+                <Outlet /> {/* El Outlet permite renderizar las rutas hijas aquí abajo */}
               </ProtectedRoute>
-            } />
-            
-            {/* Gerencial - Solo Admin General */}
-            <Route path="auditoria" element={
-              <ProtectedRoute allowedRoles={['ADMIN_GENERAL']}>
-                <Bitacora />
-              </ProtectedRoute>
-            } />
+            }>
+              <Route index element={<Nominas />} /> {/* Dashboard */}
+              <Route path="nueva" element={<GenerarPreNomina />} /> {/* Captura de archivo */}
+              
+              {/* 👇 NUEVA RUTA PARA EL DETALLE 👇 */}
+              <Route path=":id" element={<DetalleNomina />} /> 
+            </Route>
             
             <Route path="exportaciones" element={
               <ProtectedRoute allowedRoles={['ADMIN_GENERAL']}>
                 <Reportes />
               </ProtectedRoute>
             } />
+
+            <Route path="usuarios" element={
+              <ProtectedRoute allowedRoles={['ADMIN_GENERAL']}>
+                <UsuariosPage />
+              </ProtectedRoute>
+            } />
+
+            <Route path="directora" element={
+              <ProtectedRoute allowedRoles={['ADMIN_GENERAL']}>
+                <DashboardDirectora />
+              </ProtectedRoute>
+            } />
           </Route>
           
-          {/* Rutas no autorizadas o 404 */}
           <Route path="/unauthorized" element={<h2>No tienes permisos para ver esta página</h2>} />
           <Route path="*" element={<h2>Página no encontrada</h2>} />
         </Routes>

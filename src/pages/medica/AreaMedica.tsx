@@ -1,8 +1,8 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { 
-  Activity, Search, 
-  FileText, ChevronRight, Stethoscope, Clock, Users, Calendar, Folder, X
+import {
+  Activity, Search,
+  FileText, ChevronRight, Stethoscope, Clock, Users, Calendar, Folder, X, LogOut
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import apiClient from '../../services/api';
@@ -210,7 +210,7 @@ export function AreaMedica() {
                         <div style={{ fontWeight: '600', color: '#475569' }}>
                           {prospecto.primerContacto?.[0]?.edadPaciente || calcularEdad(prospecto.fechaNacimiento.toString())} años
                         </div>
-                        <div style={{ fontSize: '12px', color: '#94a3b8' }}>{prospecto.sexo === 'M' ? 'Masculino' : 'Femenina'}</div>
+                        <div style={{ fontSize: '12px', color: '#94a3b8' }}>{prospecto.sexo === 'M' ? 'Masculino' : 'Femenino'}</div>
                       </td>
                       <td style={{ padding: '1.25rem 1.5rem' }}>
                         <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.4rem', alignItems: 'center' }}>
@@ -222,7 +222,7 @@ export function AreaMedica() {
                                   <span key={i} style={{ backgroundColor: '#f1f5f9', fontSize: '10px', fontWeight: '700', padding: '0.2rem 0.6rem', borderRadius: '4px', color: '#475569' }}>{s}</span>
                                 ))}
                                 {list.length > 2 && (
-                                  <button 
+                                  <button
                                     onClick={() => setSustanciasModal({ isOpen: true, sustancias: list, nombre: `${prospecto.nombre} ${prospecto.apellidoPaterno}` })}
                                     style={{ border: 'none', backgroundColor: 'transparent', fontSize: '11px', fontWeight: '900', color: '#3b82f6', cursor: 'pointer', textDecoration: 'underline', padding: 0 }}
                                   >
@@ -241,23 +241,9 @@ export function AreaMedica() {
                         </div>
                       </td>
                       <td style={{ padding: '1.25rem 1.5rem', textAlign: 'center', borderRadius: '0 16px 16px 0' }}>
-                        <button 
+                        <button
                           onClick={() => navigate(`/admisiones/valoracion-medica/${prospecto.id}`)}
-                          style={{ 
-                            padding: '0.6rem 1.25rem', 
-                            backgroundColor: '#3b82f6', 
-                            color: 'white', 
-                            border: 'none', 
-                            borderRadius: '10px', 
-                            fontWeight: '700', 
-                            fontSize: '13px', 
-                            cursor: 'pointer',
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: '0.5rem',
-                            margin: '0 auto',
-                            boxShadow: '0 4px 6px -1px rgba(59,130,246,0.3)'
-                          }}
+                          style={{ padding: '0.6rem 1.25rem', backgroundColor: '#3b82f6', color: 'white', border: 'none', borderRadius: '10px', fontWeight: '700', fontSize: '13px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.5rem', margin: '0 auto', boxShadow: '0 4px 6px -1px rgba(59,130,246,0.3)' }}
                         >
                           <Stethoscope size={16} /> Valorar
                         </button>
@@ -351,32 +337,27 @@ export function AreaMedica() {
                       </span>
                     </div>
                   </div>
-
-                  <button 
-                    onClick={() => navigate(`/admisiones/expediente/${pacienteId}`)}
-                    style={{ 
-                      display: 'flex', 
-                      alignItems: 'center', 
-                      gap: '0.6rem', 
-                      padding: '0.75rem 1.25rem', 
-                      backgroundColor: 'white', 
-                      color: '#10b981', 
-                      border: '1.5px solid #10b981', 
-                      borderRadius: '12px', 
-                      fontWeight: '800', 
-                      cursor: 'pointer',
-                      fontSize: '13px',
-                      transition: 'all 0.2s'
-                    }}
-                    onMouseEnter={(e) => {
-                      e.currentTarget.style.backgroundColor = '#f0fdf4';
-                    }}
-                    onMouseLeave={(e) => {
-                      e.currentTarget.style.backgroundColor = 'white';
-                    }}
-                  >
-                    <Folder size={18} /> Ver Expediente Digital
-                  </button>
+                  <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
+                    {(usuario?.rol === 'AREA_MEDICA' || usuario?.rol === 'ADMIN_GENERAL') && (
+                      <button
+                        onClick={() => navigate(`/medica/egreso/${pacienteId}`)}
+                        style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', padding: '0.75rem 1.25rem', backgroundColor: 'white', color: '#ef4444', border: '1.5px solid #ef4444', borderRadius: '12px', fontWeight: '800', cursor: 'pointer', fontSize: '13px', transition: 'all 0.2s' }}
+                        onMouseEnter={e => e.currentTarget.style.backgroundColor = '#fef2f2'}
+                        onMouseLeave={e => e.currentTarget.style.backgroundColor = 'white'}
+                        title="Iniciar proceso de egreso del paciente"
+                      >
+                        <LogOut size={18} /> Iniciar Egreso
+                      </button>
+                    )}
+                    <button
+                      onClick={() => navigate(`/medica/expediente/${pacienteId}`)}
+                      style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', padding: '0.75rem 1.25rem', backgroundColor: 'white', color: '#10b981', border: '1.5px solid #10b981', borderRadius: '12px', fontWeight: '800', cursor: 'pointer', fontSize: '13px', transition: 'all 0.2s' }}
+                      onMouseEnter={e => e.currentTarget.style.backgroundColor = '#f0fdf4'}
+                      onMouseLeave={e => e.currentTarget.style.backgroundColor = 'white'}
+                    >
+                      <Folder size={18} /> Ver Expediente Completo
+                    </button>
+                  </div>
                 </div>
 
                 {/* Tabs Médicos */}
