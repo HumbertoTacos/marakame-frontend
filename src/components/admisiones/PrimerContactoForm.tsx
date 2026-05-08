@@ -282,7 +282,20 @@ export const PrimerContactoForm: React.FC = () => {
     setIsSubmitting(true);
 
     const submissionData = { ...formData };
-    
+
+    // Convierte un valor Sí/No (boolean o string) + comentario opcional a String
+    const toSiNoStr = (val: string | boolean | undefined, comentario?: string): string => {
+      const base = (val === true || val === 'SI') ? 'SÍ'
+        : val === 'DUDA' ? 'DUDA'
+        : 'NO';
+      const txt = (comentario ?? '').trim();
+      return txt ? `${base}: ${txt}` : base;
+    };
+
+    submissionData.dispuestoInternarse = toSiNoStr(submissionData.dispuestoInternarse, submissionData.comentariosInternamiento);
+    submissionData.realizoIntervencion = toSiNoStr(submissionData.realizoIntervencion, submissionData.conclusionIntervencion);
+    submissionData.tratamientoPrevio   = toSiNoStr(submissionData.tratamientoPrevio,   submissionData.lugarTratamiento);
+
     // Mapeo Inteligente de "OTRO" antes de enviar a la BD
     if (submissionData.medioEnterado === 'OTRO') {
       submissionData.medioEnterado = formData.medioEnteradoOtro;

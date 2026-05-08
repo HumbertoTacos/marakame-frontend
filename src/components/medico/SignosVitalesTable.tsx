@@ -11,7 +11,7 @@ import type { SignoVital } from '../../types';
 
 interface SignosVitalesTableProps {
   signos: SignoVital[];
-  onAddSignos: () => void;
+  onAddSignos?: () => void;
 }
 
 const SignosVitalesTable: React.FC<SignosVitalesTableProps> = ({ signos, onAddSignos }) => {
@@ -29,24 +29,26 @@ const SignosVitalesTable: React.FC<SignosVitalesTableProps> = ({ signos, onAddSi
           </div>
         </div>
         
-        <button 
-          onClick={onAddSignos}
-          style={{ 
-            display: 'flex', 
-            alignItems: 'center', 
-            gap: '0.6rem', 
-            padding: '0.75rem 1.25rem', 
-            backgroundColor: '#10b981', 
-            color: 'white', 
-            border: 'none', 
-            borderRadius: '12px', 
-            fontWeight: 'bold', 
-            cursor: 'pointer',
-            boxShadow: '0 4px 6px -1px rgba(16,185,129,0.3)'
-          }}
-        >
-          <Plus size={18} /> Registrar Signos
-        </button>
+        {onAddSignos && (
+          <button
+            onClick={onAddSignos}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.6rem',
+              padding: '0.75rem 1.25rem',
+              backgroundColor: '#10b981',
+              color: 'white',
+              border: 'none',
+              borderRadius: '12px',
+              fontWeight: 'bold',
+              cursor: 'pointer',
+              boxShadow: '0 4px 6px -1px rgba(16,185,129,0.3)'
+            }}
+          >
+            <Plus size={18} /> Registrar Signos
+          </button>
+        )}
       </div>
 
       {/* Tabla Técnica Densa */}

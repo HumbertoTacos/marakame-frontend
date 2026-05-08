@@ -18,7 +18,7 @@ import { useValoracionMedicaStore } from '../../stores/formDraftStore';
 
 interface Props {
   pacienteId: number;
-  onSuccess?: () => void;
+  onSuccess?: (esApto: boolean) => void;
 }
 
 interface PreFillData {
@@ -42,6 +42,12 @@ export const ValoracionMedicaForm: React.FC<Props> = ({ pacienteId, onSuccess })
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [preFillData, setPreFillData] = useState<PreFillData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+
+  const edadDisplay = React.useMemo(() => {
+    const e = preFillData?.identificacion.edad;
+    if (e == null || typeof e !== 'number' || e <= 0 || e > 120) return 'N/A';
+    return `${e} años`;
+  }, [preFillData]);
 
   const {
     formData, setFormData, resetForm
@@ -82,17 +88,50 @@ export const ValoracionMedicaForm: React.FC<Props> = ({ pacienteId, onSuccess })
       return;
     }
 
+    const strOrNull = (v: unknown) => {
+      const s = String(v ?? '').trim();
+      return s === '' ? null : s;
+    };
+
+    const payload = {
+      pacienteId,
+      motivoConsulta:       String(formData.motivoConsulta ?? '').trim(),
+      impresionDiagnostica: String(formData.impresionDiagnostica ?? '').trim(),
+      padecimientoActual:           strOrNull(formData.padecimientoActual),
+      sintomasGenerales:            strOrNull(formData.sintomasGenerales),
+      tratamientosPrevios:          strOrNull(formData.tratamientosPrevios),
+      antecedentesHeredofamiliares: strOrNull(formData.antecedentesHeredofamiliares),
+      antecedentesPatologicos:      strOrNull(formData.antecedentesPatologicos),
+      antecedentesNoPatologicos:    strOrNull(formData.antecedentesNoPatologicos),
+      historialConsumo:             strOrNull(formData.historialConsumo),
+      // Signos vitales: todos String en la DB
+      tensionArterial:        strOrNull(formData.tensionArterial),
+      frecuenciaCardiaca:     strOrNull(formData.frecuenciaCardiaca),
+      frecuenciaRespiratoria: strOrNull(formData.frecuenciaRespiratoria),
+      temperatura:            strOrNull(formData.temperatura),
+      peso:                   strOrNull(formData.peso),
+      talla:                  strOrNull(formData.talla),
+      exploracionFisicaDesc: strOrNull(formData.exploracionFisicaDesc),
+      examenMental:          strOrNull(formData.examenMental),
+      pronostico:            strOrNull(formData.pronostico),
+      planTratamiento:       strOrNull(formData.planTratamiento),
+      esAptoParaIngreso: formData.esAptoParaIngreso === true,
+      residente:         strOrNull(formData.residente),
+      tipoValoracion:    strOrNull(formData.tipoValoracion),
+      fechaValoracion:   strOrNull(formData.fechaValoracion),
+      horaValoracion:    strOrNull(formData.horaValoracion),
+    };
+
+    console.log('[ValoracionMedica] payload:', payload);
+
     setIsSubmitting(true);
     try {
-      const response = await apiClient.post('/admisiones/valoracion-medica', {
-        ...formData,
-        pacienteId
-      });
+      const response = await apiClient.post('/admisiones/valoracion-medica', payload);
 
       if (response.data.success) {
-        alert('Valoración guardada exitosamente. Ahora proceda a imprimir el documento oficial.');
-        window.print(); // Disparar impresión oficial
-        if (onSuccess) onSuccess();
+        const esApto = formData.esAptoParaIngreso === true;
+        window.print();
+        if (onSuccess) onSuccess(esApto);
       }
     } catch (error) {
       console.error('Error saving valuation:', error);
@@ -216,7 +255,7 @@ export const ValoracionMedicaForm: React.FC<Props> = ({ pacienteId, onSuccess })
             </div>
             <div>
               <label style={labelStyle}>Edad</label>
-              <div style={{ ...inputStyle, backgroundColor: '#f1f5f9' }}>{preFillData?.identificacion.edad} años</div>
+              <div style={{ ...inputStyle, backgroundColor: '#f1f5f9' }}>{edadDisplay}</div>
             </div>
             <div>
               <label style={labelStyle}>Estado Civil</label>

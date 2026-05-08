@@ -5,7 +5,7 @@ import {
     MapPin, Briefcase, Info, CheckCircle2, ChevronRight,
     GraduationCap, Globe, Baby, ArrowRight, Camera, Calendar, Hash,
     CreditCard, Navigation, Venus, Mars, List, Shield, Stethoscope, DollarSign, Activity,
-    UserCheck, Wallet, BriefcaseIcon, Building2, Clock, Users2, Plus, Trash2, Utensils, FileText, Check
+    UserCheck, Wallet, BriefcaseIcon, Building2, Clock, Users2, Plus, Trash2, Utensils, FileText, Check, PenLine
 } from 'lucide-react';
 import apiClient from '../../services/api';
 
@@ -162,6 +162,8 @@ const NuevoIngresoPage: React.FC = () => {
         socioCostoTratamiento: '', // 67 (Costo)
         socioObsTS: '', // 68
         socioEstudioCampo: '', // 69
+        socioFirmaSolicitanteNombre: '', // 69 - Firma solicitante
+        socioFirmaTraSocialNombre: '', // 69 - Firma trabajador social
     });
 
     // Cargar datos pre-llenados (Primer Contacto) y Catálogos
@@ -367,6 +369,16 @@ const NuevoIngresoPage: React.FC = () => {
     const updateReferenciaRow = (idx: number, field: string, val: string) => {
         const newList = [...formData.socioReferenciasDetalle];
         newList[idx] = { ...newList[idx], [field]: val };
+        updateField('socioReferenciasDetalle', newList);
+    };
+
+    const addReferenciaRow = () => {
+        updateField('socioReferenciasDetalle', [...formData.socioReferenciasDetalle, { nombre: '', telefono: '', relacion: '', tiempo: '' }]);
+    };
+
+    const removeReferenciaRow = (index: number) => {
+        if (formData.socioReferenciasDetalle.length <= 1) return;
+        const newList = formData.socioReferenciasDetalle.filter((_, i) => i !== index);
         updateField('socioReferenciasDetalle', newList);
     };
 
@@ -1267,26 +1279,41 @@ const NuevoIngresoPage: React.FC = () => {
                                         </h2>
 
                                         <div style={{ backgroundColor: 'white', padding: '2.5rem', borderRadius: '24px', border: '1px solid #e2e8f0', boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.05)' }}>
-                                            <h3 style={{ fontSize: '14px', fontWeight: '900', color: '#1e293b', marginBottom: '1.25rem', textTransform: 'uppercase' }}>66) Referencias Personales</h3>
-                                            <p style={{ fontSize: '13px', color: '#64748b', marginBottom: '2.5rem', fontWeight: '500' }}>Anotar dos referencias personales del solicitante: nombre completo, teléfono, relación y tiempo de conocerse.</p>
+                                            <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: '2rem' }}>
+                                                <div>
+                                                    <h3 style={{ fontSize: '14px', fontWeight: '900', color: '#1e293b', marginBottom: '0.4rem', textTransform: 'uppercase' }}>66) Referencias Personales</h3>
+                                                    <p style={{ fontSize: '13px', color: '#64748b', fontWeight: '500', margin: 0 }}>Registre las referencias personales del solicitante: nombre, teléfono, relación y tiempo de conocerse.</p>
+                                                </div>
+                                                <button
+                                                    onClick={addReferenciaRow}
+                                                    style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '0.6rem 1.2rem', backgroundColor: '#3b82f6', color: 'white', border: 'none', borderRadius: '10px', fontWeight: '800', fontSize: '13px', cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0 }}
+                                                >
+                                                    <Plus size={15} /> Agregar Referencia
+                                                </button>
+                                            </div>
 
                                             <div style={{ overflowX: 'auto', borderRadius: '16px', border: '1px solid #e2e8f0', backgroundColor: '#fcfcfc' }}>
                                                 <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                                                     <thead>
-                                                        <tr style={{ backgroundColor: 'white', borderBottom: '2px solid #e2e8f0' }}>
+                                                        <tr style={{ backgroundColor: '#f8fafc', borderBottom: '2px solid #e2e8f0' }}>
+                                                            <th style={{ padding: '1rem', textAlign: 'left', fontSize: '11px', fontWeight: '900', color: '#475569', textTransform: 'uppercase' }}>#</th>
                                                             <th style={{ padding: '1rem', textAlign: 'left', fontSize: '11px', fontWeight: '900', color: '#475569', textTransform: 'uppercase' }}>Nombre</th>
                                                             <th style={{ padding: '1rem', textAlign: 'left', fontSize: '11px', fontWeight: '900', color: '#475569', textTransform: 'uppercase' }}>Teléfono</th>
                                                             <th style={{ padding: '1rem', textAlign: 'left', fontSize: '11px', fontWeight: '900', color: '#475569', textTransform: 'uppercase' }}>Relación</th>
                                                             <th style={{ padding: '1rem', textAlign: 'left', fontSize: '11px', fontWeight: '900', color: '#475569', textTransform: 'uppercase' }}>Tiempo de conocerse</th>
+                                                            <th style={{ padding: '1rem', textAlign: 'center', fontSize: '11px', fontWeight: '900', color: '#475569', textTransform: 'uppercase', width: '60px' }}></th>
                                                         </tr>
                                                     </thead>
                                                     <tbody>
                                                         {formData.socioReferenciasDetalle.map((ref, idx) => (
                                                             <tr key={idx} style={{ borderBottom: '1px solid #e2e8f0', backgroundColor: 'white' }}>
+                                                                <td style={{ padding: '12px', textAlign: 'center' }}>
+                                                                    <span style={{ fontSize: '12px', fontWeight: '800', color: '#94a3b8', backgroundColor: '#f1f5f9', width: '28px', height: '28px', borderRadius: '50%', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>{idx + 1}</span>
+                                                                </td>
                                                                 <td style={{ padding: '12px' }}>
                                                                     <div style={{ position: 'relative' }}>
                                                                         <User size={14} style={{ position: 'absolute', left: '0.8rem', top: '50%', transform: 'translateY(-50%)', color: '#94a3b8' }} />
-                                                                        <input type="text" value={ref.nombre} onChange={(e) => updateReferenciaRow(idx, 'nombre', e.target.value)} style={{ ...inputStyle, paddingLeft: '2.2rem', height: '42px', fontSize: '13px', borderRadius: '10px' }} placeholder={idx === 0 ? "Referencia 1" : "Referencia 2"} />
+                                                                        <input type="text" value={ref.nombre} onChange={(e) => updateReferenciaRow(idx, 'nombre', e.target.value)} style={{ ...inputStyle, paddingLeft: '2.2rem', height: '42px', fontSize: '13px', borderRadius: '10px' }} placeholder="Nombre completo" />
                                                                     </div>
                                                                 </td>
                                                                 <td style={{ padding: '12px' }}>
@@ -1307,13 +1334,22 @@ const NuevoIngresoPage: React.FC = () => {
                                                                         <input type="text" value={ref.tiempo} onChange={(e) => updateReferenciaRow(idx, 'tiempo', e.target.value)} style={{ ...inputStyle, paddingLeft: '2.2rem', height: '42px', fontSize: '13px', borderRadius: '10px' }} placeholder="Ej: 5 años" />
                                                                     </div>
                                                                 </td>
+                                                                <td style={{ padding: '12px', textAlign: 'center' }}>
+                                                                    <button
+                                                                        onClick={() => removeReferenciaRow(idx)}
+                                                                        disabled={formData.socioReferenciasDetalle.length <= 1}
+                                                                        style={{ width: '32px', height: '32px', borderRadius: '8px', border: 'none', backgroundColor: formData.socioReferenciasDetalle.length <= 1 ? '#f1f5f9' : '#fff1f2', color: formData.socioReferenciasDetalle.length <= 1 ? '#cbd5e1' : '#f43f5e', cursor: formData.socioReferenciasDetalle.length <= 1 ? 'not-allowed' : 'pointer', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}
+                                                                    >
+                                                                        <Trash2 size={14} />
+                                                                    </button>
+                                                                </td>
                                                             </tr>
                                                         ))}
                                                     </tbody>
                                                 </table>
                                             </div>
 
-                                            <div style={{ marginTop: '2.5rem', backgroundColor: '#eff6ff', padding: '1.25rem', borderRadius: '16px', border: '1px solid #dbeafe', color: '#1e40af', fontSize: '12px', lineHeight: '1.5' }}>
+                                            <div style={{ marginTop: '2rem', backgroundColor: '#eff6ff', padding: '1.25rem', borderRadius: '16px', border: '1px solid #dbeafe', color: '#1e40af', fontSize: '12px', lineHeight: '1.5' }}>
                                                 <strong>Nota:</strong> Estas referencias son fundamentales para el proceso de validación socioeconómica y contacto en caso de emergencia.
                                             </div>
                                         </div>
@@ -1328,11 +1364,13 @@ const NuevoIngresoPage: React.FC = () => {
                                         </h2>
 
                                         <div style={{ backgroundColor: 'white', padding: '2.5rem', borderRadius: '24px', border: '1px solid #e2e8f0', boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.05)' }}>
-                                            <textarea 
-                                                value={formData.socioDiagEconomico} 
-                                                onChange={(e) => updateField('socioDiagEconomico', e.target.value)} 
-                                                placeholder="Escriba libremente el diagnóstico económico basado en el tabulador de costos..."
-                                                style={{ ...inputStyle, paddingLeft: '1rem', height: '400px', resize: 'none', backgroundColor: '#fffbeb', border: '1px solid #fde68a' }} 
+                                            <h3 style={{ fontSize: '14px', fontWeight: '900', color: '#1e293b', marginBottom: '0.5rem', textTransform: 'uppercase' }}>67) Diagnóstico General</h3>
+                                            <p style={{ fontSize: '13px', color: '#64748b', marginBottom: '1.5rem', fontWeight: '500' }}>Describa el diagnóstico socioeconómico general de la familia, basándose en la información recopilada en las secciones anteriores.</p>
+                                            <textarea
+                                                value={formData.socioDiagEconomico}
+                                                onChange={(e) => updateField('socioDiagEconomico', e.target.value)}
+                                                placeholder="Escriba libremente el diagnóstico socioeconómico general..."
+                                                style={{ ...inputStyle, paddingLeft: '1rem', height: '400px', resize: 'vertical', backgroundColor: '#fffbeb', border: '1px solid #fde68a', fontFamily: 'inherit', lineHeight: '1.7' }}
                                             />
                                         </div>
                                     </div>
@@ -1346,30 +1384,110 @@ const NuevoIngresoPage: React.FC = () => {
                                         </h2>
 
                                         <div style={{ backgroundColor: 'white', padding: '2.5rem', borderRadius: '24px', border: '1px solid #e2e8f0', boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.05)' }}>
-                                            <textarea 
-                                                value={formData.socioObsTS} 
-                                                onChange={(e) => updateField('socioObsTS', e.target.value)} 
-                                                placeholder="68) Escriba aquí las observaciones finales del trabajador social..."
-                                                style={{ ...inputStyle, paddingLeft: '1rem', height: '400px', resize: 'none', backgroundColor: '#fcfcfc', border: '1px dotted #3b82f6' }} 
+                                            <h3 style={{ fontSize: '14px', fontWeight: '900', color: '#1e293b', marginBottom: '0.5rem', textTransform: 'uppercase' }}>68) Observaciones del Trabajador Social</h3>
+                                            <p style={{ fontSize: '13px', color: '#64748b', marginBottom: '1.5rem', fontWeight: '500' }}>Registre las observaciones, conclusiones y recomendaciones del trabajador social respecto al caso evaluado.</p>
+                                            <textarea
+                                                value={formData.socioObsTS}
+                                                onChange={(e) => updateField('socioObsTS', e.target.value)}
+                                                placeholder="Escriba aquí las observaciones del trabajador social..."
+                                                style={{ ...inputStyle, paddingLeft: '1rem', height: '400px', resize: 'vertical', backgroundColor: '#f0f9ff', border: '1px solid #bae6fd', fontFamily: 'inherit', lineHeight: '1.7' }}
                                             />
                                         </div>
                                     </div>
                                 )}
 
-                                {/* DIVISIÓN 13: OBSERVACIONES DE LA VISITA DOMICILIARIA (69) */}
+                                {/* DIVISIÓN 13: OBSERVACIONES DE LA VISITA DOMICILIARIA Y FIRMAS (69) */}
                                 {currentSubStep === 13 && (
                                     <div className="animate-fade-in">
                                         <h2 style={{ fontSize: '20px', fontWeight: '900', color: '#0f172a', marginBottom: '2.5rem', display: 'flex', alignItems: 'center', gap: '12px' }}>
-                                            <div style={{ width: '8px', height: '24px', backgroundColor: '#8b5cf6', borderRadius: '4px' }} /> VIII. OBSERVACIONES DE LA VISITA DOMICILIARIA
+                                            <div style={{ width: '8px', height: '24px', backgroundColor: '#8b5cf6', borderRadius: '4px' }} /> VIII. OBSERVACIONES DE LA VISITA DOMICILIARIA Y FIRMAS
                                         </h2>
 
-                                        <div style={{ backgroundColor: 'white', padding: '2.5rem', borderRadius: '24px', border: '1px solid #e2e8f0', boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.05)' }}>
-                                            <textarea 
-                                                value={formData.socioEstudioCampo} 
-                                                onChange={(e) => updateField('socioEstudioCampo', e.target.value)} 
-                                                placeholder="69) Describa los hallazgos de la visita de campo (si aplica)..."
-                                                style={{ ...inputStyle, paddingLeft: '1rem', height: '400px', resize: 'none', backgroundColor: '#f5f3ff', border: '1px solid #ddd6fe' }} 
+                                        {/* Observaciones */}
+                                        <div style={{ backgroundColor: 'white', padding: '2.5rem', borderRadius: '24px', border: '1px solid #e2e8f0', boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.05)', marginBottom: '2rem' }}>
+                                            <h3 style={{ fontSize: '14px', fontWeight: '900', color: '#1e293b', marginBottom: '0.5rem', textTransform: 'uppercase' }}>69) Observaciones de la Visita Domiciliaria</h3>
+                                            <p style={{ fontSize: '13px', color: '#64748b', marginBottom: '1.5rem', fontWeight: '500' }}>Describa los hallazgos y observaciones realizadas durante la visita domiciliaria (si aplica).</p>
+                                            <textarea
+                                                value={formData.socioEstudioCampo}
+                                                onChange={(e) => updateField('socioEstudioCampo', e.target.value)}
+                                                placeholder="Describa los hallazgos de la visita domiciliaria..."
+                                                style={{ ...inputStyle, paddingLeft: '1rem', height: '300px', resize: 'vertical', backgroundColor: '#f5f3ff', border: '1px solid #ddd6fe', fontFamily: 'inherit', lineHeight: '1.7' }}
                                             />
+                                        </div>
+
+                                        {/* Firmas */}
+                                        <div style={{ backgroundColor: 'white', padding: '2.5rem', borderRadius: '24px', border: '1px solid #e2e8f0', boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.05)' }}>
+                                            <h3 style={{ fontSize: '14px', fontWeight: '900', color: '#1e293b', marginBottom: '0.5rem', textTransform: 'uppercase' }}>Firmas de Conformidad</h3>
+                                            <p style={{ fontSize: '13px', color: '#64748b', marginBottom: '2.5rem', fontWeight: '500' }}>Registre los nombres de las personas que firman el estudio socioeconómico.</p>
+
+                                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '2rem' }}>
+                                                {/* Firma del Solicitante */}
+                                                <div style={{ border: '1px solid #e2e8f0', borderRadius: '16px', padding: '1.75rem', backgroundColor: '#fafafa' }}>
+                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '1.25rem' }}>
+                                                        <div style={{ width: '36px', height: '36px', backgroundColor: '#eff6ff', borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                                            <User size={18} color="#3b82f6" />
+                                                        </div>
+                                                        <div>
+                                                            <p style={{ margin: 0, fontSize: '12px', fontWeight: '800', color: '#64748b', textTransform: 'uppercase' }}>Solicitante</p>
+                                                            <p style={{ margin: 0, fontSize: '13px', fontWeight: '700', color: '#1e293b' }}>Nombre y Firma</p>
+                                                        </div>
+                                                    </div>
+
+                                                    <label style={labelStyle}>Nombre Completo</label>
+                                                    <div style={{ position: 'relative', marginBottom: '1.5rem' }}>
+                                                        <User size={14} style={{ position: 'absolute', left: '1rem', top: '50%', transform: 'translateY(-50%)', color: '#94a3b8' }} />
+                                                        <input
+                                                            type="text"
+                                                            value={formData.socioFirmaSolicitanteNombre}
+                                                            onChange={(e) => updateField('socioFirmaSolicitanteNombre', e.target.value)}
+                                                            placeholder="Nombre del solicitante"
+                                                            style={{ ...inputStyle }}
+                                                        />
+                                                    </div>
+
+                                                    <label style={labelStyle}>Firma</label>
+                                                    <div style={{ height: '80px', border: '2px dashed #cbd5e1', borderRadius: '12px', backgroundColor: 'white', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '6px', color: '#94a3b8' }}>
+                                                        <PenLine size={20} />
+                                                        <span style={{ fontSize: '11px', fontWeight: '600' }}>Espacio para firma física</span>
+                                                    </div>
+                                                </div>
+
+                                                {/* Firma del Trabajador Social */}
+                                                <div style={{ border: '1px solid #e2e8f0', borderRadius: '16px', padding: '1.75rem', backgroundColor: '#fafafa' }}>
+                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '1.25rem' }}>
+                                                        <div style={{ width: '36px', height: '36px', backgroundColor: '#f0fdf4', borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                                            <Briefcase size={18} color="#10b981" />
+                                                        </div>
+                                                        <div>
+                                                            <p style={{ margin: 0, fontSize: '12px', fontWeight: '800', color: '#64748b', textTransform: 'uppercase' }}>Trabajador Social</p>
+                                                            <p style={{ margin: 0, fontSize: '13px', fontWeight: '700', color: '#1e293b' }}>Nombre y Firma</p>
+                                                        </div>
+                                                    </div>
+
+                                                    <label style={labelStyle}>Nombre Completo</label>
+                                                    <div style={{ position: 'relative', marginBottom: '1.5rem' }}>
+                                                        <User size={14} style={{ position: 'absolute', left: '1rem', top: '50%', transform: 'translateY(-50%)', color: '#94a3b8' }} />
+                                                        <input
+                                                            type="text"
+                                                            value={formData.socioFirmaTraSocialNombre}
+                                                            onChange={(e) => updateField('socioFirmaTraSocialNombre', e.target.value)}
+                                                            placeholder="Nombre del trabajador social"
+                                                            style={{ ...inputStyle }}
+                                                        />
+                                                    </div>
+
+                                                    <label style={labelStyle}>Firma</label>
+                                                    <div style={{ height: '80px', border: '2px dashed #cbd5e1', borderRadius: '12px', backgroundColor: 'white', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '6px', color: '#94a3b8' }}>
+                                                        <PenLine size={20} />
+                                                        <span style={{ fontSize: '11px', fontWeight: '600' }}>Espacio para firma física</span>
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                            <div style={{ marginTop: '2rem', backgroundColor: '#f0fdf4', padding: '1.25rem', borderRadius: '16px', border: '1px solid #bbf7d0', color: '#166534', fontSize: '12px', lineHeight: '1.5', display: 'flex', alignItems: 'flex-start', gap: '10px' }}>
+                                                <CheckCircle2 size={16} style={{ flexShrink: 0, marginTop: '1px' }} />
+                                                <span>Al completar este paso, el estudio socioeconómico quedará registrado en el sistema. Las firmas físicas deberán plasmarse en la versión impresa del documento.</span>
+                                            </div>
                                         </div>
                                     </div>
                                 )}

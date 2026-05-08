@@ -1,7 +1,10 @@
 import { Outlet, useNavigate, useLocation } from 'react-router-dom';
-import { LogOut, Search, Bell, HeartPulse, Stethoscope, PackageOpen, ShoppingCart, Banknote, ShieldAlert, FileOutput, ChevronRight, Users, Clock, ClipboardList, Plus } from 'lucide-react';
-import { useState } from 'react';
+import { LogOut, Search, Bell, HeartPulse, Stethoscope, PackageOpen, ShoppingCart, Banknote, ShieldAlert, FileOutput, ChevronRight, Users, Clock, ClipboardList, LayoutDashboard, Droplets, FlaskConical, UserCog, ClipboardCheck } from 'lucide-react';
+import { useState, useEffect } from 'react';
 import { useAuthStore } from '../stores/authStore';
+import { notificacionService, type Notificacion } from '../services/notificacion.service';
+import apiClient from '../services/api';
+import marakameLogo from '../assets/Marakame_Logo.png';
 
 export function Layout() {
   const { usuario, logout } = useAuthStore();
@@ -10,16 +13,59 @@ export function Layout() {
 
   const [showNotifications, setShowNotifications] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  const [notificaciones, setNotificaciones] = useState<Notificacion[]>([]);
+  const [unreadCount, setUnreadCount] = useState(0);
 
-  const notificacionesMock = [
-    { id: 1, text: 'Inventario bajo en Paracetamol', time: 'Hace 5 min', unread: true },
-    { id: 2, text: 'Ingreso pendiente de valoración', time: 'Hace 2 horas', unread: true },
-    { id: 3, text: 'Nómina autorizada por Dirección', time: 'Hace 1 día', unread: false }
-  ];
+  const fetchNotificaciones = async () => {
+    try {
+      const res = await notificacionService.getMisNotificaciones();
+      if (res.success) {
+        setNotificaciones(res.data);
+        setUnreadCount(res.data.filter(n => !n.leida).length);
+      }
+    } catch (err) {
+      console.error('Error fetching notifications:', err);
+    }
+  };
+
+  // Heartbeat: actualiza ultimoAcceso en el servidor para el usuario activo
+  const pingUltimoAcceso = async () => {
+    try { await apiClient.get('/auth/me'); } catch { /* silencioso */ }
+  };
+
+  useEffect(() => {
+    fetchNotificaciones();
+    pingUltimoAcceso(); // Al montar el Layout, registrar actividad inmediatamente
+
+    const intervalNotif  = setInterval(fetchNotificaciones, 60000);   // cada 60s
+    const intervalPing   = setInterval(pingUltimoAcceso,   5 * 60000); // cada 5 min
+    return () => {
+      clearInterval(intervalNotif);
+      clearInterval(intervalPing);
+    };
+  }, []);
+
+  const handleMarcarLeida = async (id: number) => {
+    await notificacionService.marcarComoLeida(id);
+    fetchNotificaciones();
+  };
+
+  const handleMarcarTodasLeidas = async () => {
+    await notificacionService.marcarTodasComoLeidas();
+    fetchNotificaciones();
+  };
 
   const handleLogout = () => {
     logout();
     navigate('/login');
+  };
+
+  const getHomeRoute = () => {
+    const rol = usuario?.rol?.toUpperCase();
+    if (rol === 'ADMIN_GENERAL') return '/directora';
+    if (rol === 'RRHH_FINANZAS') return '/nominas';
+    if (rol === 'ADMISIONES') return '/admisiones/dashboard';
+    return '/dashboard';
   };
 
   const navItemStyle = (path: string) => {
@@ -41,7 +87,7 @@ export function Layout() {
   };
 
   return (
-    <div style={{ display: 'flex', minHeight: '100vh', backgroundColor: 'var(--bg)', background: 'radial-gradient(at top left, #f8fafc 0%, #f1f5f9 100%)' }}>
+    <div style={{ display: 'flex', height: '100vh', backgroundColor: 'var(--bg)', background: 'radial-gradient(at top left, #f8fafc 0%, #f1f5f9 100%)', overflow: 'hidden' }}>
       {/* Navigation Sidebar */}
       <aside style={{ 
         width: '280px', 
@@ -52,13 +98,11 @@ export function Layout() {
         boxShadow: '4px 0 24px rgba(0,0,0,0.1)',
         zIndex: 20
       }}>
-        <div style={{ padding: '2rem 1.5rem', display: 'flex', alignItems: 'center', gap: '1rem' }}>
-          <div style={{ background: 'linear-gradient(135deg, var(--primary), #60a5fa)', padding: '0.5rem', borderRadius: '12px', boxShadow: '0 4px 12px rgba(59,130,246,0.3)' }}>
-            <HeartPulse size={28} color="#ffffff" />
-          </div>
-          <h2 style={{ fontFamily: 'var(--heading)', fontSize: '24px', fontWeight: '700', margin: 0, letterSpacing: '0.5px', background: 'linear-gradient(to right, #ffffff, #cbd5e1)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
-            MARAKAME
-          </h2>
+        <div
+          onClick={() => navigate(getHomeRoute())}
+          style={{ padding: '1.5rem 1.5rem', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}
+        >
+          <img src={marakameLogo} alt="Marakame" style={{ width: '100%', maxWidth: '200px', objectFit: 'contain' }} />
         </div>
         
         <div style={{ padding: '0 1.5rem 1.5rem', flex: 1, overflowY: 'auto' }} className="custom-scrollbar">
@@ -95,15 +139,52 @@ export function Layout() {
             </>
           )}
 
-          {/* Módulo Médico */}
-          {(['AREA_MEDICA', 'ENFERMERIA', 'PSICOLOGIA', 'NUTRICION', 'ADMIN_GENERAL'].includes(usuario?.rol || '')) && (
+          {/* Módulo Médico — visible para médico, jefe médico, staff clínico y admin */}
+          {(['AREA_MEDICA', 'JEFE_MEDICO', 'ENFERMERIA', 'PSICOLOGIA', 'NUTRICION', 'ADMIN_GENERAL'].includes(usuario?.rol || '')) && (
             <>
               <div style={{ fontSize: '11px', color: '#64748b', textTransform: 'uppercase', letterSpacing: '1.5px', margin: '2rem 0 1rem 0', fontWeight: '700' }}>Área Médica</div>
-              <div style={navItemStyle('medica')} onClick={() => navigate('/medica')}
-                   onMouseEnter={(e) => { if (!location.pathname.includes('medica')) { e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.05)'; e.currentTarget.style.color = '#e2e8f0'; } }}
-                   onMouseLeave={(e) => { if (!location.pathname.includes('medica')) { e.currentTarget.style.backgroundColor = 'transparent'; e.currentTarget.style.color = '#94a3b8'; } }}
+              <div style={navItemStyle('medico/dashboard')} onClick={() => navigate('/medico/dashboard')}
+                   onMouseEnter={(e) => { if (!location.pathname.includes('medico/dashboard')) { e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.05)'; e.currentTarget.style.color = '#e2e8f0'; } }}
+                   onMouseLeave={(e) => { if (!location.pathname.includes('medico/dashboard')) { e.currentTarget.style.backgroundColor = 'transparent'; e.currentTarget.style.color = '#94a3b8'; } }}
               >
-                <Stethoscope size={20} style={{ marginRight: '1rem' }}/> Médica / Expediente
+                <LayoutDashboard size={20} style={{ marginRight: '1rem' }}/> Inicio
+              </div>
+              <div style={navItemStyle('medica/pacientes')} onClick={() => navigate('/medica/pacientes')}
+                   onMouseEnter={(e) => { if (!location.pathname.includes('medica/pacientes')) { e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.05)'; e.currentTarget.style.color = '#e2e8f0'; } }}
+                   onMouseLeave={(e) => { if (!location.pathname.includes('medica/pacientes')) { e.currentTarget.style.backgroundColor = 'transparent'; e.currentTarget.style.color = '#94a3b8'; } }}
+              >
+                <Stethoscope size={20} style={{ marginRight: '1rem' }}/> Pacientes
+              </div>
+              <div style={navItemStyle('medica/desintoxicacion')} onClick={() => navigate('/medica/desintoxicacion')}
+                   onMouseEnter={(e) => { if (!location.pathname.includes('medica/desintoxicacion')) { e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.05)'; e.currentTarget.style.color = '#e2e8f0'; } }}
+                   onMouseLeave={(e) => { if (!location.pathname.includes('medica/desintoxicacion')) { e.currentTarget.style.backgroundColor = 'transparent'; e.currentTarget.style.color = '#94a3b8'; } }}
+              >
+                <Droplets size={20} style={{ marginRight: '1rem' }}/> Desintoxicación
+              </div>
+              <div style={navItemStyle('medica/laboratorio')} onClick={() => navigate('/medica/laboratorio')}
+                   onMouseEnter={(e) => { if (!location.pathname.includes('medica/laboratorio')) { e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.05)'; e.currentTarget.style.color = '#e2e8f0'; } }}
+                   onMouseLeave={(e) => { if (!location.pathname.includes('medica/laboratorio')) { e.currentTarget.style.backgroundColor = 'transparent'; e.currentTarget.style.color = '#94a3b8'; } }}
+              >
+                <FlaskConical size={20} style={{ marginRight: '1rem' }}/> Laboratorio
+              </div>
+            </>
+          )}
+
+          {/* Jefatura — visible solo para jefe médico y admin */}
+          {(['JEFE_MEDICO', 'ADMIN_GENERAL'].includes(usuario?.rol || '')) && (
+            <>
+              <div style={{ fontSize: '11px', color: '#64748b', textTransform: 'uppercase', letterSpacing: '1.5px', margin: '2rem 0 1rem 0', fontWeight: '700' }}>Jefatura</div>
+              <div style={navItemStyle('jefatura/personal')} onClick={() => navigate('/jefatura/personal')}
+                   onMouseEnter={(e) => { if (!location.pathname.includes('jefatura/personal')) { e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.05)'; e.currentTarget.style.color = '#e2e8f0'; } }}
+                   onMouseLeave={(e) => { if (!location.pathname.includes('jefatura/personal')) { e.currentTarget.style.backgroundColor = 'transparent'; e.currentTarget.style.color = '#94a3b8'; } }}
+              >
+                <UserCog size={20} style={{ marginRight: '1rem' }}/> Personal
+              </div>
+              <div style={navItemStyle('jefatura/solicitudes')} onClick={() => navigate('/jefatura/solicitudes')}
+                   onMouseEnter={(e) => { if (!location.pathname.includes('jefatura/solicitudes')) { e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.05)'; e.currentTarget.style.color = '#e2e8f0'; } }}
+                   onMouseLeave={(e) => { if (!location.pathname.includes('jefatura/solicitudes')) { e.currentTarget.style.backgroundColor = 'transparent'; e.currentTarget.style.color = '#94a3b8'; } }}
+              >
+                <ClipboardCheck size={20} style={{ marginRight: '1rem' }}/> Solicitudes
               </div>
             </>
           )}
@@ -146,7 +227,13 @@ export function Layout() {
           {/* Gerencial */}
           {usuario?.rol === 'ADMIN_GENERAL' && (
             <>
-              <div style={{ fontSize: '11px', color: '#64748b', textTransform: 'uppercase', letterSpacing: '1.5px', margin: '2rem 0 1rem 0', fontWeight: '700' }}>Gerencial</div>
+              <div style={{ fontSize: '11px', color: '#64748b', textTransform: 'uppercase', letterSpacing: '1.5px', margin: '2rem 0 1rem 0', fontWeight: '700' }}>Dirección</div>
+              <div style={navItemStyle('directora')} onClick={() => navigate('/directora')}
+                   onMouseEnter={(e) => { if (!location.pathname.includes('directora')) { e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.05)'; e.currentTarget.style.color = '#e2e8f0'; } }}
+                   onMouseLeave={(e) => { if (!location.pathname.includes('directora')) { e.currentTarget.style.backgroundColor = 'transparent'; e.currentTarget.style.color = '#94a3b8'; } }}
+              >
+                <LayoutDashboard size={20} style={{ marginRight: '1rem' }}/> Panel Ejecutivo
+              </div>
               <div style={navItemStyle('auditoria')} onClick={() => navigate('/auditoria')}
                    onMouseEnter={(e) => { if (!location.pathname.includes('auditoria')) { e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.05)'; e.currentTarget.style.color = '#e2e8f0'; } }}
                    onMouseLeave={(e) => { if (!location.pathname.includes('auditoria')) { e.currentTarget.style.backgroundColor = 'transparent'; e.currentTarget.style.color = '#94a3b8'; } }}
@@ -158,6 +245,12 @@ export function Layout() {
                    onMouseLeave={(e) => { if (!location.pathname.includes('exportaciones')) { e.currentTarget.style.backgroundColor = 'transparent'; e.currentTarget.style.color = '#94a3b8'; } }}
               >
                 <FileOutput size={20} style={{ marginRight: '1rem' }}/> Exportar Datos
+              </div>
+              <div style={navItemStyle('usuarios')} onClick={() => navigate('/usuarios')}
+                   onMouseEnter={(e) => { if (!location.pathname.includes('usuarios')) { e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.05)'; e.currentTarget.style.color = '#e2e8f0'; } }}
+                   onMouseLeave={(e) => { if (!location.pathname.includes('usuarios')) { e.currentTarget.style.backgroundColor = 'transparent'; e.currentTarget.style.color = '#94a3b8'; } }}
+              >
+                <UserCog size={20} style={{ marginRight: '1rem' }}/> Gestión de Usuarios
               </div>
             </>
           )}
@@ -247,22 +340,24 @@ export function Layout() {
                 onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#f1f5f9'}
               >
                 <Bell size={20} color="#475569" />
-                <span style={{ 
-                  position: 'absolute', 
-                  top: '-2px', 
-                  right: '-2px', 
-                  backgroundColor: '#ef4444', 
-                  color: 'white', 
-                  fontSize: '10px', 
-                  height: '18px', 
-                  width: '18px', 
-                  display: 'flex', 
-                  alignItems: 'center', 
-                  justifyContent: 'center', 
-                  borderRadius: '50%', 
-                  fontWeight: 'bold', 
-                  border: '2px solid white' 
-                }}>2</span>
+                {unreadCount > 0 && (
+                  <span style={{ 
+                    position: 'absolute', 
+                    top: '-2px', 
+                    right: '-2px', 
+                    backgroundColor: '#ef4444', 
+                    color: 'white', 
+                    fontSize: '10px', 
+                    height: '18px', 
+                    width: '18px', 
+                    display: 'flex', 
+                    alignItems: 'center', 
+                    justifyContent: 'center', 
+                    borderRadius: '50%', 
+                    fontWeight: 'bold', 
+                    border: '2px solid white' 
+                  }}>{unreadCount}</span>
+                )}
               </button>
 
               {/* Dropdown de Notificaciones */}
@@ -270,30 +365,50 @@ export function Layout() {
                 <div style={{ position: 'absolute', top: 'calc(100% + 10px)', right: '0', width: '340px', backgroundColor: 'white', borderRadius: '16px', boxShadow: 'var(--shadow-lg)', border: '1px solid #f1f5f9', overflow: 'hidden', zIndex: 50, transformOrigin: 'top right', animation: 'fadeIn 0.2s ease-out' }}>
                   <div style={{ padding: '1.25rem', backgroundColor: '#ffffff', borderBottom: '1px solid #f1f5f9', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <h3 style={{ margin: 0, fontSize: '15px', fontWeight: '600', color: '#0f172a' }}>Notificaciones</h3>
-                    <span style={{ fontSize: '12px', color: 'var(--primary)', cursor: 'pointer', fontWeight: '500' }}>Marcar como leídas</span>
+                    <span 
+                      onClick={handleMarcarTodasLeidas}
+                      style={{ fontSize: '12px', color: 'var(--primary)', cursor: 'pointer', fontWeight: '500' }}
+                    >Marcar todas como leídas</span>
                   </div>
-                  <div style={{ maxHeight: '300px', overflowY: 'auto' }}>
-                    {notificacionesMock.map(notif => (
-                      <div key={notif.id} style={{ 
-                        padding: '1.25rem', 
-                        borderBottom: '1px solid #f8fafc', 
-                        backgroundColor: notif.unread ? '#f0f9ff' : 'white', 
-                        cursor: 'pointer',
-                        transition: 'background-color 0.2s ease'
-                      }}
-                      onMouseEnter={(e) => e.currentTarget.style.backgroundColor = notif.unread ? '#e0f2fe' : '#f8fafc'}
-                      onMouseLeave={(e) => e.currentTarget.style.backgroundColor = notif.unread ? '#f0f9ff' : 'white'}
-                      >
-                        <p style={{ margin: 0, fontSize: '14px', color: '#334155', fontWeight: notif.unread ? '600' : '400', lineHeight: '1.4' }}>{notif.text}</p>
-                        <p style={{ margin: 0, fontSize: '12px', color: '#94a3b8', marginTop: '0.5rem', display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
-                          <span style={{ width: '6px', height: '6px', borderRadius: '50%', backgroundColor: notif.unread ? 'var(--primary)' : 'transparent' }}></span>
-                          {notif.time}
-                        </p>
-                      </div>
-                    ))}
-                  </div>
-                  <div style={{ padding: '1rem', textAlign: 'center', fontSize: '13px', color: 'var(--primary)', cursor: 'pointer', backgroundColor: '#f8fafc', fontWeight: '500', transition: 'background 0.2s ease' }} onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#f1f5f9'} onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#f8fafc'}>
-                    Ver todas las notificaciones
+                  <div style={{ maxHeight: '350px', overflowY: 'auto' }}>
+                    {notificaciones.length === 0 ? (
+                      <div style={{ padding: '2rem', textAlign: 'center', color: '#94a3b8', fontSize: '14px' }}>No hay notificaciones</div>
+                    ) : (
+                      notificaciones.map(notif => (
+                        <div key={notif.id} 
+                        onClick={() => {
+                          if (!notif.leida) handleMarcarLeida(notif.id);
+                          if (notif.link) navigate(notif.link);
+                          setShowNotifications(false);
+                        }}
+                        style={{ 
+                          padding: '1.25rem', 
+                          borderBottom: '1px solid #f8fafc', 
+                          backgroundColor: !notif.leida ? '#f0f9ff' : 'white', 
+                          cursor: 'pointer',
+                          transition: 'background-color 0.2s ease'
+                        }}
+                        onMouseEnter={(e) => e.currentTarget.style.backgroundColor = !notif.leida ? '#e0f2fe' : '#f8fafc'}
+                        onMouseLeave={(e) => e.currentTarget.style.backgroundColor = !notif.leida ? '#f0f9ff' : 'white'}
+                        >
+                          <div style={{ display: 'flex', gap: '0.75rem' }}>
+                            <div style={{ 
+                              width: '8px', height: '8px', borderRadius: '50%', 
+                              backgroundColor: notif.tipo === 'ERROR' ? '#ef4444' : (notif.tipo === 'ALERTA' ? '#f59e0b' : '#3b82f6'),
+                              marginTop: '5px', flexShrink: 0,
+                              display: notif.leida ? 'none' : 'block'
+                            }}></div>
+                            <div>
+                              <p style={{ margin: 0, fontSize: '14px', color: '#334155', fontWeight: !notif.leida ? '600' : '500', lineHeight: '1.4' }}>{notif.titulo}</p>
+                              <p style={{ margin: '0.25rem 0 0', fontSize: '13px', color: '#64748b', lineHeight: '1.4' }}>{notif.mensaje}</p>
+                              <p style={{ margin: 0, fontSize: '11px', color: '#94a3b8', marginTop: '0.5rem' }}>
+                                {new Date(notif.createdAt).toLocaleString()}
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+                      ))
+                    )}
                   </div>
                 </div>
               )}

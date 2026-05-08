@@ -1,24 +1,33 @@
 import React, { useState } from 'react';
+import { Stethoscope, Pill, CalendarDays, X, Save } from 'lucide-react';
 import TimelineNotas from './TimelineNotas';
 import SignosVitalesTable from './SignosVitalesTable';
+import SeccionTratamientos from './SeccionTratamientos';
+import SeccionCitas from './SeccionCitas';
 import apiClient from '../../services/api';
-import {
-  X,
-  Save,
-  Pill
-} from 'lucide-react';
+import { useAuthStore } from '../../stores/authStore';
+
+type SubTab = 'notas' | 'tratamientos' | 'citas';
 
 interface SeccionMedicaProps {
-  expediente: any; // El objeto expediente completo con notas y signos
+  expediente: any;
   onRefresh: () => void;
 }
 
+const SUB_TABS: { id: SubTab; label: string; icon: React.ReactNode; color: string }[] = [
+  { id: 'notas',        label: 'Notas y Signos',  icon: <Stethoscope size={16} />, color: '#10b981' },
+  { id: 'tratamientos', label: 'Tratamientos',    icon: <Pill size={16} />,        color: '#d97706' },
+  { id: 'citas',        label: 'Agenda',          icon: <CalendarDays size={16} />, color: '#7c3aed' },
+];
+
 const SeccionMedica: React.FC<SeccionMedicaProps> = ({ expediente, onRefresh }) => {
+  const { usuario } = useAuthStore();
+  const puedeCapturaClinica = ['AREA_MEDICA', 'ENFERMERIA', 'ADMIN_GENERAL'].includes(usuario?.rol ?? '');
+  const [subTab, setSubTab] = useState<SubTab>('notas');
   const [showModalNota, setShowModalNota] = useState(false);
   const [showModalSignos, setShowModalSignos] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
 
-  // Estados de formularios
   const [nuevaNota, setNuevaNota] = useState({ tipo: 'GENERAL', nota: '' });
   const [nuevosSignos, setNuevosSignos] = useState({
     presionArterial: '',
@@ -28,7 +37,7 @@ const SeccionMedica: React.FC<SeccionMedicaProps> = ({ expediente, onRefresh }) 
     oxigenacion: '',
     glucosa: '',
     peso: '',
-    observaciones: ''
+    observaciones: '',
   });
 
   const handleSaveNota = async () => {
@@ -39,7 +48,7 @@ const SeccionMedica: React.FC<SeccionMedicaProps> = ({ expediente, onRefresh }) 
       setShowModalNota(false);
       setNuevaNota({ tipo: 'GENERAL', nota: '' });
       onRefresh();
-    } catch (error) {
+    } catch {
       alert('Error al guardar la nota médica');
     } finally {
       setIsSaving(false);
@@ -59,10 +68,10 @@ const SeccionMedica: React.FC<SeccionMedicaProps> = ({ expediente, onRefresh }) 
         oxigenacion: '',
         glucosa: '',
         peso: '',
-        observaciones: ''
+        observaciones: '',
       });
       onRefresh();
-    } catch (error) {
+    } catch {
       alert('Error al registrar signos vitales');
     } finally {
       setIsSaving(false);
@@ -70,51 +79,72 @@ const SeccionMedica: React.FC<SeccionMedicaProps> = ({ expediente, onRefresh }) 
   };
 
   return (
-    <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) 400px', gap: '2rem', animation: 'fadeIn 0.3s ease' }}>
-      
-      {/* Columna Izquierda: Línea de Tiempo de Notas */}
-      <div style={{ backgroundColor: 'white', borderRadius: '24px', border: '1px solid #e2e8f0', padding: '2rem' }}>
-        <TimelineNotas 
-          notas={expediente.notasEvolucion || []} 
-          onAddNota={() => setShowModalNota(true)} 
-        />
+    <div style={{ animation: 'fadeIn 0.3s ease' }}>
+
+      {/* Sub-navegación interna */}
+      <div style={{
+        display: 'flex', gap: '0.5rem', marginBottom: '1.75rem',
+        borderBottom: '1px solid #f1f5f9', paddingBottom: '0'
+      }}>
+        {SUB_TABS.map(tab => (
+          <button
+            key={tab.id}
+            onClick={() => setSubTab(tab.id)}
+            style={{
+              display: 'flex', alignItems: 'center', gap: '0.5rem',
+              padding: '0.75rem 1.25rem', border: 'none', background: 'none',
+              fontSize: '14px', fontWeight: '700',
+              color: subTab === tab.id ? tab.color : '#94a3b8',
+              borderBottom: subTab === tab.id ? `3px solid ${tab.color}` : '3px solid transparent',
+              cursor: 'pointer', transition: 'all 0.15s ease'
+            }}
+          >
+            {tab.icon}
+            {tab.label}
+          </button>
+        ))}
       </div>
 
-      {/* Columna Derecha: Signos Vitales y Alertas */}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
-        <div style={{ backgroundColor: 'white', borderRadius: '24px', border: '1px solid #e2e8f0', padding: '2rem' }}>
-          <SignosVitalesTable 
-            signos={expediente.signosVitales || []} 
-            onAddSignos={() => setShowModalSignos(true)} 
-          />
-        </div>
-        
-        {/* Info: Tratamientos en pestaña dedicada */}
-        <div style={{ backgroundColor: '#eff6ff', borderRadius: '24px', border: '1px solid #bfdbfe', padding: '1.5rem', color: '#1e40af' }}>
-          <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
-            <Pill size={20} color="#3b82f6" />
-            <span style={{ fontWeight: 'bold', fontSize: '14px' }}>Tratamientos Farmacológicos</span>
+      {/* Contenido según sub-tab */}
+      {subTab === 'notas' && (
+        <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) 400px', gap: '2rem' }}>
+          <div style={{ backgroundColor: 'white', borderRadius: '24px', border: '1px solid #e2e8f0', padding: '2rem' }}>
+            <TimelineNotas
+              notas={expediente.notasEvolucion || []}
+              onAddNota={puedeCapturaClinica ? () => setShowModalNota(true) : undefined}
+            />
           </div>
-          <p style={{ fontSize: '13px', margin: '8px 0 0', color: '#1d4ed8' }}>
-            Gestiona medicamentos, dosis y registro de suministros en la pestaña <strong>Tratamientos</strong>.
-          </p>
+          <div style={{ backgroundColor: 'white', borderRadius: '24px', border: '1px solid #e2e8f0', padding: '2rem' }}>
+            <SignosVitalesTable
+              signos={expediente.signosVitales || []}
+              onAddSignos={puedeCapturaClinica ? () => setShowModalSignos(true) : undefined}
+            />
+          </div>
         </div>
-      </div>
+      )}
 
-      {/* Modal Nueva Nota */}
+      {subTab === 'tratamientos' && (
+        <SeccionTratamientos expedienteId={expediente.id} />
+      )}
+
+      {subTab === 'citas' && (
+        <SeccionCitas pacienteId={expediente.paciente?.id ?? expediente.pacienteId} />
+      )}
+
+      {/* Modal: Nueva Nota */}
       {showModalNota && (
-        <div style={modalOverlayStyle}>
-          <div style={modalContentStyle}>
-            <div style={modalHeaderStyle}>
+        <div style={overlayStyle}>
+          <div style={modalStyle}>
+            <div style={headerStyle}>
               <h3 style={{ margin: 0 }}>Nueva Nota de Evolución</h3>
-              <X cursor="pointer" onClick={() => setShowModalNota(false)} />
+              <X size={20} style={{ cursor: 'pointer', color: '#94a3b8' }} onClick={() => setShowModalNota(false)} />
             </div>
-            <div style={modalBodyStyle}>
-              <div style={formGroupStyle}>
+            <div style={{ padding: '2rem' }}>
+              <div style={groupStyle}>
                 <label style={labelStyle}>Tipo de Nota</label>
-                <select 
+                <select
                   value={nuevaNota.tipo}
-                  onChange={e => setNuevaNota({...nuevaNota, tipo: e.target.value})}
+                  onChange={e => setNuevaNota({ ...nuevaNota, tipo: e.target.value })}
                   style={inputStyle}
                 >
                   <option value="GENERAL">General</option>
@@ -124,17 +154,17 @@ const SeccionMedica: React.FC<SeccionMedicaProps> = ({ expediente, onRefresh }) 
                   <option value="ENFERMERIA">Enfermería</option>
                 </select>
               </div>
-              <div style={formGroupStyle}>
+              <div style={groupStyle}>
                 <label style={labelStyle}>Contenido de la Nota</label>
-                <textarea 
+                <textarea
                   rows={10}
                   value={nuevaNota.nota}
-                  onChange={e => setNuevaNota({...nuevaNota, nota: e.target.value})}
+                  onChange={e => setNuevaNota({ ...nuevaNota, nota: e.target.value })}
                   placeholder="Escriba los detalles de la evolución del paciente..."
                   style={{ ...inputStyle, fontFamily: 'inherit', resize: 'vertical', whiteSpace: 'pre-wrap' }}
                 />
               </div>
-              <button onClick={handleSaveNota} disabled={isSaving} style={btnSaveStyle}>
+              <button onClick={handleSaveNota} disabled={isSaving} style={{ ...btnStyle, backgroundColor: '#10b981' }}>
                 {isSaving ? 'Guardando...' : <><Save size={18} /> Guardar Nota Médica</>}
               </button>
             </div>
@@ -142,54 +172,40 @@ const SeccionMedica: React.FC<SeccionMedicaProps> = ({ expediente, onRefresh }) 
         </div>
       )}
 
-      {/* Modal Registrar Signos */}
+      {/* Modal: Registrar Signos */}
       {showModalSignos && (
-        <div style={modalOverlayStyle}>
-          <div style={modalContentStyle}>
-            <div style={modalHeaderStyle}>
+        <div style={overlayStyle}>
+          <div style={modalStyle}>
+            <div style={headerStyle}>
               <h3 style={{ margin: 0 }}>Registrar Signos Vitales</h3>
-              <X cursor="pointer" onClick={() => setShowModalSignos(false)} />
+              <X size={20} style={{ cursor: 'pointer', color: '#94a3b8' }} onClick={() => setShowModalSignos(false)} />
             </div>
-            <div style={modalBodyStyle}>
+            <div style={{ padding: '2rem' }}>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
-                <div style={formGroupStyle}>
-                  <label style={labelStyle}>Presión Arterial</label>
-                  <input type="text" placeholder="120/80" value={nuevosSignos.presionArterial} onChange={e => setNuevosSignos({...nuevosSignos, presionArterial: e.target.value})} style={inputStyle} />
-                </div>
-                <div style={formGroupStyle}>
-                  <label style={labelStyle}>Temperatura (°C)</label>
-                  <input type="number" step="0.1" placeholder="36.5" value={nuevosSignos.temperatura} onChange={e => setNuevosSignos({...nuevosSignos, temperatura: e.target.value})} style={inputStyle} />
-                </div>
-                <div style={formGroupStyle}>
-                  <label style={labelStyle}>Frec. Cardíaca (lpm)</label>
-                  <input type="number" placeholder="70" value={nuevosSignos.frecuenciaCardiaca} onChange={e => setNuevosSignos({...nuevosSignos, frecuenciaCardiaca: e.target.value})} style={inputStyle} />
-                </div>
-                <div style={formGroupStyle}>
-                  <label style={labelStyle}>Frec. Respiratoria (rpm)</label>
-                  <input type="number" placeholder="16" value={nuevosSignos.frecuenciaRespiratoria} onChange={e => setNuevosSignos({...nuevosSignos, frecuenciaRespiratoria: e.target.value})} style={inputStyle} />
-                </div>
-                <div style={formGroupStyle}>
-                  <label style={labelStyle}>Oxigenación (%)</label>
-                  <input type="number" placeholder="98" value={nuevosSignos.oxigenacion} onChange={e => setNuevosSignos({...nuevosSignos, oxigenacion: e.target.value})} style={inputStyle} />
-                </div>
-                <div style={formGroupStyle}>
-                  <label style={labelStyle}>Glucosa (mg/dL)</label>
-                  <input type="number" step="0.1" placeholder="90" value={nuevosSignos.glucosa} onChange={e => setNuevosSignos({...nuevosSignos, glucosa: e.target.value})} style={inputStyle} />
-                </div>
-                <div style={formGroupStyle}>
-                  <label style={labelStyle}>Peso (kg)</label>
-                  <input type="number" step="0.1" value={nuevosSignos.peso} onChange={e => setNuevosSignos({...nuevosSignos, peso: e.target.value})} style={inputStyle} />
-                </div>
-                <div style={formGroupStyle}>
-                  <label style={labelStyle}>Observaciones</label>
-                  <input type="text" placeholder="Opcional" value={nuevosSignos.observaciones} onChange={e => setNuevosSignos({...nuevosSignos, observaciones: e.target.value})} style={inputStyle} />
-                </div>
+                {[
+                  { label: 'Presión Arterial',         key: 'presionArterial',        ph: '120/80', type: 'text'   },
+                  { label: 'Temperatura (°C)',           key: 'temperatura',            ph: '36.5',   type: 'number' },
+                  { label: 'Frec. Cardíaca (lpm)',       key: 'frecuenciaCardiaca',     ph: '70',     type: 'number' },
+                  { label: 'Frec. Respiratoria (rpm)',   key: 'frecuenciaRespiratoria', ph: '16',     type: 'number' },
+                  { label: 'Oxigenación (%)',             key: 'oxigenacion',            ph: '98',     type: 'number' },
+                  { label: 'Glucosa (mg/dL)',             key: 'glucosa',                ph: '90',     type: 'number' },
+                  { label: 'Peso (kg)',                   key: 'peso',                   ph: '70',     type: 'number' },
+                  { label: 'Observaciones',               key: 'observaciones',          ph: 'Opcional', type: 'text' },
+                ].map(({ label, key, ph, type }) => (
+                  <div key={key} style={groupStyle}>
+                    <label style={labelStyle}>{label}</label>
+                    <input
+                      type={type}
+                      step="0.1"
+                      placeholder={ph}
+                      value={(nuevosSignos as any)[key]}
+                      onChange={e => setNuevosSignos({ ...nuevosSignos, [key]: e.target.value })}
+                      style={inputStyle}
+                    />
+                  </div>
+                ))}
               </div>
-              <button 
-                onClick={handleSaveSignos} 
-                disabled={isSaving}
-                style={{ ...btnSaveStyle, backgroundColor: '#10b981', boxShadow: '0 4px 6px -1px rgba(16,185,129,0.3)' }}
-              >
+              <button onClick={handleSaveSignos} disabled={isSaving} style={{ ...btnStyle, backgroundColor: '#10b981', marginTop: '0.5rem' }}>
                 {isSaving ? 'Registrando...' : <><Save size={18} /> Guardar Registro</>}
               </button>
             </div>
@@ -200,14 +216,12 @@ const SeccionMedica: React.FC<SeccionMedicaProps> = ({ expediente, onRefresh }) 
   );
 };
 
-// Estilos rápidos (pueden venir de un sistema de diseño real)
-const modalOverlayStyle: React.CSSProperties = { position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 };
-const modalContentStyle: React.CSSProperties = { backgroundColor: 'white', borderRadius: '24px', width: '90%', maxWidth: '600px', boxShadow: '0 25px 50px -12px rgba(0,0,0,0.25)' };
-const modalHeaderStyle: React.CSSProperties = { padding: '1.5rem 2rem', borderBottom: '1px solid #f1f5f9', display: 'flex', justifyContent: 'space-between', alignItems: 'center' };
-const modalBodyStyle: React.CSSProperties = { padding: '2rem' };
-const formGroupStyle: React.CSSProperties = { marginBottom: '1.25rem' };
+const overlayStyle: React.CSSProperties = { position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 };
+const modalStyle: React.CSSProperties = { backgroundColor: 'white', borderRadius: '24px', width: '90%', maxWidth: '600px', boxShadow: '0 25px 50px -12px rgba(0,0,0,0.25)', maxHeight: '90vh', overflowY: 'auto' };
+const headerStyle: React.CSSProperties = { padding: '1.5rem 2rem', borderBottom: '1px solid #f1f5f9', display: 'flex', justifyContent: 'space-between', alignItems: 'center' };
+const groupStyle: React.CSSProperties = { marginBottom: '1.25rem' };
 const labelStyle: React.CSSProperties = { display: 'block', fontSize: '13px', fontWeight: 'bold', color: '#64748b', marginBottom: '0.5rem' };
-const inputStyle: React.CSSProperties = { width: '100%', padding: '0.75rem 1rem', borderRadius: '12px', border: '1px solid #e2e8f0', outline: 'none', transition: 'border-color 0.2s' };
-const btnSaveStyle: React.CSSProperties = { width: '100%', padding: '1rem', backgroundColor: '#3b82f6', color: 'white', border: 'none', borderRadius: '12px', fontWeight: 'bold', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', marginTop: '1rem' };
+const inputStyle: React.CSSProperties = { width: '100%', padding: '0.75rem 1rem', borderRadius: '12px', border: '1px solid #e2e8f0', outline: 'none', transition: 'border-color 0.2s', boxSizing: 'border-box' };
+const btnStyle: React.CSSProperties = { width: '100%', padding: '1rem', color: 'white', border: 'none', borderRadius: '12px', fontWeight: 'bold', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', marginTop: '1rem' };
 
 export default SeccionMedica;

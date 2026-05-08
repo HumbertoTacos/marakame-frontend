@@ -9,7 +9,7 @@ import type { NotaEvolucion, TipoNota } from '../../types';
 
 interface TimelineNotasProps {
   notas: NotaEvolucion[];
-  onAddNota: () => void;
+  onAddNota?: () => void;
 }
 
 const TimelineNotas: React.FC<TimelineNotasProps> = ({ notas, onAddNota }) => {
@@ -38,24 +38,26 @@ const TimelineNotas: React.FC<TimelineNotasProps> = ({ notas, onAddNota }) => {
           </div>
         </div>
         
-        <button 
-          onClick={onAddNota}
-          style={{ 
-            display: 'flex', 
-            alignItems: 'center', 
-            gap: '0.6rem', 
-            padding: '0.75rem 1.25rem', 
-            backgroundColor: '#3b82f6', 
-            color: 'white', 
-            border: 'none', 
-            borderRadius: '12px', 
-            fontWeight: 'bold', 
-            cursor: 'pointer',
-            boxShadow: '0 4px 6px -1px rgba(59,130,246,0.3)'
-          }}
-        >
-          <Plus size={18} /> Agregar Nota
-        </button>
+        {onAddNota && (
+          <button
+            onClick={onAddNota}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.6rem',
+              padding: '0.75rem 1.25rem',
+              backgroundColor: '#3b82f6',
+              color: 'white',
+              border: 'none',
+              borderRadius: '12px',
+              fontWeight: 'bold',
+              cursor: 'pointer',
+              boxShadow: '0 4px 6px -1px rgba(59,130,246,0.3)'
+            }}
+          >
+            <Plus size={18} /> Agregar Nota
+          </button>
+        )}
       </div>
 
       {/* Timeline List */}
