@@ -3,7 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   Activity, Search, Stethoscope, Users, Calendar, X,
   Trash2, Folder, ClipboardList, HeartPulse, Building2, History,
-  ChevronDown, Download, FilePen, Brain, Apple, Heart, ExternalLink, Droplets,
+  ChevronDown, Download, FilePen, Brain, Apple, Heart, ExternalLink, Droplets, LogOut,
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import apiClient from '../../services/api';
@@ -764,6 +764,15 @@ export function AreaMedica() {
 
                         {/* Action buttons */}
                         <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+                          {(usuario?.rol === 'AREA_MEDICA' || usuario?.rol === 'JEFE_MEDICO' || usuario?.rol === 'ADMIN_GENERAL') && (
+                            <button
+                              onClick={() => navigate(`/medica/egreso/${pac.id}`)}
+                              style={actionBtn('#ef4444')}
+                              title="Iniciar proceso de egreso"
+                            >
+                              <LogOut size={13} /> Egreso
+                            </button>
+                          )}
                           {/* Expediente dropdown */}
                           <div style={{ position: 'relative' }}>
                             <button

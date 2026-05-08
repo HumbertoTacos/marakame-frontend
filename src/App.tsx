@@ -20,6 +20,7 @@ const DesintoxicacionPage = lazy(() => import('./pages/medica/DesintoxicacionPag
 const LaboratorioPage = lazy(() => import('./pages/medica/LaboratorioPage'));
 const PersonalPage = lazy(() => import('./pages/medica/PersonalPage'));
 const SolicitudesPage = lazy(() => import('./pages/medica/SolicitudesPage'));
+const EgresoPacientePage = lazy(() => import('./pages/medica/EgresoPacientePage'));
 const MedicoExpedienteDigitalPage = lazy(() => import('./pages/medico/ExpedienteDigitalPage'));
 const Bitacora = lazy(() => import('./pages/transversal/Bitacora').then(m => ({ default: m.Bitacora })));
 const Reportes = lazy(() => import('./pages/transversal/Reportes').then(m => ({ default: m.Reportes })));
@@ -35,6 +36,9 @@ const ExpedienteDigitalPage = lazy(() => import('./pages/admisiones/ExpedienteDi
 const SeguimientoProspectosPage = lazy(() => import('./pages/admisiones/SeguimientoProspectosPage'));
 const WizardPertenencias = lazy(() => import('./pages/admisiones/WizardPertenencias'));
 const DetalleNomina = lazy(() => import('./pages/nominas/DetalleNomina').then(m => ({ default: m.DetalleNomina })));
+
+const UsuariosPage = lazy(() => import('./pages/admin/UsuariosPage'));
+const DashboardDirectora = lazy(() => import('./pages/admin/DashboardDirectora'));
 // Loader Premium para Suspense
 const PageLoader = () => (
   <div style={{
@@ -101,6 +105,11 @@ function App() {
               <Route path="desintoxicacion" element={<DesintoxicacionPage />} />
               <Route path="laboratorio" element={<LaboratorioPage />} />
               <Route path="expediente/:id" element={<MedicoExpedienteDigitalPage />} />
+              <Route path="egreso/:id" element={
+                <ProtectedRoute allowedRoles={['AREA_MEDICA', 'ADMIN_GENERAL']}>
+                  <EgresoPacientePage />
+                </ProtectedRoute>
+              } />
             </Route>
 
             {/* Módulo Jefatura */}
@@ -148,6 +157,19 @@ function App() {
                 <Reportes />
               </ProtectedRoute>
             } />
+
+            <Route path="usuarios" element={
+              <ProtectedRoute allowedRoles={['ADMIN_GENERAL']}>
+                <UsuariosPage />
+              </ProtectedRoute>
+            } />
+
+            <Route path="directora" element={
+              <ProtectedRoute allowedRoles={['ADMIN_GENERAL']}>
+                <DashboardDirectora />
+              </ProtectedRoute>
+            } />
+
           </Route>
 
           <Route path="/unauthorized" element={<h2>No tienes permisos para ver esta página</h2>} />
