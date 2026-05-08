@@ -34,7 +34,7 @@ const ValoracionMedicaPage = lazy(() => import('./pages/admisiones/ValoracionMed
 const ExpedienteDigitalPage = lazy(() => import('./pages/admisiones/ExpedienteDigitalPage').then(m => ({ default: m.ExpedienteDigitalPage })));
 const SeguimientoProspectosPage = lazy(() => import('./pages/admisiones/SeguimientoProspectosPage'));
 const WizardPertenencias = lazy(() => import('./pages/admisiones/WizardPertenencias'));
-
+const DetalleNomina = lazy(() => import('./pages/nominas/DetalleNomina').then(m => ({ default: m.DetalleNomina })));
 // Loader Premium para Suspense
 const PageLoader = () => (
   <div style={{
@@ -133,6 +133,7 @@ function App() {
             }>
               <Route index element={<Nominas />} />
               <Route path="nueva" element={<GenerarPreNomina />} />
+              <Route path=":id" element={<DetalleNomina />} />
             </Route>
 
             <Route path="auditoria" element={
@@ -140,6 +141,7 @@ function App() {
                 <Bitacora />
               </ProtectedRoute>
             } />
+
 
             <Route path="exportaciones" element={
               <ProtectedRoute allowedRoles={['ADMIN_GENERAL']}>
