@@ -15,6 +15,13 @@ const Nominas = lazy(() => import('./pages/nominas/NominasDashboard'));
 const GenerarPreNomina = lazy(() => import('./pages/nominas/GenerarPrenomina'));
 
 const AreaMedica = lazy(() => import('./pages/medica/AreaMedica').then(m => ({ default: m.AreaMedica })));
+const DashboardMedico = lazy(() => import('./pages/medico/DashboardMedico').then(m => ({ default: m.DashboardMedico })));
+const DesintoxicacionPage = lazy(() => import('./pages/medica/DesintoxicacionPage'));
+const EvolucionPage = lazy(() => import('./pages/medica/EvolucionPage'));
+const LaboratorioPage = lazy(() => import('./pages/medica/LaboratorioPage'));
+const MedicamentosPage = lazy(() => import('./pages/medica/MedicamentosPage'));
+const PersonalPage = lazy(() => import('./pages/medica/PersonalPage'));
+const SolicitudesPage = lazy(() => import('./pages/medica/SolicitudesPage'));
 const Bitacora = lazy(() => import('./pages/transversal/Bitacora').then(m => ({ default: m.Bitacora })));
 const Reportes = lazy(() => import('./pages/transversal/Reportes').then(m => ({ default: m.Reportes })));
 
@@ -56,7 +63,7 @@ function App() {
             
             {/* Módulo de Admisiones */}
             <Route path="admisiones" element={
-              <ProtectedRoute allowedRoles={['ADMISIONES', 'ADMIN_GENERAL', 'AREA_MEDICA', 'PSICOLOGIA']}>
+              <ProtectedRoute allowedRoles={['ADMISIONES', 'ADMIN_GENERAL', 'AREA_MEDICA', 'JEFE_MEDICO', 'PSICOLOGIA']}>
                 <Outlet />
               </ProtectedRoute>
             }>
@@ -69,7 +76,7 @@ function App() {
               <Route path="valoracion-medica/:id" element={<ValoracionMedicaPage />} />
               <Route path="seguimiento" element={<SeguimientoProspectosPage />} />
               <Route path="expediente/:pacienteId" element={
-                <ProtectedRoute allowedRoles={['ADMIN_GENERAL', 'AREA_MEDICA', 'ENFERMERIA', 'PSICOLOGIA', 'NUTRICION', 'ADMISIONES']}>
+                <ProtectedRoute allowedRoles={['ADMIN_GENERAL', 'AREA_MEDICA', 'JEFE_MEDICO', 'ENFERMERIA', 'PSICOLOGIA', 'NUTRICION', 'ADMISIONES']}>
                   <ExpedienteDigitalPage />
                 </ProtectedRoute>
               } />
@@ -77,11 +84,34 @@ function App() {
               <Route path="estudio-socioeconomico/:id" element={<EstudioSocioeconomicoPage />} />
             </Route>
             
-            <Route path="medica" element={
-              <ProtectedRoute allowedRoles={['AREA_MEDICA', 'ENFERMERIA', 'PSICOLOGIA', 'NUTRICION', 'ADMIN_GENERAL']}>
-                <AreaMedica />
+            <Route path="medico/dashboard" element={
+              <ProtectedRoute allowedRoles={['AREA_MEDICA', 'JEFE_MEDICO', 'ENFERMERIA', 'PSICOLOGIA', 'NUTRICION', 'ADMIN_GENERAL']}>
+                <DashboardMedico />
               </ProtectedRoute>
             } />
+
+            {/* Módulo Área Médica */}
+            <Route path="medica" element={
+              <ProtectedRoute allowedRoles={['AREA_MEDICA', 'JEFE_MEDICO', 'ENFERMERIA', 'PSICOLOGIA', 'NUTRICION', 'ADMIN_GENERAL']}>
+                <Outlet />
+              </ProtectedRoute>
+            }>
+              <Route path="pacientes" element={<AreaMedica />} />
+              <Route path="desintoxicacion" element={<DesintoxicacionPage />} />
+              <Route path="evolucion" element={<EvolucionPage />} />
+              <Route path="laboratorio" element={<LaboratorioPage />} />
+            </Route>
+
+            {/* Módulo Jefatura */}
+            <Route path="jefatura" element={
+              <ProtectedRoute allowedRoles={['JEFE_MEDICO', 'ADMIN_GENERAL']}>
+                <Outlet />
+              </ProtectedRoute>
+            }>
+              <Route path="medicamentos" element={<MedicamentosPage />} />
+              <Route path="personal" element={<PersonalPage />} />
+              <Route path="solicitudes" element={<SolicitudesPage />} />
+            </Route>
             
             <Route path="almacen" element={
               <ProtectedRoute allowedRoles={['ALMACEN', 'ADMIN_GENERAL']}>

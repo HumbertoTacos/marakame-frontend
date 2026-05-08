@@ -1,5 +1,5 @@
 import { Outlet, useNavigate, useLocation } from 'react-router-dom';
-import { LogOut, Search, Bell, HeartPulse, Stethoscope, PackageOpen, ShoppingCart, Banknote, ShieldAlert, FileOutput, ChevronRight, Users, Clock, ClipboardList, Plus } from 'lucide-react';
+import { LogOut, Search, Bell, HeartPulse, Stethoscope, PackageOpen, ShoppingCart, Banknote, ShieldAlert, FileOutput, ChevronRight, Users, Clock, ClipboardList, LayoutDashboard, Droplets, TrendingUp, FlaskConical, Pill, UserCog, ClipboardCheck } from 'lucide-react';
 import { useState } from 'react';
 import { useAuthStore } from '../stores/authStore';
 
@@ -95,15 +95,64 @@ export function Layout() {
             </>
           )}
 
-          {/* Módulo Médico */}
-          {(['AREA_MEDICA', 'ENFERMERIA', 'PSICOLOGIA', 'NUTRICION', 'ADMIN_GENERAL'].includes(usuario?.rol || '')) && (
+          {/* Módulo Médico — visible para médico, jefe médico, staff clínico y admin */}
+          {(['AREA_MEDICA', 'JEFE_MEDICO', 'ENFERMERIA', 'PSICOLOGIA', 'NUTRICION', 'ADMIN_GENERAL'].includes(usuario?.rol || '')) && (
             <>
               <div style={{ fontSize: '11px', color: '#64748b', textTransform: 'uppercase', letterSpacing: '1.5px', margin: '2rem 0 1rem 0', fontWeight: '700' }}>Área Médica</div>
-              <div style={navItemStyle('medica')} onClick={() => navigate('/medica')}
-                   onMouseEnter={(e) => { if (!location.pathname.includes('medica')) { e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.05)'; e.currentTarget.style.color = '#e2e8f0'; } }}
-                   onMouseLeave={(e) => { if (!location.pathname.includes('medica')) { e.currentTarget.style.backgroundColor = 'transparent'; e.currentTarget.style.color = '#94a3b8'; } }}
+              <div style={navItemStyle('medico/dashboard')} onClick={() => navigate('/medico/dashboard')}
+                   onMouseEnter={(e) => { if (!location.pathname.includes('medico/dashboard')) { e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.05)'; e.currentTarget.style.color = '#e2e8f0'; } }}
+                   onMouseLeave={(e) => { if (!location.pathname.includes('medico/dashboard')) { e.currentTarget.style.backgroundColor = 'transparent'; e.currentTarget.style.color = '#94a3b8'; } }}
               >
-                <Stethoscope size={20} style={{ marginRight: '1rem' }}/> Médica / Expediente
+                <LayoutDashboard size={20} style={{ marginRight: '1rem' }}/> Inicio
+              </div>
+              <div style={navItemStyle('medica/pacientes')} onClick={() => navigate('/medica/pacientes')}
+                   onMouseEnter={(e) => { if (!location.pathname.includes('medica/pacientes')) { e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.05)'; e.currentTarget.style.color = '#e2e8f0'; } }}
+                   onMouseLeave={(e) => { if (!location.pathname.includes('medica/pacientes')) { e.currentTarget.style.backgroundColor = 'transparent'; e.currentTarget.style.color = '#94a3b8'; } }}
+              >
+                <Stethoscope size={20} style={{ marginRight: '1rem' }}/> Pacientes
+              </div>
+              <div style={navItemStyle('medica/desintoxicacion')} onClick={() => navigate('/medica/desintoxicacion')}
+                   onMouseEnter={(e) => { if (!location.pathname.includes('medica/desintoxicacion')) { e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.05)'; e.currentTarget.style.color = '#e2e8f0'; } }}
+                   onMouseLeave={(e) => { if (!location.pathname.includes('medica/desintoxicacion')) { e.currentTarget.style.backgroundColor = 'transparent'; e.currentTarget.style.color = '#94a3b8'; } }}
+              >
+                <Droplets size={20} style={{ marginRight: '1rem' }}/> Desintoxicación
+              </div>
+              <div style={navItemStyle('medica/evolucion')} onClick={() => navigate('/medica/evolucion')}
+                   onMouseEnter={(e) => { if (!location.pathname.includes('medica/evolucion')) { e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.05)'; e.currentTarget.style.color = '#e2e8f0'; } }}
+                   onMouseLeave={(e) => { if (!location.pathname.includes('medica/evolucion')) { e.currentTarget.style.backgroundColor = 'transparent'; e.currentTarget.style.color = '#94a3b8'; } }}
+              >
+                <TrendingUp size={20} style={{ marginRight: '1rem' }}/> Evolución
+              </div>
+              <div style={navItemStyle('medica/laboratorio')} onClick={() => navigate('/medica/laboratorio')}
+                   onMouseEnter={(e) => { if (!location.pathname.includes('medica/laboratorio')) { e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.05)'; e.currentTarget.style.color = '#e2e8f0'; } }}
+                   onMouseLeave={(e) => { if (!location.pathname.includes('medica/laboratorio')) { e.currentTarget.style.backgroundColor = 'transparent'; e.currentTarget.style.color = '#94a3b8'; } }}
+              >
+                <FlaskConical size={20} style={{ marginRight: '1rem' }}/> Laboratorio
+              </div>
+            </>
+          )}
+
+          {/* Jefatura — visible solo para jefe médico y admin */}
+          {(['JEFE_MEDICO', 'ADMIN_GENERAL'].includes(usuario?.rol || '')) && (
+            <>
+              <div style={{ fontSize: '11px', color: '#64748b', textTransform: 'uppercase', letterSpacing: '1.5px', margin: '2rem 0 1rem 0', fontWeight: '700' }}>Jefatura</div>
+              <div style={navItemStyle('jefatura/medicamentos')} onClick={() => navigate('/jefatura/medicamentos')}
+                   onMouseEnter={(e) => { if (!location.pathname.includes('jefatura/medicamentos')) { e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.05)'; e.currentTarget.style.color = '#e2e8f0'; } }}
+                   onMouseLeave={(e) => { if (!location.pathname.includes('jefatura/medicamentos')) { e.currentTarget.style.backgroundColor = 'transparent'; e.currentTarget.style.color = '#94a3b8'; } }}
+              >
+                <Pill size={20} style={{ marginRight: '1rem' }}/> Medicamentos
+              </div>
+              <div style={navItemStyle('jefatura/personal')} onClick={() => navigate('/jefatura/personal')}
+                   onMouseEnter={(e) => { if (!location.pathname.includes('jefatura/personal')) { e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.05)'; e.currentTarget.style.color = '#e2e8f0'; } }}
+                   onMouseLeave={(e) => { if (!location.pathname.includes('jefatura/personal')) { e.currentTarget.style.backgroundColor = 'transparent'; e.currentTarget.style.color = '#94a3b8'; } }}
+              >
+                <UserCog size={20} style={{ marginRight: '1rem' }}/> Personal
+              </div>
+              <div style={navItemStyle('jefatura/solicitudes')} onClick={() => navigate('/jefatura/solicitudes')}
+                   onMouseEnter={(e) => { if (!location.pathname.includes('jefatura/solicitudes')) { e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.05)'; e.currentTarget.style.color = '#e2e8f0'; } }}
+                   onMouseLeave={(e) => { if (!location.pathname.includes('jefatura/solicitudes')) { e.currentTarget.style.backgroundColor = 'transparent'; e.currentTarget.style.color = '#94a3b8'; } }}
+              >
+                <ClipboardCheck size={20} style={{ marginRight: '1rem' }}/> Solicitudes
               </div>
             </>
           )}

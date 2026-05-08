@@ -80,7 +80,7 @@ export function Dashboard() {
 
   // Lógica de Vistas Según Rol
   const esAdmin = usuario?.rol === 'ADMIN_GENERAL';
-  const esMedico = usuario?.rol === 'AREA_MEDICA' || usuario?.rol === 'NUTRICION' || usuario?.rol === 'PSICOLOGIA';
+  const esMedico = usuario?.rol === 'AREA_MEDICA' || usuario?.rol === 'JEFE_MEDICO' || usuario?.rol === 'NUTRICION' || usuario?.rol === 'PSICOLOGIA';
   const esOperativo = usuario?.rol === 'ALMACEN' || usuario?.rol === 'RRHH_FINANZAS' || usuario?.rol === 'ADMISIONES';
 
   return (

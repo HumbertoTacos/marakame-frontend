@@ -52,14 +52,14 @@ export const ExpedienteDigitalPage: React.FC = () => {
     // Columna Derecha (Evaluaciones - RBAC dinámico por tipo)
     if (doc.ubicacion === 'LADO_DER' || doc.ubicacion === 'EVALUACIONES') {
       const n = doc.nombre.toLowerCase();
-      if (n.includes('médic') || n.includes('assist')) return rol === 'AREA_MEDICA';
+      if (n.includes('médic') || n.includes('assist')) return rol === 'AREA_MEDICA' || rol === 'JEFE_MEDICO';
       if (n.includes('psicoló')) return rol === 'PSICOLOGIA';
       if (n.includes('nutricio')) return rol === 'NUTRICION';
       if (n.includes('enfermer')) return rol === 'ENFERMERIA';
 
       // Si no es ninguno de los específicos, permitimos al staff clínico general si es un cuestionario
       if (n.includes('cuestionario') || n.includes('escala')) {
-        return ['AREA_MEDICA', 'PSICOLOGIA', 'ENFERMERIA'].includes(rol);
+        return ['AREA_MEDICA', 'JEFE_MEDICO', 'PSICOLOGIA', 'ENFERMERIA'].includes(rol);
       }
     }
 
@@ -174,7 +174,7 @@ export const ExpedienteDigitalPage: React.FC = () => {
           </div>
 
           {/* ALERTA DE VALORACIÓN PENDIENTE DE FIRMA (FLUJO PHYGITAL) */}
-          {valoracionMedica?.estado === 'COMPLETADA' && usuario?.rol === 'AREA_MEDICA' && (
+          {valoracionMedica?.estado === 'COMPLETADA' && (usuario?.rol === 'AREA_MEDICA' || usuario?.rol === 'JEFE_MEDICO') && (
             <div style={{ marginTop: '2rem', padding: '1.5rem 2rem', backgroundColor: '#fdf2f8', borderRadius: '24px', border: '2px dashed #db2777', display: 'flex', justifyContent: 'space-between', alignItems: 'center', animation: 'pulse 2s infinite' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '1.5rem' }}>
                 <div style={{ padding: '0.8rem', backgroundColor: '#fce7f3', color: '#db2777', borderRadius: '50%' }}>

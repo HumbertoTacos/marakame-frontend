@@ -2,10 +2,12 @@
 
 // --- Enums and Unions (Base Types) ---
 
-export type Rol = 'ADMIN_GENERAL' | 'AREA_MEDICA' | 'ENFERMERIA' | 'NUTRICION' | 'PSICOLOGIA' | 'RRHH_FINANZAS' | 'ADMISIONES' | 'ALMACEN';
+export type Rol = 'ADMIN_GENERAL' | 'AREA_MEDICA' | 'ENFERMERIA' | 'NUTRICION' | 'PSICOLOGIA' | 'RRHH_FINANZAS' | 'ADMISIONES' | 'ALMACEN' | 'JEFE_MEDICO';
 
 export const EstadoPaciente = {
   PROSPECTO: 'PROSPECTO',
+  EN_VALORACION_SOCIOECONOMICA: 'EN_VALORACION_SOCIOECONOMICA',
+  PENDIENTE_VALORACION_MEDICA: 'PENDIENTE_VALORACION_MEDICA',
   EN_VALORACION: 'EN_VALORACION',
   PENDIENTE_INGRESO: 'PENDIENTE_INGRESO',
   INTERNADO: 'INTERNADO',
@@ -133,6 +135,56 @@ export const getEstadoCompraUI = (estado: EstadoCompra) => {
 };
   
 export type TipoNota = 'MEDICA' | 'PSICOLOGICA' | 'NUTRICIONAL' | 'ENFERMERIA' | 'GENERAL';
+
+export interface HistoriaClinica {
+  estadoCivil: string;
+  religion: string;
+  lugarResidencia: string;
+  lugarOrigen: string;
+  ocupacion: string;
+  escolaridad: string;
+  historiaConsumo: string;
+  alergias: string;
+  enfermedadesExantem: string;
+  otrasEnfermedades: string;
+  antecedentesQx: string;
+  transfusiones: string;
+  antecSexuales: string;
+  antecSuicidas: string;
+  padrePatologia: string;
+  madrePatologia: string;
+  hermanosPatologia: string;
+  esposaPatologia: string;
+  hijosPatologia: string;
+  sintCabeza: string;
+  sintCardioresp: string;
+  sintGastro: string;
+  sintGenito: string;
+  sintEndoNeuro: string;
+  svPresion: string;
+  svFrecResp: string;
+  svFrecCard: string;
+  svTemp: string;
+  svPeso: string;
+  svEstatura: string;
+  fisicoHabitus: string;
+  fisicoCabeza: string;
+  fisicoOrl: string;
+  fisicoOrofaringe: string;
+  fisicoCuello: string;
+  fisicoTorax: string;
+  fisicoPulmones: string;
+  fisicoCorazon: string;
+  fisicoAbdomen: string;
+  fisicoExtremidades: string;
+  neuro: string;
+  estadoMental: string;
+  diagnosticos: string[];
+  recomendacion1: string;
+  recomendacion2: string;
+  firma: string;
+  cedula: string;
+}
 
 // --- NUEVOS ENUMS DE NÓMINA ---
 export type EstadoNomina = 'BORRADOR' | 'PRE_NOMINA' | 'SOLICITUD_SUBSIDIO' | 'EN_REVISION' | 'AUTORIZADO' | 'PAGADO';
@@ -445,6 +497,7 @@ export interface Paciente {
   cama?: Cama;
   sustancias?: string[];
   primerContacto?: PrimerContacto[];
+  expediente?: { id: number } | null;
   createdAt?: string;
 }
 
@@ -477,6 +530,7 @@ export interface Expediente {
   pacienteId: number;
   paciente?: Paciente;
   diagnosticoPrincipal?: string;
+  historiaClinica?: HistoriaClinica;
   notasEvolucion?: NotaEvolucion[];
   signosVitales?: SignoVital[];
   createdAt: string;
