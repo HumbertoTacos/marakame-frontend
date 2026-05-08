@@ -2,10 +2,10 @@ import React, { useState } from 'react';
 import TimelineNotas from './TimelineNotas';
 import SignosVitalesTable from './SignosVitalesTable';
 import apiClient from '../../services/api';
-import { 
-  X, 
-  Save, 
-  AlertCircle 
+import {
+  X,
+  Save,
+  Pill
 } from 'lucide-react';
 
 interface SeccionMedicaProps {
@@ -27,17 +27,15 @@ const SeccionMedica: React.FC<SeccionMedicaProps> = ({ expediente, onRefresh }) 
     frecuenciaRespiratoria: '',
     oxigenacion: '',
     glucosa: '',
-    peso: ''
+    peso: '',
+    observaciones: ''
   });
 
   const handleSaveNota = async () => {
     if (!nuevaNota.nota.trim()) return;
     setIsSaving(true);
     try {
-      await apiClient.post(`/expedientes/${expediente.id}/notas`, {
-        ...nuevaNota,
-        usuarioId: 1 // TODO: Obtener del AuthContext real
-      });
+      await apiClient.post(`/expedientes/${expediente.id}/notas`, nuevaNota);
       setShowModalNota(false);
       setNuevaNota({ tipo: 'GENERAL', nota: '' });
       onRefresh();
@@ -51,14 +49,7 @@ const SeccionMedica: React.FC<SeccionMedicaProps> = ({ expediente, onRefresh }) 
   const handleSaveSignos = async () => {
     setIsSaving(true);
     try {
-      const payload: any = { ...nuevosSignos, usuarioId: 1 };
-      // Conversión de tipos si es necesario
-      if (payload.temperatura) payload.temperatura = parseFloat(payload.temperatura);
-      if (payload.frecuenciaCardiaca) payload.frecuenciaCardiaca = parseInt(payload.frecuenciaCardiaca);
-      if (payload.oxigenacion) payload.oxigenacion = parseInt(payload.oxigenacion);
-      if (payload.peso) payload.peso = parseFloat(payload.peso);
-
-      await apiClient.post(`/expedientes/${expediente.id}/signos`, payload);
+      await apiClient.post(`/expedientes/${expediente.id}/signos`, nuevosSignos);
       setShowModalSignos(false);
       setNuevosSignos({
         presionArterial: '',
@@ -67,7 +58,8 @@ const SeccionMedica: React.FC<SeccionMedicaProps> = ({ expediente, onRefresh }) 
         frecuenciaRespiratoria: '',
         oxigenacion: '',
         glucosa: '',
-        peso: ''
+        peso: '',
+        observaciones: ''
       });
       onRefresh();
     } catch (error) {
@@ -97,14 +89,14 @@ const SeccionMedica: React.FC<SeccionMedicaProps> = ({ expediente, onRefresh }) 
           />
         </div>
         
-        {/* Placeholder para futuras herramientas */}
-        <div style={{ backgroundColor: '#fff7ed', borderRadius: '24px', border: '1px solid #ffedd5', padding: '1.5rem', color: '#9a3412' }}>
-          <div style={{ display: 'flex', gap: '0.75rem' }}>
-            <AlertCircle size={20} />
-            <span style={{ fontWeight: 'bold', fontSize: '14px' }}>Próximamente: Histórico de Tratamientos</span>
+        {/* Info: Tratamientos en pestaña dedicada */}
+        <div style={{ backgroundColor: '#eff6ff', borderRadius: '24px', border: '1px solid #bfdbfe', padding: '1.5rem', color: '#1e40af' }}>
+          <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
+            <Pill size={20} color="#3b82f6" />
+            <span style={{ fontWeight: 'bold', fontSize: '14px' }}>Tratamientos Farmacológicos</span>
           </div>
-          <p style={{ fontSize: '13px', margin: '8px 0 0', color: '#c2410c' }}>
-            Podrás visualizar la adherencia farmacológica y planes médicos aquí.
+          <p style={{ fontSize: '13px', margin: '8px 0 0', color: '#1d4ed8' }}>
+            Gestiona medicamentos, dosis y registro de suministros en la pestaña <strong>Tratamientos</strong>.
           </p>
         </div>
       </div>
@@ -169,20 +161,28 @@ const SeccionMedica: React.FC<SeccionMedicaProps> = ({ expediente, onRefresh }) 
                   <input type="number" step="0.1" placeholder="36.5" value={nuevosSignos.temperatura} onChange={e => setNuevosSignos({...nuevosSignos, temperatura: e.target.value})} style={inputStyle} />
                 </div>
                 <div style={formGroupStyle}>
-                  <label style={labelStyle}>Frec. Cardíaca</label>
+                  <label style={labelStyle}>Frec. Cardíaca (lpm)</label>
                   <input type="number" placeholder="70" value={nuevosSignos.frecuenciaCardiaca} onChange={e => setNuevosSignos({...nuevosSignos, frecuenciaCardiaca: e.target.value})} style={inputStyle} />
+                </div>
+                <div style={formGroupStyle}>
+                  <label style={labelStyle}>Frec. Respiratoria (rpm)</label>
+                  <input type="number" placeholder="16" value={nuevosSignos.frecuenciaRespiratoria} onChange={e => setNuevosSignos({...nuevosSignos, frecuenciaRespiratoria: e.target.value})} style={inputStyle} />
                 </div>
                 <div style={formGroupStyle}>
                   <label style={labelStyle}>Oxigenación (%)</label>
                   <input type="number" placeholder="98" value={nuevosSignos.oxigenacion} onChange={e => setNuevosSignos({...nuevosSignos, oxigenacion: e.target.value})} style={inputStyle} />
                 </div>
                 <div style={formGroupStyle}>
-                  <label style={labelStyle}>Glucosa (opcional)</label>
-                  <input type="text" value={nuevosSignos.glucosa} onChange={e => setNuevosSignos({...nuevosSignos, glucosa: e.target.value})} style={inputStyle} />
+                  <label style={labelStyle}>Glucosa (mg/dL)</label>
+                  <input type="number" step="0.1" placeholder="90" value={nuevosSignos.glucosa} onChange={e => setNuevosSignos({...nuevosSignos, glucosa: e.target.value})} style={inputStyle} />
                 </div>
                 <div style={formGroupStyle}>
                   <label style={labelStyle}>Peso (kg)</label>
                   <input type="number" step="0.1" value={nuevosSignos.peso} onChange={e => setNuevosSignos({...nuevosSignos, peso: e.target.value})} style={inputStyle} />
+                </div>
+                <div style={formGroupStyle}>
+                  <label style={labelStyle}>Observaciones</label>
+                  <input type="text" placeholder="Opcional" value={nuevosSignos.observaciones} onChange={e => setNuevosSignos({...nuevosSignos, observaciones: e.target.value})} style={inputStyle} />
                 </div>
               </div>
               <button 

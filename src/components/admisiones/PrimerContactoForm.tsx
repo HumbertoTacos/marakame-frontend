@@ -766,16 +766,17 @@ export const PrimerContactoForm: React.FC = () => {
               {['LLAMARLE', 'ESPERAR_LLAMADA', 'POSIBLE_INGRESO'].includes(formData.acuerdoSeguimiento) && (
                 <div style={{ animation: 'fadeIn 0.3s ease' }}>
                   <label style={{ ...labelStyle, color: '#2563eb' }}>📅 Fecha Programada *</label>
-                  <input 
-                    type="date" 
-                    name="fechaAcuerdo" 
-                    value={formData.fechaAcuerdo} 
-                    onChange={handleChange} 
-                    style={{ 
-                      ...inputStyle, 
-                      borderColor: errors.fechaAcuerdo ? '#ef4444' : '#3b82f6', 
-                      backgroundColor: errors.fechaAcuerdo ? '#fef2f2' : '#eff6ff' 
-                    }} 
+                  <input
+                    type="date"
+                    name="fechaAcuerdo"
+                    value={formData.fechaAcuerdo}
+                    min={new Date().toISOString().split('T')[0]}
+                    onChange={handleChange}
+                    style={{
+                      ...inputStyle,
+                      borderColor: errors.fechaAcuerdo ? '#ef4444' : '#3b82f6',
+                      backgroundColor: errors.fechaAcuerdo ? '#fef2f2' : '#eff6ff'
+                    }}
                   />
                   {errors.fechaAcuerdo && <div style={errorTextStyle}>{errors.fechaAcuerdo}</div>}
                 </div>
