@@ -27,7 +27,7 @@ const PrimerContactoPage = lazy(() => import('./pages/admisiones/PrimerContactoP
 const ValoracionMedicaPage = lazy(() => import('./pages/admisiones/ValoracionMedicaPage'));
 const ExpedienteDigitalPage = lazy(() => import('./pages/admisiones/ExpedienteDigitalPage').then(m => ({ default: m.ExpedienteDigitalPage })));
 const SeguimientoProspectosPage = lazy(() => import('./pages/admisiones/SeguimientoProspectosPage'));
-
+const DetalleNomina = lazy(() => import('./pages/nominas/DetalleNomina').then(m => ({ default: m.DetalleNomina })));
 // Loader Premium para Suspense
 const PageLoader = () => (
   <div style={{ 
@@ -101,15 +101,12 @@ function App() {
                 <Outlet /> {/* El Outlet permite renderizar las rutas hijas aquí abajo */}
               </ProtectedRoute>
             }>
-              <Route index element={<Nominas />} /> {/* Esta es la tabla que ya vemos */}
-              <Route path="nueva" element={<GenerarPreNomina />} /> {/* Esta es la de captura */}
+              <Route index element={<Nominas />} /> {/* Dashboard */}
+              <Route path="nueva" element={<GenerarPreNomina />} /> {/* Captura de archivo */}
+              
+              {/* 👇 NUEVA RUTA PARA EL DETALLE 👇 */}
+              <Route path=":id" element={<DetalleNomina />} /> 
             </Route>
-            
-            <Route path="auditoria" element={
-              <ProtectedRoute allowedRoles={['ADMIN_GENERAL']}>
-                <Bitacora />
-              </ProtectedRoute>
-            } />
             
             <Route path="exportaciones" element={
               <ProtectedRoute allowedRoles={['ADMIN_GENERAL']}>

@@ -74,9 +74,22 @@ const NominasDashboard: React.FC = () => {
         </div>
         <button 
           onClick={() => navigate('/nominas/nueva')}
-          style={{ backgroundColor: '#3b82f6', color: 'white', border: 'none', padding: '0.75rem 1.5rem', borderRadius: '12px', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', boxShadow: '0 4px 6px -1px rgba(59,130,246,0.3)' }}
+          style={{ 
+            backgroundColor: '#3b82f6', 
+            color: 'white', 
+            border: 'none', 
+            padding: '0.75rem 1.5rem', 
+            borderRadius: '12px', 
+            fontWeight: 'bold', 
+            display: 'flex', 
+            alignItems: 'center', 
+            gap: '8px', 
+            cursor: 'pointer', 
+            boxShadow: '0 4px 6px -1px rgba(59,130,246,0.3)' 
+          }}
         >
-          Generar Pre-Nómina
+          <FileText size={20} />
+          Importar de CONTPAQi
         </button>
       </div>
 
@@ -167,7 +180,7 @@ const NominasDashboard: React.FC = () => {
                 {nominas.length === 0 && (
                   <tr>
                     <td colSpan={5} style={{ padding: '3rem', textAlign: 'center', color: '#64748b', fontWeight: '600' }}>
-                      No hay nóminas registradas. Haz clic en "Generar Pre-Nómina" para comenzar.
+                      No hay nóminas registradas. Haz clic en "Importar de CONTPAQi" para subir el cálculo de la quincena.
                     </td>
                   </tr>
                 )}
