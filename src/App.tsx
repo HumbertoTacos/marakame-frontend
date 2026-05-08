@@ -144,6 +144,12 @@ function App() {
                 <DashboardDirectora />
               </ProtectedRoute>
             } />
+
+            <Route path="auditoria" element={
+              <ProtectedRoute allowedRoles={['ADMIN_GENERAL']}>
+                <Bitacora />
+              </ProtectedRoute>
+            } />
           </Route>
           
           <Route path="/unauthorized" element={<h2>No tienes permisos para ver esta página</h2>} />
