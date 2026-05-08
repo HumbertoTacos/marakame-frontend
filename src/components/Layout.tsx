@@ -1,5 +1,5 @@
 import { Outlet, useNavigate, useLocation } from 'react-router-dom';
-import { LogOut, Search, Bell, HeartPulse, Stethoscope, PackageOpen, ShoppingCart, Banknote, ShieldAlert, FileOutput, ChevronRight, Users, Clock, ClipboardList, LayoutDashboard, Droplets, TrendingUp, FlaskConical, Pill, UserCog, ClipboardCheck } from 'lucide-react';
+import { LogOut, Search, Bell, HeartPulse, Stethoscope, PackageOpen, ShoppingCart, Banknote, ShieldAlert, FileOutput, ChevronRight, Users, Clock, ClipboardList, LayoutDashboard, Droplets, FlaskConical, UserCog, ClipboardCheck } from 'lucide-react';
 import { useState } from 'react';
 import { useAuthStore } from '../stores/authStore';
 
@@ -117,12 +117,6 @@ export function Layout() {
               >
                 <Droplets size={20} style={{ marginRight: '1rem' }}/> Desintoxicación
               </div>
-              <div style={navItemStyle('medica/evolucion')} onClick={() => navigate('/medica/evolucion')}
-                   onMouseEnter={(e) => { if (!location.pathname.includes('medica/evolucion')) { e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.05)'; e.currentTarget.style.color = '#e2e8f0'; } }}
-                   onMouseLeave={(e) => { if (!location.pathname.includes('medica/evolucion')) { e.currentTarget.style.backgroundColor = 'transparent'; e.currentTarget.style.color = '#94a3b8'; } }}
-              >
-                <TrendingUp size={20} style={{ marginRight: '1rem' }}/> Evolución
-              </div>
               <div style={navItemStyle('medica/laboratorio')} onClick={() => navigate('/medica/laboratorio')}
                    onMouseEnter={(e) => { if (!location.pathname.includes('medica/laboratorio')) { e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.05)'; e.currentTarget.style.color = '#e2e8f0'; } }}
                    onMouseLeave={(e) => { if (!location.pathname.includes('medica/laboratorio')) { e.currentTarget.style.backgroundColor = 'transparent'; e.currentTarget.style.color = '#94a3b8'; } }}
@@ -136,12 +130,6 @@ export function Layout() {
           {(['JEFE_MEDICO', 'ADMIN_GENERAL'].includes(usuario?.rol || '')) && (
             <>
               <div style={{ fontSize: '11px', color: '#64748b', textTransform: 'uppercase', letterSpacing: '1.5px', margin: '2rem 0 1rem 0', fontWeight: '700' }}>Jefatura</div>
-              <div style={navItemStyle('jefatura/medicamentos')} onClick={() => navigate('/jefatura/medicamentos')}
-                   onMouseEnter={(e) => { if (!location.pathname.includes('jefatura/medicamentos')) { e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.05)'; e.currentTarget.style.color = '#e2e8f0'; } }}
-                   onMouseLeave={(e) => { if (!location.pathname.includes('jefatura/medicamentos')) { e.currentTarget.style.backgroundColor = 'transparent'; e.currentTarget.style.color = '#94a3b8'; } }}
-              >
-                <Pill size={20} style={{ marginRight: '1rem' }}/> Medicamentos
-              </div>
               <div style={navItemStyle('jefatura/personal')} onClick={() => navigate('/jefatura/personal')}
                    onMouseEnter={(e) => { if (!location.pathname.includes('jefatura/personal')) { e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.05)'; e.currentTarget.style.color = '#e2e8f0'; } }}
                    onMouseLeave={(e) => { if (!location.pathname.includes('jefatura/personal')) { e.currentTarget.style.backgroundColor = 'transparent'; e.currentTarget.style.color = '#94a3b8'; } }}

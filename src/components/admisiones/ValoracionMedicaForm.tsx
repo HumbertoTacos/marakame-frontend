@@ -82,12 +82,45 @@ export const ValoracionMedicaForm: React.FC<Props> = ({ pacienteId, onSuccess })
       return;
     }
 
+    const strOrNull = (v: unknown) => {
+      const s = String(v ?? '').trim();
+      return s === '' ? null : s;
+    };
+
+    const payload = {
+      pacienteId,
+      motivoConsulta:       String(formData.motivoConsulta ?? '').trim(),
+      impresionDiagnostica: String(formData.impresionDiagnostica ?? '').trim(),
+      padecimientoActual:           strOrNull(formData.padecimientoActual),
+      sintomasGenerales:            strOrNull(formData.sintomasGenerales),
+      tratamientosPrevios:          strOrNull(formData.tratamientosPrevios),
+      antecedentesHeredofamiliares: strOrNull(formData.antecedentesHeredofamiliares),
+      antecedentesPatologicos:      strOrNull(formData.antecedentesPatologicos),
+      antecedentesNoPatologicos:    strOrNull(formData.antecedentesNoPatologicos),
+      historialConsumo:             strOrNull(formData.historialConsumo),
+      // Signos vitales: todos String en la DB
+      tensionArterial:        strOrNull(formData.tensionArterial),
+      frecuenciaCardiaca:     strOrNull(formData.frecuenciaCardiaca),
+      frecuenciaRespiratoria: strOrNull(formData.frecuenciaRespiratoria),
+      temperatura:            strOrNull(formData.temperatura),
+      peso:                   strOrNull(formData.peso),
+      talla:                  strOrNull(formData.talla),
+      exploracionFisicaDesc: strOrNull(formData.exploracionFisicaDesc),
+      examenMental:          strOrNull(formData.examenMental),
+      pronostico:            strOrNull(formData.pronostico),
+      planTratamiento:       strOrNull(formData.planTratamiento),
+      esAptoParaIngreso: formData.esAptoParaIngreso === true,
+      residente:         strOrNull(formData.residente),
+      tipoValoracion:    strOrNull(formData.tipoValoracion),
+      fechaValoracion:   strOrNull(formData.fechaValoracion),
+      horaValoracion:    strOrNull(formData.horaValoracion),
+    };
+
+    console.log('[ValoracionMedica] payload:', payload);
+
     setIsSubmitting(true);
     try {
-      const response = await apiClient.post('/admisiones/valoracion-medica', {
-        ...formData,
-        pacienteId
-      });
+      const response = await apiClient.post('/admisiones/valoracion-medica', payload);
 
       if (response.data.success) {
         alert('Valoración guardada exitosamente. Ahora proceda a imprimir el documento oficial.');

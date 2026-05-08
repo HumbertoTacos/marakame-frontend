@@ -1,34 +1,40 @@
 import React, { useState, useEffect } from 'react';
-import { 
-  FileText, 
-  Stethoscope, 
-  ClipboardCheck, 
-  User, 
-  Calendar, 
-  MapPin, 
+import {
+  FileText,
+  Stethoscope,
+  ClipboardCheck,
+  Pill,
+  CalendarDays,
+  BookOpen,
+  User,
+  Calendar,
+  MapPin,
   ShieldCheck,
   ArrowLeft
 } from 'lucide-react';
 import { useNavigate, useParams } from 'react-router-dom';
+import apiClient from '../../services/api';
 
 import SeccionAdministrativa from '../../components/medico/SeccionAdministrativa';
 import SeccionMedica from '../../components/medico/SeccionMedica';
 import SeccionEvaluaciones from '../../components/medico/SeccionEvaluaciones';
+import SeccionTratamientos from '../../components/medico/SeccionTratamientos';
+import SeccionCitas from '../../components/medico/SeccionCitas';
+import SeccionHistoriaClinica from '../../components/medico/SeccionHistoriaClinica';
 
 const ExpedienteDigitalPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const [activeTab, setActiveTab] = useState<'administrativo' | 'medico' | 'evaluaciones'>('administrativo');
+  const [activeTab, setActiveTab] = useState<'historia' | 'administrativo' | 'medico' | 'evaluaciones' | 'tratamientos' | 'citas'>('historia');
   const [expedienteRaw, setExpedienteRaw] = useState<any>(null);
   const [loading, setLoading] = useState(true);
 
   // Carga de datos reales del expediente con carga profunda (notas, signos, paciente)
   const fetchExpediente = async () => {
     try {
-      const response = await fetch(`${import.meta.env.VITE_API_URL}/expedientes/paciente/${id}`);
-      const data = await response.json();
-      if (data.success) {
-        setExpedienteRaw(data.data);
+      const res = await apiClient.get(`/expedientes/paciente/${id}`);
+      if (res.data.success) {
+        setExpedienteRaw(res.data.data);
       }
     } catch (error) {
       console.error('Error fetching expediente:', error);
@@ -42,9 +48,12 @@ const ExpedienteDigitalPage: React.FC = () => {
   }, [id]);
 
   const tabs = [
-    { id: 'administrativo', label: 'Administrativo', icon: FileText, color: '#3b82f6' },
-    { id: 'medico', label: 'Médico', icon: Stethoscope, color: '#10b981' },
-    { id: 'evaluaciones', label: 'Evaluaciones', icon: ClipboardCheck, color: '#f59e0b' },
+    { id: 'historia',       label: 'Historia Clínica', icon: BookOpen,      color: '#0891b2' },
+    { id: 'administrativo', label: 'Administrativo',   icon: FileText,      color: '#3b82f6' },
+    { id: 'medico',         label: 'Médico',           icon: Stethoscope,   color: '#10b981' },
+    { id: 'tratamientos',   label: 'Tratamientos',     icon: Pill,          color: '#d97706' },
+    { id: 'evaluaciones',   label: 'Evaluaciones',     icon: ClipboardCheck,color: '#f59e0b' },
+    { id: 'citas',          label: 'Citas',            icon: CalendarDays,  color: '#7c3aed' },
   ];
 
   if (loading) return <div style={{ padding: '4rem', textAlign: 'center' }}>Cargando expediente clínico...</div>;
@@ -157,6 +166,10 @@ const ExpedienteDigitalPage: React.FC = () => {
         padding: '2rem',
         minHeight: '600px'
       }}>
+        {activeTab === 'historia' && (
+          <SeccionHistoriaClinica pacienteId={paciente.id} />
+        )}
+
         {activeTab === 'administrativo' && (
           <SeccionAdministrativa pacienteId={paciente.id} />
         )}
@@ -165,8 +178,16 @@ const ExpedienteDigitalPage: React.FC = () => {
           <SeccionMedica expediente={expedienteRaw} onRefresh={fetchExpediente} />
         )}
 
+        {activeTab === 'tratamientos' && (
+          <SeccionTratamientos expedienteId={expedienteRaw.id} />
+        )}
+
         {activeTab === 'evaluaciones' && (
           <SeccionEvaluaciones pacienteId={paciente.id} />
+        )}
+
+        {activeTab === 'citas' && (
+          <SeccionCitas pacienteId={paciente.id} />
         )}
       </div>
 

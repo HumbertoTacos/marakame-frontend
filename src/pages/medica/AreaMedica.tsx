@@ -3,7 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   Activity, Search, Stethoscope, Users, Calendar, X,
   Trash2, Folder, ClipboardList, HeartPulse, Building2, History,
-  ChevronDown, Download, FilePen,
+  ChevronDown, Download, FilePen, Brain, Apple, Heart, ExternalLink, Droplets,
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import apiClient from '../../services/api';
@@ -12,7 +12,20 @@ import type { Paciente, Expediente } from '../../types';
 import { ExpedienteFormModal } from './ExpedienteFormModal';
 import { generarExpedientePDF } from '../../utils/expedientePDF';
 
-// ─── Helpers ────────────────────────────────────────────────────────────────
+// ── Configuración por rol ─────────────────────────────────────────────────────
+
+type RolMedico = 'AREA_MEDICA' | 'JEFE_MEDICO' | 'PSICOLOGIA' | 'NUTRICION' | 'ENFERMERIA' | 'ADMIN_GENERAL';
+
+const ROL_CONFIG: Record<RolMedico, { titulo: string; descripcion: string; acento: string; showInbox: boolean }> = {
+  AREA_MEDICA:   { titulo: 'Área Médica',        descripcion: 'Panel del Médico',       acento: '#3b82f6', showInbox: true  },
+  JEFE_MEDICO:   { titulo: 'Jefatura Médica',    descripcion: 'Panel del Jefe Médico',  acento: '#1d4ed8', showInbox: true  },
+  PSICOLOGIA:    { titulo: 'Área de Psicología', descripcion: 'Panel del Psicólogo',    acento: '#8b5cf6', showInbox: false },
+  NUTRICION:     { titulo: 'Área de Nutrición',  descripcion: 'Panel del Nutriólogo',   acento: '#10b981', showInbox: false },
+  ENFERMERIA:    { titulo: 'Área de Enfermería', descripcion: 'Panel de Enfermería',    acento: '#f59e0b', showInbox: false },
+  ADMIN_GENERAL: { titulo: 'Panel Clínico',      descripcion: 'Vista de Administrador', acento: '#64748b', showInbox: true  },
+};
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
 
 const calcularEdad = (fechaNacimiento: string | Date) => {
   const hoy = new Date();
@@ -24,13 +37,11 @@ const calcularEdad = (fechaNacimiento: string | Date) => {
 };
 
 const AREA_CONFIG: Record<string, { color: string; light: string; border: string; label: string }> = {
-  HOMBRES:    { color: '#3b82f6', light: '#eff6ff', border: '#bfdbfe', label: 'Hombres' },
-  MUJERES:    { color: '#ec4899', light: '#fdf2f8', border: '#fbcfe8', label: 'Mujeres' },
-  DETOX:      { color: '#f59e0b', light: '#fffbeb', border: '#fde68a', label: 'Desintoxicación' },
-  SIN_ASIGNAR:{ color: '#64748b', light: '#f8fafc', border: '#e2e8f0', label: 'Sin Habitación Asignada' },
+  HOMBRES:     { color: '#3b82f6', light: '#eff6ff', border: '#bfdbfe', label: 'Hombres' },
+  MUJERES:     { color: '#ec4899', light: '#fdf2f8', border: '#fbcfe8', label: 'Mujeres' },
+  DETOX:       { color: '#f59e0b', light: '#fffbeb', border: '#fde68a', label: 'Desintoxicación' },
+  SIN_ASIGNAR: { color: '#64748b', light: '#f8fafc', border: '#e2e8f0', label: 'Sin Habitación Asignada' },
 };
-
-// ─── Shared button styles ────────────────────────────────────────────────────
 
 const actionBtn = (color: string): React.CSSProperties => ({
   display: 'flex',
@@ -48,7 +59,7 @@ const actionBtn = (color: string): React.CSSProperties => ({
   transition: 'all 0.2s',
 });
 
-// ─── Modal: Sustancias ───────────────────────────────────────────────────────
+// ─── Modal: Sustancias ────────────────────────────────────────────────────────
 
 const VerSustanciasModal = ({ isOpen, onClose, sustancias, nombrePaciente }: {
   isOpen: boolean; onClose: () => void; sustancias: string[]; nombrePaciente: string;
@@ -62,9 +73,7 @@ const VerSustanciasModal = ({ isOpen, onClose, sustancias, nombrePaciente }: {
             <h3 style={{ margin: 0, fontSize: '18px', fontWeight: '900', color: '#0f172a' }}>Perfil de Sustancias</h3>
             <p style={{ margin: 0, fontSize: '12px', color: '#64748b', fontWeight: '600' }}>{nombrePaciente}</p>
           </div>
-          <button onClick={onClose} style={{ padding: '0.5rem', borderRadius: '12px', border: '1px solid #f1f5f9', backgroundColor: 'white', cursor: 'pointer', color: '#64748b' }}>
-            <X size={18} />
-          </button>
+          <button onClick={onClose} style={{ padding: '0.5rem', borderRadius: '12px', border: '1px solid #f1f5f9', backgroundColor: 'white', cursor: 'pointer', color: '#64748b' }}><X size={18} /></button>
         </div>
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.75rem', marginBottom: '1rem' }}>
           {sustancias.map((s, i) => (
@@ -79,7 +88,7 @@ const VerSustanciasModal = ({ isOpen, onClose, sustancias, nombrePaciente }: {
   );
 };
 
-// ─── Modal: Valoración Interna ───────────────────────────────────────────────
+// ─── Modal: Valoración Interna ────────────────────────────────────────────────
 
 const ValoracionInternaModal = ({ isOpen, onClose, paciente, onSuccess }: {
   isOpen: boolean; onClose: () => void; paciente: Paciente | null; onSuccess: () => void;
@@ -105,12 +114,12 @@ const ValoracionInternaModal = ({ isOpen, onClose, paciente, onSuccess }: {
       if (hasSignos) {
         tasks.push(apiClient.post(`/expedientes/${expediente.id}/signos`, {
           usuarioId: usuario?.id,
-          ...(form.temperatura         && { temperatura:         parseFloat(form.temperatura) }),
-          ...(form.presionArterial     && { presionArterial:     form.presionArterial }),
-          ...(form.frecuenciaCardiaca  && { frecuenciaCardiaca:  parseInt(form.frecuenciaCardiaca) }),
+          ...(form.temperatura            && { temperatura:            parseFloat(form.temperatura) }),
+          ...(form.presionArterial        && { presionArterial:        form.presionArterial }),
+          ...(form.frecuenciaCardiaca     && { frecuenciaCardiaca:     parseInt(form.frecuenciaCardiaca) }),
           ...(form.frecuenciaRespiratoria && { frecuenciaRespiratoria: parseInt(form.frecuenciaRespiratoria) }),
-          ...(form.oxigenacion         && { oxigenacion:         parseInt(form.oxigenacion) }),
-          ...(form.peso                && { peso:                parseFloat(form.peso) }),
+          ...(form.oxigenacion            && { oxigenacion:            parseInt(form.oxigenacion) }),
+          ...(form.peso                   && { peso:                   parseFloat(form.peso) }),
         }));
       }
 
@@ -143,19 +152,18 @@ const ValoracionInternaModal = ({ isOpen, onClose, paciente, onSuccess }: {
   };
 
   const signosFields = [
-    { label: 'Temperatura (°C)',    key: 'temperatura',          placeholder: '36.5' },
-    { label: 'Presión Arterial',    key: 'presionArterial',      placeholder: '120/80' },
-    { label: 'Frec. Cardíaca (lpm)',key: 'frecuenciaCardiaca',   placeholder: '72' },
-    { label: 'Frec. Respiratoria',  key: 'frecuenciaRespiratoria',placeholder: '18' },
-    { label: 'Oxigenación (%)',     key: 'oxigenacion',          placeholder: '98' },
-    { label: 'Peso (kg)',           key: 'peso',                 placeholder: '75' },
+    { label: 'Temperatura (°C)',      key: 'temperatura',            placeholder: '36.5'  },
+    { label: 'Presión Arterial',      key: 'presionArterial',        placeholder: '120/80' },
+    { label: 'Frec. Cardíaca (lpm)',  key: 'frecuenciaCardiaca',     placeholder: '72'    },
+    { label: 'Frec. Respiratoria',    key: 'frecuenciaRespiratoria', placeholder: '18'    },
+    { label: 'Oxigenación (%)',       key: 'oxigenacion',            placeholder: '98'    },
+    { label: 'Peso (kg)',             key: 'peso',                   placeholder: '75'    },
   ];
 
   return (
     <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(15,23,42,0.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1100, padding: '1rem' }}>
       <div style={{ backgroundColor: 'white', borderRadius: '32px', width: '100%', maxWidth: '580px', maxHeight: '92vh', overflow: 'hidden', display: 'flex', flexDirection: 'column', boxShadow: '0 25px 50px -12px rgba(0,0,0,0.25)' }}>
 
-        {/* Header */}
         <div style={{ padding: '2rem 2.5rem', borderBottom: '1px solid #f1f5f9', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '0.2rem' }}>
@@ -173,7 +181,6 @@ const ValoracionInternaModal = ({ isOpen, onClose, paciente, onSuccess }: {
           </button>
         </div>
 
-        {/* Body */}
         <div style={{ flex: 1, overflowY: 'auto', padding: '2rem 2.5rem' }}>
           {isLoadingExp ? (
             <p style={{ textAlign: 'center', color: '#94a3b8' }}>Cargando expediente...</p>
@@ -214,7 +221,6 @@ const ValoracionInternaModal = ({ isOpen, onClose, paciente, onSuccess }: {
           )}
         </div>
 
-        {/* Footer */}
         {expediente && (
           <div style={{ padding: '1.5rem 2.5rem', borderTop: '1px solid #f1f5f9', display: 'flex', justifyContent: 'flex-end', gap: '0.75rem' }}>
             <button onClick={onClose} style={{ padding: '0.75rem 1.5rem', border: '1.5px solid #e2e8f0', borderRadius: '14px', backgroundColor: 'white', color: '#475569', fontWeight: '700', cursor: 'pointer', fontSize: '14px' }}>
@@ -234,7 +240,7 @@ const ValoracionInternaModal = ({ isOpen, onClose, paciente, onSuccess }: {
   );
 };
 
-// ─── Modal: Historial Clínico ────────────────────────────────────────────────
+// ─── Modal: Historial Clínico ─────────────────────────────────────────────────
 
 const HistorialModal = ({ isOpen, onClose, paciente }: {
   isOpen: boolean; onClose: () => void; paciente: Paciente | null;
@@ -271,7 +277,6 @@ const HistorialModal = ({ isOpen, onClose, paciente }: {
     <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(15,23,42,0.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1100, padding: '1rem' }}>
       <div style={{ backgroundColor: 'white', borderRadius: '32px', width: '100%', maxWidth: '660px', maxHeight: '92vh', overflow: 'hidden', display: 'flex', flexDirection: 'column', boxShadow: '0 25px 50px -12px rgba(0,0,0,0.25)' }}>
 
-        {/* Header */}
         <div style={{ padding: '1.75rem 2.5rem', borderBottom: '1px solid #f1f5f9', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.85rem' }}>
             <div style={{ backgroundColor: '#f0fdf4', padding: '0.6rem', borderRadius: '12px', display: 'flex' }}>
@@ -294,7 +299,6 @@ const HistorialModal = ({ isOpen, onClose, paciente }: {
           </button>
         </div>
 
-        {/* Body */}
         <div style={{ flex: 1, overflowY: 'auto', padding: '1.75rem 2.5rem' }}>
           {isLoading ? (
             <p style={{ textAlign: 'center', color: '#94a3b8', padding: '2rem' }}>Cargando historial...</p>
@@ -308,21 +312,13 @@ const HistorialModal = ({ isOpen, onClose, paciente }: {
             </div>
           ) : (
             <>
-              {/* Notas de evolución */}
               {notas.length > 0 && (
                 <div style={{ marginBottom: '1.75rem' }}>
                   <SecTitle>Notas de Evolución Médica</SecTitle>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
                     {(notas as any[]).map((nota: any) => (
-                      <div key={nota.id} style={{
-                        backgroundColor: '#f8fafc', borderRadius: '14px',
-                        border: '1px solid #e2e8f0', overflow: 'hidden',
-                      }}>
-                        <div style={{
-                          padding: '0.65rem 1rem', backgroundColor: '#f1f5f9',
-                          borderBottom: '1px solid #e2e8f0',
-                          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                        }}>
+                      <div key={nota.id} style={{ backgroundColor: '#f8fafc', borderRadius: '14px', border: '1px solid #e2e8f0', overflow: 'hidden' }}>
+                        <div style={{ padding: '0.65rem 1rem', backgroundColor: '#f1f5f9', borderBottom: '1px solid #e2e8f0', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                           <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                             <Calendar size={13} color="#64748b" />
                             <span style={{ fontSize: '12px', fontWeight: '700', color: '#475569' }}>
@@ -346,7 +342,6 @@ const HistorialModal = ({ isOpen, onClose, paciente }: {
                 </div>
               )}
 
-              {/* Signos vitales */}
               {signos.length > 0 && (
                 <div>
                   <SecTitle>Registro de Signos Vitales</SecTitle>
@@ -356,15 +351,8 @@ const HistorialModal = ({ isOpen, onClose, paciente }: {
                         .map(([k, label]) => ({ label, value: sv[k] }))
                         .filter(({ value }) => value != null && value !== '');
                       return (
-                        <div key={sv.id} style={{
-                          backgroundColor: '#f8fafc', borderRadius: '14px',
-                          border: '1px solid #e2e8f0', overflow: 'hidden',
-                        }}>
-                          <div style={{
-                            padding: '0.65rem 1rem', backgroundColor: '#f1f5f9',
-                            borderBottom: '1px solid #e2e8f0',
-                            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                          }}>
+                        <div key={sv.id} style={{ backgroundColor: '#f8fafc', borderRadius: '14px', border: '1px solid #e2e8f0', overflow: 'hidden' }}>
+                          <div style={{ padding: '0.65rem 1rem', backgroundColor: '#f1f5f9', borderBottom: '1px solid #e2e8f0', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                             <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                               <Calendar size={13} color="#64748b" />
                               <span style={{ fontSize: '12px', fontWeight: '700', color: '#475569' }}>
@@ -397,7 +385,6 @@ const HistorialModal = ({ isOpen, onClose, paciente }: {
           )}
         </div>
 
-        {/* Footer */}
         <div style={{ padding: '1.25rem 2.5rem', borderTop: '1px solid #f1f5f9', display: 'flex', justifyContent: 'flex-end' }}>
           <button onClick={onClose} style={{ padding: '0.75rem 1.75rem', backgroundColor: '#0f172a', color: 'white', border: 'none', borderRadius: '14px', fontWeight: '800', cursor: 'pointer', fontSize: '14px' }}>
             Cerrar
@@ -408,19 +395,73 @@ const HistorialModal = ({ isOpen, onClose, paciente }: {
   );
 };
 
-// ─── Main Component ──────────────────────────────────────────────────────────
+// ─── Modal: Confirmar Détox ───────────────────────────────────────────────────
+
+const DetoxConfirmModal = ({ isOpen, onClose, paciente, onConfirm, isPending }: {
+  isOpen: boolean; onClose: () => void; paciente: Paciente | null; onConfirm: () => void; isPending: boolean;
+}) => {
+  if (!isOpen || !paciente) return null;
+  const nombre = `${paciente.nombre ?? ''} ${paciente.apellidoPaterno ?? ''}`.trim();
+  return (
+    <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(15,23,42,0.75)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1200, padding: '1rem' }}>
+      <div style={{ backgroundColor: 'white', borderRadius: '28px', width: '100%', maxWidth: '440px', padding: '2rem', boxShadow: '0 25px 50px -12px rgba(0,0,0,0.3)' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.85rem', marginBottom: '1.25rem' }}>
+          <div style={{ backgroundColor: '#fffbeb', padding: '0.65rem', borderRadius: '14px', display: 'flex' }}>
+            <Droplets size={22} color="#f59e0b" />
+          </div>
+          <div>
+            <h3 style={{ margin: 0, fontSize: '17px', fontWeight: '900', color: '#0f172a' }}>Traslado a Desintoxicación</h3>
+            <p style={{ margin: 0, fontSize: '12px', color: '#64748b', fontWeight: '600' }}>Acción requerirá confirmación</p>
+          </div>
+        </div>
+        <p style={{ fontSize: '14px', color: '#334155', lineHeight: '1.65', margin: '0 0 1.5rem', backgroundColor: '#fefce8', border: '1px solid #fde68a', borderRadius: '14px', padding: '1rem' }}>
+          ¿Está seguro de enviar a <strong>{nombre}</strong> a Desintoxicación?<br />
+          <span style={{ fontSize: '13px', color: '#92400e' }}>Se notificará al equipo médico y se liberará la cama actual.</span>
+        </p>
+        <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'flex-end' }}>
+          <button
+            onClick={onClose}
+            disabled={isPending}
+            style={{ padding: '0.75rem 1.5rem', border: '1.5px solid #e2e8f0', borderRadius: '14px', backgroundColor: 'white', color: '#475569', fontWeight: '700', cursor: 'pointer', fontSize: '14px' }}
+          >
+            Cancelar
+          </button>
+          <button
+            onClick={onConfirm}
+            disabled={isPending}
+            style={{ padding: '0.75rem 1.75rem', backgroundColor: '#f59e0b', color: 'white', border: 'none', borderRadius: '14px', fontWeight: '800', cursor: isPending ? 'not-allowed' : 'pointer', fontSize: '14px', boxShadow: '0 4px 12px rgba(245,158,11,0.35)', opacity: isPending ? 0.7 : 1, display: 'flex', alignItems: 'center', gap: '0.5rem' }}
+          >
+            <Droplets size={15} />
+            {isPending ? 'Enviando...' : 'Confirmar traslado'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// ─── Main Component ───────────────────────────────────────────────────────────
 
 export function AreaMedica() {
   const { usuario } = useAuthStore();
   const queryClient = useQueryClient();
   const navigate = useNavigate();
 
-  const [currentView, setCurrentView] = useState<'PROSPECTOS' | 'INTERNOS'>('PROSPECTOS');
+  const config = ROL_CONFIG[(usuario?.rol as RolMedico) ?? 'AREA_MEDICA'];
+
+  const RolIcon = usuario?.rol === 'PSICOLOGIA' ? Brain
+    : usuario?.rol === 'NUTRICION' ? Apple
+    : usuario?.rol === 'ENFERMERIA' ? Heart
+    : Stethoscope;
+
+  const [currentView, setCurrentView] = useState<'PROSPECTOS' | 'INTERNOS'>(
+    config.showInbox ? 'PROSPECTOS' : 'INTERNOS'
+  );
   const [searchQuery, setSearchQuery] = useState('');
   const [sustanciasModal, setSustanciasModal] = useState({ isOpen: false, sustancias: [] as string[], nombre: '' });
   const [valoracionModal, setValoracionModal] = useState<{ isOpen: boolean; paciente: Paciente | null }>({ isOpen: false, paciente: null });
-  const [historialModal, setHistorialModal] = useState<{ isOpen: boolean; paciente: Paciente | null }>({ isOpen: false, paciente: null });
   const [expedienteFormModal, setExpedienteFormModal] = useState<{ isOpen: boolean; paciente: Paciente | null }>({ isOpen: false, paciente: null });
+  const [detoxModal, setDetoxModal] = useState<{ isOpen: boolean; paciente: Paciente | null }>({ isOpen: false, paciente: null });
   const [openDropdown, setOpenDropdown] = useState<number | null>(null);
   const [isDownloading, setIsDownloading] = useState<number | null>(null);
 
@@ -444,7 +485,7 @@ export function AreaMedica() {
     }
   };
 
-  // ── Queries ─────────────────────────────────────────────────────────────
+  // ── Queries ───────────────────────────────────────────────────────────────
 
   const { data: prospectos, isLoading: isLoadingProspectos } = useQuery<Paciente[]>({
     queryKey: ['prospectos_pendientes'],
@@ -453,10 +494,14 @@ export function AreaMedica() {
 
   const { data: pacientesInternados, isLoading: isLoadingInternados } = useQuery<Paciente[]>({
     queryKey: ['pacientes_internados'],
-    queryFn: () => apiClient.get('/pacientes?estado=INTERNADO').then(r => r.data.data),
+    queryFn: () =>
+      Promise.all([
+        apiClient.get('/pacientes?estado=INTERNADO').then(r => r.data.data as Paciente[]),
+        apiClient.get('/pacientes?estado=DETOX').then(r => r.data.data as Paciente[]),
+      ]).then(([internados, detox]) => [...internados, ...detox]),
   });
 
-  // ── Mutations ────────────────────────────────────────────────────────────
+  // ── Mutations ─────────────────────────────────────────────────────────────
 
   const archivarMutation = useMutation({
     mutationFn: (id: number) => apiClient.patch(`/pacientes/${id}/archivar`, {}),
@@ -466,15 +511,23 @@ export function AreaMedica() {
     },
   });
 
+  const detoxMutation = useMutation({
+    mutationFn: (id: number) => apiClient.patch(`/pacientes/${id}/detox`, {}),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['pacientes_internados'] });
+      setDetoxModal({ isOpen: false, paciente: null });
+    },
+  });
+
   const handleArchivar = (pac: Paciente) => {
     if (!window.confirm(`¿Archivar a ${pac.nombre} ${pac.apellidoPaterno}? Esta acción lo ocultará del sistema.`)) return;
     archivarMutation.mutate(pac.id);
   };
 
-  // ── Internos agrupados por área ──────────────────────────────────────────
+  // ── Internos agrupados por área ───────────────────────────────────────────
 
   const groupedByArea = (pacientesInternados ?? []).reduce<Record<string, Paciente[]>>((acc, pac) => {
-    const area = pac.cama?.habitacion?.area ?? 'SIN_ASIGNAR';
+    const area = pac.estado === 'DETOX' ? 'DETOX' : (pac.cama?.habitacion?.area ?? 'SIN_ASIGNAR');
     if (!acc[area]) acc[area] = [];
     acc[area].push(pac);
     return acc;
@@ -483,13 +536,13 @@ export function AreaMedica() {
   const AREA_ORDER = ['HOMBRES', 'MUJERES', 'DETOX', 'SIN_ASIGNAR'];
   const visibleAreas = AREA_ORDER.filter(a => groupedByArea[a]?.length);
 
-  // ── Filtro de búsqueda de prospectos ─────────────────────────────────────
+  // ── Filtro de búsqueda de prospectos ──────────────────────────────────────
 
   const filteredProspectos = (prospectos ?? []).filter(p =>
     !searchQuery || `${p.nombre} ${p.apellidoPaterno}`.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  // ─── Render ──────────────────────────────────────────────────────────────
+  // ─── Render ───────────────────────────────────────────────────────────────
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: 'calc(100vh - 120px)', gap: '1.5rem' }}>
@@ -497,45 +550,62 @@ export function AreaMedica() {
       {/* HEADER + TAB SWITCHER */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', backgroundColor: 'white', padding: '1.5rem 2.5rem', borderRadius: '24px', border: '1px solid #e2e8f0', boxShadow: 'var(--shadow)' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-          <div style={{ padding: '0.75rem', backgroundColor: '#3b82f6', color: 'white', borderRadius: '16px' }}>
-            <Activity size={28} />
+          <div style={{ padding: '0.75rem', backgroundColor: config.acento, color: 'white', borderRadius: '16px' }}>
+            <RolIcon size={28} />
           </div>
           <div>
-            <h1 style={{ fontSize: '22px', fontWeight: '900', color: '#1e293b', margin: 0 }}>Área Médica</h1>
+            <h1 style={{ fontSize: '22px', fontWeight: '900', color: '#1e293b', margin: 0 }}>{config.titulo}</h1>
             <p style={{ color: '#64748b', fontSize: '13px', margin: 0, fontWeight: '600' }}>
-              Panel del Médico · {usuario?.nombre}
+              {config.descripcion} · {usuario?.nombre}
             </p>
           </div>
         </div>
 
         <div style={{ display: 'flex', backgroundColor: '#f1f5f9', padding: '0.4rem', borderRadius: '14px', gap: '0.25rem' }}>
-          {([
-            { key: 'PROSPECTOS', label: 'Prospectos', icon: HeartPulse, count: prospectos?.length ?? 0 },
-            { key: 'INTERNOS',   label: 'Internos',   icon: Users,      count: pacientesInternados?.length ?? 0 },
-          ] as const).map(tab => (
+          {config.showInbox && (
             <button
-              key={tab.key}
-              onClick={() => setCurrentView(tab.key)}
+              onClick={() => setCurrentView('PROSPECTOS')}
               style={{
                 padding: '0.7rem 1.4rem', borderRadius: '11px', border: 'none', cursor: 'pointer',
                 fontWeight: '700', fontSize: '14px', display: 'flex', alignItems: 'center', gap: '0.5rem',
-                backgroundColor: currentView === tab.key ? 'white' : 'transparent',
-                color: currentView === tab.key ? '#3b82f6' : '#64748b',
-                boxShadow: currentView === tab.key ? '0 4px 6px -1px rgba(0,0,0,0.08)' : 'none',
+                backgroundColor: currentView === 'PROSPECTOS' ? 'white' : 'transparent',
+                color: currentView === 'PROSPECTOS' ? config.acento : '#64748b',
+                boxShadow: currentView === 'PROSPECTOS' ? '0 4px 6px -1px rgba(0,0,0,0.08)' : 'none',
                 transition: 'all 0.2s',
               }}
             >
-              <tab.icon size={15} />
-              {tab.label}
+              <HeartPulse size={15} />
+              Prospectos
               <span style={{
-                backgroundColor: currentView === tab.key ? '#eff6ff' : '#e2e8f0',
-                color: currentView === tab.key ? '#3b82f6' : '#64748b',
+                backgroundColor: currentView === 'PROSPECTOS' ? '#eff6ff' : '#e2e8f0',
+                color: currentView === 'PROSPECTOS' ? config.acento : '#64748b',
                 borderRadius: '100px', padding: '0.1rem 0.5rem', fontSize: '12px', fontWeight: '900',
               }}>
-                {tab.count}
+                {prospectos?.length ?? 0}
               </span>
             </button>
-          ))}
+          )}
+          <button
+            onClick={() => setCurrentView('INTERNOS')}
+            style={{
+              padding: '0.7rem 1.4rem', borderRadius: '11px', border: 'none', cursor: 'pointer',
+              fontWeight: '700', fontSize: '14px', display: 'flex', alignItems: 'center', gap: '0.5rem',
+              backgroundColor: currentView === 'INTERNOS' ? 'white' : 'transparent',
+              color: currentView === 'INTERNOS' ? config.acento : '#64748b',
+              boxShadow: currentView === 'INTERNOS' ? '0 4px 6px -1px rgba(0,0,0,0.08)' : 'none',
+              transition: 'all 0.2s',
+            }}
+          >
+            <Users size={15} />
+            Internos
+            <span style={{
+              backgroundColor: currentView === 'INTERNOS' ? '#eff6ff' : '#e2e8f0',
+              color: currentView === 'INTERNOS' ? config.acento : '#64748b',
+              borderRadius: '100px', padding: '0.1rem 0.5rem', fontSize: '12px', fontWeight: '900',
+            }}>
+              {pacientesInternados?.length ?? 0}
+            </span>
+          </button>
         </div>
       </div>
 
@@ -711,9 +781,22 @@ export function AreaMedica() {
                                   backgroundColor: 'white', borderRadius: '14px',
                                   border: '1.5px solid #e2e8f0',
                                   boxShadow: '0 10px 25px -5px rgba(0,0,0,0.14)',
-                                  zIndex: 300, minWidth: '210px', overflow: 'hidden',
+                                  zIndex: 300, minWidth: '220px', overflow: 'hidden',
                                 }}
                               >
+                                <button
+                                  onClick={() => { navigate(`/medica/expediente/${pac.id}`); setOpenDropdown(null); }}
+                                  style={{
+                                    width: '100%', display: 'flex', alignItems: 'center', gap: '0.75rem',
+                                    padding: '0.85rem 1.1rem', border: 'none', backgroundColor: 'transparent',
+                                    cursor: 'pointer', fontSize: '13px', fontWeight: '700', color: '#1e293b',
+                                    textAlign: 'left',
+                                  }}
+                                >
+                                  <ExternalLink size={14} color="#0ea5e9" />
+                                  Ver Expediente Completo
+                                </button>
+                                <div style={{ height: '1px', backgroundColor: '#f1f5f9', margin: '0 1rem' }} />
                                 <button
                                   onClick={() => { setExpedienteFormModal({ isOpen: true, paciente: pac }); setOpenDropdown(null); }}
                                   style={{
@@ -758,11 +841,12 @@ export function AreaMedica() {
                             <Stethoscope size={13} /> Valoración
                           </button>
                           <button
-                            onClick={() => setHistorialModal({ isOpen: true, paciente: pac })}
-                            style={actionBtn('#8b5cf6')}
-                            title="Ver historial"
+                            onClick={() => setDetoxModal({ isOpen: true, paciente: pac })}
+                            disabled={pac.estado === 'DETOX'}
+                            style={{ ...actionBtn('#f59e0b'), opacity: pac.estado === 'DETOX' ? 0.45 : 1, cursor: pac.estado === 'DETOX' ? 'not-allowed' : 'pointer' }}
+                            title={pac.estado === 'DETOX' ? 'Ya en Desintoxicación' : 'Enviar a Desintoxicación'}
                           >
-                            <History size={13} /> Historial
+                            <Droplets size={13} /> Détox
                           </button>
                           <button
                             onClick={() => handleArchivar(pac)}
@@ -784,6 +868,13 @@ export function AreaMedica() {
       )}
 
       {/* MODALES */}
+      <DetoxConfirmModal
+        isOpen={detoxModal.isOpen}
+        onClose={() => setDetoxModal({ isOpen: false, paciente: null })}
+        paciente={detoxModal.paciente}
+        onConfirm={() => detoxModal.paciente && detoxMutation.mutate(detoxModal.paciente.id)}
+        isPending={detoxMutation.isPending}
+      />
       <ExpedienteFormModal
         isOpen={expedienteFormModal.isOpen}
         onClose={() => setExpedienteFormModal({ isOpen: false, paciente: null })}
@@ -800,11 +891,6 @@ export function AreaMedica() {
         onClose={() => setValoracionModal({ isOpen: false, paciente: null })}
         paciente={valoracionModal.paciente}
         onSuccess={() => queryClient.invalidateQueries({ queryKey: ['pacientes_internados'] })}
-      />
-      <HistorialModal
-        isOpen={historialModal.isOpen}
-        onClose={() => setHistorialModal({ isOpen: false, paciente: null })}
-        paciente={historialModal.paciente}
       />
     </div>
   );

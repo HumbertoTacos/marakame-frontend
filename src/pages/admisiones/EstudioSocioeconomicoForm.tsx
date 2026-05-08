@@ -791,10 +791,62 @@ export function EstudioSocioeconomicoForm({ pacienteId }: { pacienteId: number }
               </div>
             </section>
 
-            {/* B: Datos del cónyuge */}
+            {/* B: Datos de Empleo del Prospecto */}
+            <section>
+              <div style={{ ...S.subTitle, color: '#7c3aed' }}>
+                <Briefcase size={15} color="#7c3aed" /> B. Datos de Empleo del Prospecto (Beneficiario)
+              </div>
+              <div style={S.grid2}>
+                <div>
+                  <label style={S.label}>Ocupación</label>
+                  <select {...inp('prosp_ocupacionTipo')}>
+                    <option value="">Seleccione...</option>
+                    {['Desempleado', 'Empleo temporal', 'Obrero / Empleado', 'Profesional', 'Empresario'].map(o => <option key={o}>{o}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label style={S.label}>Empresa / Lugar donde labora</label>
+                  <input {...inp('prosp_empresaLabora')} placeholder="Nombre de la empresa o institución" />
+                </div>
+                <div>
+                  <label style={S.label}>Antigüedad en el empleo</label>
+                  <input {...inp('prosp_antiguedadEmpleo')} placeholder="Ej: 2 años, 6 meses..." />
+                </div>
+                <div>
+                  <label style={S.label}>Puesto que ocupa</label>
+                  <input {...inp('prosp_puestoOcupa')} placeholder="Ej: Contador, Operario..." />
+                </div>
+                <div>
+                  <label style={S.label}>Horario de trabajo</label>
+                  <input {...inp('prosp_horarioTrabajo')} placeholder="Ej: 8:00 – 17:00, Lun–Vie" />
+                </div>
+                <div>
+                  <label style={S.label}>No. de dependientes económicos</label>
+                  <input {...inp('prosp_numDependientes')} type="number" min="0" placeholder="Ej: 3" />
+                </div>
+                <div>
+                  <label style={S.label}>Ingreso mensual neto ($)</label>
+                  <input {...inp('prosp_ingresoMensualNeto')} type="number" min="0" step="0.01" placeholder="$0.00" />
+                </div>
+                <div style={{ gridColumn: 'span 2' }}>
+                  <label style={S.label}>Otros ingresos</label>
+                  <input {...inp('prosp_otrosIngresos')} placeholder="Ej: Renta de propiedad, pensión alimenticia, apoyos..." />
+                </div>
+                <div>
+                  <label style={S.label}>Ocupación del cónyuge</label>
+                  <input {...inp('prosp_conyuge_ocupacion')} placeholder="Ej: Ama de casa, Comerciante..." />
+                </div>
+                <div>
+                  <label style={S.label}>Empresa donde labora el cónyuge</label>
+                  <input {...inp('prosp_conyuge_empresa')} placeholder="Nombre de la empresa o negocio" />
+                </div>
+              </div>
+            </section>
+
+            {/* C: Datos del cónyuge del solicitante */}
             <section>
               <div style={{ ...S.subTitle, color: '#1d4ed8' }}>
-                <Users size={15} color="#1d4ed8" /> B. Datos del Cónyuge
+                <Users size={15} color="#1d4ed8" /> C. Datos del Cónyuge del Solicitante
               </div>
               <div style={S.grid2}>
                 <div>
@@ -816,10 +868,10 @@ export function EstudioSocioeconomicoForm({ pacienteId }: { pacienteId: number }
               </div>
             </section>
 
-            {/* C: Otros aportantes */}
+            {/* D: Otros aportantes */}
             <section>
               <div style={{ ...S.subTitle, color: '#7c3aed' }}>
-                <Users size={15} color="#7c3aed" /> C. Otros Aportantes al Ingreso Familiar
+                <Users size={15} color="#7c3aed" /> D. Otros Aportantes al Ingreso Familiar
               </div>
               <div style={{ marginBottom: '1rem' }}>
                 <label style={S.label}>¿Otro miembro de la familia aporta al ingreso familiar?</label>
