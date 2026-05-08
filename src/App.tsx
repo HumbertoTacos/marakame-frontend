@@ -40,6 +40,7 @@ const DetalleNomina = lazy(() => import('./pages/nominas/DetalleNomina').then(m 
 
 const UsuariosPage = lazy(() => import('./pages/admin/UsuariosPage'));
 const DashboardDirectora = lazy(() => import('./pages/admin/DashboardDirectora'));
+const PagosPacientePage = lazy(() => import('./pages/operativos/PagosPacientePage'));
 // Loader Premium para Suspense
 const PageLoader = () => (
   <div style={{
@@ -137,6 +138,12 @@ function App() {
             <Route path="compras" element={
               <ProtectedRoute allowedRoles={['RRHH_FINANZAS', 'ADMIN_GENERAL']}>
                 <Compras />
+              </ProtectedRoute>
+            } />
+
+            <Route path="pagos" element={
+              <ProtectedRoute allowedRoles={['RRHH_FINANZAS', 'ADMIN_GENERAL', 'ADMISIONES']}>
+                <PagosPacientePage />
               </ProtectedRoute>
             } />
 
