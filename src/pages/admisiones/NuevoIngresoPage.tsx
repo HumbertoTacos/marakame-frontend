@@ -5,7 +5,7 @@ import {
     MapPin, Briefcase, Info, CheckCircle2, ChevronRight,
     GraduationCap, Globe, Baby, ArrowRight, Camera, Calendar, Hash,
     CreditCard, Navigation, Venus, Mars, List, Shield, Stethoscope, DollarSign, Activity,
-    UserCheck, Wallet, BriefcaseIcon, Building2, Clock, Users2, Plus, Trash2, Utensils, FileText, Check
+    UserCheck, Wallet, BriefcaseIcon, Building2, Clock, Users2, Plus, Trash2, Utensils, FileText, Check, UploadCloud, Printer
 } from 'lucide-react';
 import apiClient from '../../services/api';
 
@@ -162,6 +162,7 @@ const NuevoIngresoPage: React.FC = () => {
         socioCostoTratamiento: '', // 67 (Costo)
         socioObsTS: '', // 68
         socioEstudioCampo: '', // 69
+        socioEstudioFirmadoUrl: '', // URL del documento impreso y firmado
     });
 
     // Cargar datos pre-llenados (Primer Contacto) y Catálogos
@@ -240,14 +241,32 @@ const NuevoIngresoPage: React.FC = () => {
         setFormData(prev => ({ ...prev, [field]: value }));
     };
 
-    const handleNextStep = () => {
+    const handleNextStep = async () => {
         if (currentStep === 3) {
             if (currentSubStep < 13) {
                 setCurrentSubStep(prev => prev + 1);
                 window.scrollTo(0, 0);
             } else {
                 setIsSaving(true);
-                setTimeout(() => { setIsSaving(false); setCurrentStep(prev => prev + 1); window.scrollTo(0, 0); }, 600);
+                setTimeout(() => { setIsSaving(false); setCurrentStep(4); window.scrollTo(0, 0); }, 600);
+            }
+        } else if (currentStep === 4) {
+            // Alta del Estudio en el Backend
+            try {
+                setIsSaving(true);
+                await apiClient.post('/admisiones/estudio', {
+                    pacienteId: pacienteId || 1, // Usar 1 como fallback si no hay paciente en contexto (idealmente obtenerlo bien)
+                    datos: formData,
+                    seccionActual: 13,
+                    completado: true
+                });
+                setIsSaving(false);
+                setCurrentStep(5);
+                window.scrollTo(0, 0);
+            } catch (err) {
+                console.error("Error guardando estudio:", err);
+                alert("Hubo un error al dar de alta el estudio socioeconómico.");
+                setIsSaving(false);
             }
         } else {
             setIsSaving(true);
@@ -265,11 +284,54 @@ const NuevoIngresoPage: React.FC = () => {
         }
     };
 
-    const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
         if (file) {
-            const url = URL.createObjectURL(file);
-            updateField('socioFoto', url);
+            // Mostrar un preview temporal mientras sube
+            const previewUrl = URL.createObjectURL(file);
+            updateField('socioFoto', previewUrl);
+            
+            try {
+                const formDataFile = new FormData();
+                formDataFile.append('foto', file);
+                
+                // Subir al backend
+                const response = await apiClient.post('/admisiones/estudio/upload-foto', formDataFile, {
+                    headers: { 'Content-Type': 'multipart/form-data' }
+                });
+                
+                if (response.data.success) {
+                    const backendHost = 'http://localhost:3000';
+                    const serverUrl = backendHost + response.data.data.url;
+                    updateField('socioFoto', serverUrl);
+                }
+            } catch (error) {
+                console.error("Error al subir foto:", error);
+                alert("Error al subir la foto. Por favor intente de nuevo.");
+            }
+        }
+    };
+
+    const handleUploadDocumento = async (e: React.ChangeEvent<HTMLInputElement>, fieldName: string) => {
+        const file = e.target.files?.[0];
+        if (file) {
+            try {
+                const formDataFile = new FormData();
+                formDataFile.append('foto', file); // Reusamos el endpoint que creamos
+                
+                const response = await apiClient.post('/admisiones/estudio/upload-foto', formDataFile, {
+                    headers: { 'Content-Type': 'multipart/form-data' }
+                });
+                
+                if (response.data.success) {
+                    const backendHost = 'http://localhost:3000';
+                    const serverUrl = backendHost + response.data.data.url;
+                    updateField(fieldName, serverUrl);
+                }
+            } catch (error) {
+                console.error("Error al subir documento:", error);
+                alert("Error al subir el documento. Por favor intente de nuevo.");
+            }
         }
     };
 
@@ -1390,6 +1452,88 @@ const NuevoIngresoPage: React.FC = () => {
                                 <button onClick={handleNextStep} style={{ padding: '0.8rem 2.5rem', backgroundColor: '#3b82f6', color: 'white', border: 'none', borderRadius: '12px', fontWeight: '800', boxShadow: '0 4px 6px -1px rgba(59, 130, 246, 0.3)' }}>Siguiente División <ArrowRight size={18} style={{ marginLeft: '8px' }} /></button>
                             </div>
                         </main>
+                    </div>
+                )}
+
+                {/* PASO 4: FIRMAS Y FINALIZACIÓN */}
+                {currentStep === 4 && (
+                    <div className="animate-fade-in" style={{ backgroundColor: 'white', borderRadius: '24px', border: '1px solid #e2e8f0', padding: '3rem', boxShadow: '0 10px 15px -3px rgba(0,0,0,0.05)' }}>
+                        <div style={{ textAlign: 'center', marginBottom: '3rem' }}>
+                            <div style={{ width: '64px', height: '64px', backgroundColor: '#eff6ff', color: '#3b82f6', borderRadius: '20px', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 1.5rem' }}>
+                                <FileText size={32} />
+                            </div>
+                            <h2 style={{ fontSize: '24px', fontWeight: '900', color: '#0f172a' }}>Firmas y Expediente Físico</h2>
+                            <p style={{ color: '#64748b', marginTop: '0.5rem' }}>Imprima el estudio para recabar firmas y suba la evidencia escaneada.</p>
+                        </div>
+
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '3rem' }}>
+                            {/* COLUMNA 1: IMPRIMIR */}
+                            <div style={{ backgroundColor: '#f8fafc', padding: '2rem', borderRadius: '20px', border: '1px solid #e2e8f0', display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center' }}>
+                                <Printer size={48} color="#94a3b8" style={{ marginBottom: '1.5rem' }} />
+                                <h3 style={{ fontSize: '18px', fontWeight: '800', color: '#1e293b', marginBottom: '0.5rem' }}>1. Imprimir Estudio</h3>
+                                <p style={{ fontSize: '13px', color: '#64748b', marginBottom: '2rem' }}>Genera el formato físico con los campos de firma del solicitante y trabajo social.</p>
+                                <button onClick={() => window.print()} style={{ padding: '0.8rem 2rem', backgroundColor: '#0f172a', color: 'white', border: 'none', borderRadius: '12px', fontWeight: '800', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.5rem', width: '100%', justifyContent: 'center' }}>
+                                    <Printer size={18} /> Generar Impresión
+                                </button>
+                            </div>
+
+                            {/* COLUMNA 2: SUBIR */}
+                            <div style={{ backgroundColor: '#f0fdf4', padding: '2rem', borderRadius: '20px', border: '1px solid #dcfce7', display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center' }}>
+                                <UploadCloud size={48} color="#10b981" style={{ marginBottom: '1.5rem' }} />
+                                <h3 style={{ fontSize: '18px', fontWeight: '800', color: '#166534', marginBottom: '0.5rem' }}>2. Subir Evidencia</h3>
+                                <p style={{ fontSize: '13px', color: '#15803d', marginBottom: '2rem' }}>Escanee el documento firmado y súbalo al expediente digital del paciente.</p>
+                                
+                                <div style={{ position: 'relative', width: '100%' }}>
+                                    <button style={{ padding: '0.8rem 2rem', backgroundColor: '#10b981', color: 'white', border: 'none', borderRadius: '12px', fontWeight: '800', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.5rem', width: '100%', justifyContent: 'center' }}>
+                                        <UploadCloud size={18} /> Seleccionar Archivo
+                                    </button>
+                                    <input 
+                                        type="file" 
+                                        accept=".pdf,image/*" 
+                                        onChange={(e) => handleUploadDocumento(e, 'socioEstudioFirmadoUrl')} 
+                                        style={{ position: 'absolute', inset: 0, opacity: 0, cursor: 'pointer' }} 
+                                    />
+                                </div>
+                                {formData.socioEstudioFirmadoUrl && (
+                                    <div style={{ marginTop: '1rem', color: '#059669', fontSize: '12px', fontWeight: '800', display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
+                                        <CheckCircle2 size={14} /> Archivo Subido Correctamente
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+
+                        <div style={{ marginTop: '3rem', paddingTop: '2.5rem', borderTop: '1px solid #f1f5f9', display: 'flex', justifyContent: 'space-between' }}>
+                            <button onClick={() => setCurrentStep(3)} style={{ padding: '0.8rem 1.5rem', borderRadius: '12px', border: '1px solid #e2e8f0', background: 'transparent', color: '#64748b', fontWeight: '800', cursor: 'pointer' }}>Regresar al Estudio</button>
+                            <button 
+                                onClick={handleNextStep} 
+                                disabled={isSaving}
+                                style={{ padding: '0.8rem 2.5rem', backgroundColor: '#3b82f6', color: 'white', border: 'none', borderRadius: '12px', fontWeight: '800', boxShadow: '0 4px 6px -1px rgba(59, 130, 246, 0.3)', display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: isSaving ? 'wait' : 'pointer' }}
+                            >
+                                {isSaving ? 'Guardando...' : 'Dar de Alta Estudio'} <CheckCircle2 size={18} />
+                            </button>
+                        </div>
+                    </div>
+                )}
+
+                {/* PASO 5: ÉXITO */}
+                {currentStep === 5 && (
+                    <div className="animate-fade-in" style={{ backgroundColor: 'white', borderRadius: '24px', border: '1px solid #e2e8f0', padding: '4rem 2rem', textAlign: 'center', boxShadow: '0 10px 15px -3px rgba(0,0,0,0.05)' }}>
+                        <div style={{ width: '80px', height: '80px', backgroundColor: '#10b981', color: 'white', borderRadius: '24px', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 2rem' }}>
+                            <CheckCircle2 size={48} />
+                        </div>
+                        <h2 style={{ fontSize: '28px', fontWeight: '900', color: '#0f172a', marginBottom: '1rem' }}>¡Estudio Socioeconómico Completo!</h2>
+                        <p style={{ color: '#64748b', fontSize: '15px', maxWidth: '500px', margin: '0 auto 3rem', lineHeight: '1.6' }}>
+                            El estudio ha sido guardado exitosamente en el expediente digital del paciente y las evidencias fueron adjuntadas.
+                        </p>
+                        
+                        <div style={{ display: 'flex', justifyContent: 'center', gap: '1rem' }}>
+                            <button onClick={() => navigate('/admisiones/dashboard')} style={{ padding: '1rem 2rem', backgroundColor: '#f1f5f9', color: '#475569', border: 'none', borderRadius: '14px', fontWeight: '800', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                <Home size={18} /> Volver al Dashboard
+                            </button>
+                            <button onClick={() => navigate('/admisiones/seguimiento')} style={{ padding: '1rem 2rem', backgroundColor: '#0f172a', color: 'white', border: 'none', borderRadius: '14px', fontWeight: '800', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                <Users size={18} /> Continuar con CRM
+                            </button>
+                        </div>
                     </div>
                 )}
 
