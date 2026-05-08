@@ -1,7 +1,8 @@
 import { Outlet, useNavigate, useLocation } from 'react-router-dom';
-import { LogOut, Search, Bell, HeartPulse, Stethoscope, PackageOpen, ShoppingCart, Banknote, ShieldAlert, FileOutput, ChevronRight, Users, Clock, ClipboardList, Plus } from 'lucide-react';
+import { LogOut, Search, Bell, Stethoscope, PackageOpen, ShoppingCart, Banknote, ShieldAlert, FileOutput, ChevronRight, Users, Clock, ClipboardList, Plus, UserCog, LayoutDashboard } from 'lucide-react';
 import { useState } from 'react';
 import { useAuthStore } from '../stores/authStore';
+import marakameLogo from '../assets/Marakame_Logo.png';
 
 export function Layout() {
   const { usuario, logout } = useAuthStore();
@@ -20,6 +21,14 @@ export function Layout() {
   const handleLogout = () => {
     logout();
     navigate('/login');
+  };
+
+  const getHomeRoute = () => {
+    const rol = usuario?.rol?.toUpperCase();
+    if (rol === 'ADMIN_GENERAL') return '/directora';
+    if (rol === 'RRHH_FINANZAS') return '/nominas';
+    if (rol === 'ADMISIONES') return '/admisiones/dashboard';
+    return '/dashboard';
   };
 
   const navItemStyle = (path: string) => {
@@ -52,13 +61,11 @@ export function Layout() {
         boxShadow: '4px 0 24px rgba(0,0,0,0.1)',
         zIndex: 20
       }}>
-        <div style={{ padding: '2rem 1.5rem', display: 'flex', alignItems: 'center', gap: '1rem' }}>
-          <div style={{ background: 'linear-gradient(135deg, var(--primary), #60a5fa)', padding: '0.5rem', borderRadius: '12px', boxShadow: '0 4px 12px rgba(59,130,246,0.3)' }}>
-            <HeartPulse size={28} color="#ffffff" />
-          </div>
-          <h2 style={{ fontFamily: 'var(--heading)', fontSize: '24px', fontWeight: '700', margin: 0, letterSpacing: '0.5px', background: 'linear-gradient(to right, #ffffff, #cbd5e1)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
-            MARAKAME
-          </h2>
+        <div
+          onClick={() => navigate(getHomeRoute())}
+          style={{ padding: '1.5rem 1.5rem', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}
+        >
+          <img src={marakameLogo} alt="Marakame" style={{ width: '100%', maxWidth: '200px', objectFit: 'contain' }} />
         </div>
         
         <div style={{ padding: '0 1.5rem 1.5rem', flex: 1, overflowY: 'auto' }} className="custom-scrollbar">
@@ -146,7 +153,13 @@ export function Layout() {
           {/* Gerencial */}
           {usuario?.rol === 'ADMIN_GENERAL' && (
             <>
-              <div style={{ fontSize: '11px', color: '#64748b', textTransform: 'uppercase', letterSpacing: '1.5px', margin: '2rem 0 1rem 0', fontWeight: '700' }}>Gerencial</div>
+              <div style={{ fontSize: '11px', color: '#64748b', textTransform: 'uppercase', letterSpacing: '1.5px', margin: '2rem 0 1rem 0', fontWeight: '700' }}>Dirección</div>
+              <div style={navItemStyle('directora')} onClick={() => navigate('/directora')}
+                   onMouseEnter={(e) => { if (!location.pathname.includes('directora')) { e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.05)'; e.currentTarget.style.color = '#e2e8f0'; } }}
+                   onMouseLeave={(e) => { if (!location.pathname.includes('directora')) { e.currentTarget.style.backgroundColor = 'transparent'; e.currentTarget.style.color = '#94a3b8'; } }}
+              >
+                <LayoutDashboard size={20} style={{ marginRight: '1rem' }}/> Panel Ejecutivo
+              </div>
               <div style={navItemStyle('auditoria')} onClick={() => navigate('/auditoria')}
                    onMouseEnter={(e) => { if (!location.pathname.includes('auditoria')) { e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.05)'; e.currentTarget.style.color = '#e2e8f0'; } }}
                    onMouseLeave={(e) => { if (!location.pathname.includes('auditoria')) { e.currentTarget.style.backgroundColor = 'transparent'; e.currentTarget.style.color = '#94a3b8'; } }}
@@ -158,6 +171,12 @@ export function Layout() {
                    onMouseLeave={(e) => { if (!location.pathname.includes('exportaciones')) { e.currentTarget.style.backgroundColor = 'transparent'; e.currentTarget.style.color = '#94a3b8'; } }}
               >
                 <FileOutput size={20} style={{ marginRight: '1rem' }}/> Exportar Datos
+              </div>
+              <div style={navItemStyle('usuarios')} onClick={() => navigate('/usuarios')}
+                   onMouseEnter={(e) => { if (!location.pathname.includes('usuarios')) { e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.05)'; e.currentTarget.style.color = '#e2e8f0'; } }}
+                   onMouseLeave={(e) => { if (!location.pathname.includes('usuarios')) { e.currentTarget.style.backgroundColor = 'transparent'; e.currentTarget.style.color = '#94a3b8'; } }}
+              >
+                <UserCog size={20} style={{ marginRight: '1rem' }}/> Gestión de Usuarios
               </div>
             </>
           )}

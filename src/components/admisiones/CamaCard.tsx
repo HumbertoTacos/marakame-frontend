@@ -73,7 +73,7 @@ const CamaCard: React.FC<CamaCardProps> = ({ cama, onSelect, selected }) => {
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#3b82f6' }}>
             <User size={16} />
             <span style={{ fontSize: '13px', fontWeight: '600' }}>
-              {cama.paciente.claveUnica ? `Paciente #${cama.paciente.claveUnica}` : `${cama.paciente.nombre} ${cama.paciente.apellidoPaterno}`}
+              {`#${cama.paciente.claveUnica ?? cama.paciente.id} · ${cama.paciente.nombre}`}
             </span>
           </div>
         ) : isMaintenance ? (
