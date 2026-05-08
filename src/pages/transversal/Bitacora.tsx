@@ -38,12 +38,12 @@ export function Bitacora() {
             style={{ padding: '0.5rem', border: '1px solid #cbd5e0', borderRadius: '4px', color: '#4a5568' }}
           >
             <option value="">Todos los Módulos</option>
-            <option value="LOGIN">Autenticación (Login)</option>
-            <option value="COMPRAS">Compras / Gastos</option>
-            <option value="EXPEDIENTE">Expediente Clínico</option>
-            <option value="INGRESO">Admisiones</option>
-            <option value="ALMACEN">Kardex y Almacén</option>
-            <option value="NOMINA">Nóminas</option>
+            <option value="auth">Autenticación (Login)</option>
+            <option value="Compras">Compras / Gastos</option>
+            <option value="Expediente Clínico">Expediente Clínico</option>
+            <option value="Admisiones">Admisiones</option>
+            <option value="Almacén">Kardex y Almacén</option>
+            <option value="Nóminas">Nóminas</option>
           </select>
         </div>
       </div>

@@ -74,21 +74,28 @@ export const UbicacionFisica = {
 } as const;
 export type UbicacionFisica = (typeof UbicacionFisica)[keyof typeof UbicacionFisica];
 
-export type CategoriaProducto = 'MEDICAMENTO' | 'INSUMO_MEDICO' | 'MOBILIARIO' | 'PAPELERIA' | 'LIMPIEZA' | 'OTRO';
+export type CategoriaProducto = 'MEDICAMENTO' | 'INSUMO_MEDICO' | 'MOBILIARIO' | 'PAPELERIA' | 'LIMPIEZA' | 'ALIMENTO' | 'OTRO';
 export type EstadoStock = 'NORMAL' | 'BAJO' | 'CRITICO';
 
 export const EstadoCompra = {
   REQUISICION_CREADA: 'REQUISICION_CREADA',
-  REQUISICION_REVISADA: 'REQUISICION_REVISADA',
+
+  EN_REVISION_RECURSOS: 'EN_REVISION_RECURSOS',
+  EN_REVISION_COMPRAS: 'EN_REVISION_COMPRAS',
+  EN_REVISION_ADMINISTRACION: 'EN_REVISION_ADMINISTRACION',
+  EN_REVISION_DIRECCION: 'EN_REVISION_DIRECCION',
+
   COTIZACIONES_CARGADAS: 'COTIZACIONES_CARGADAS',
   PROVEEDOR_SELECCIONADO: 'PROVEEDOR_SELECCIONADO',
   NEGOCIACION_COMPLETADA: 'NEGOCIACION_COMPLETADA',
-  EN_REVISION_ADMIN: 'EN_REVISION_ADMIN',
-  EN_AUTORIZACION_DIRECCION: 'EN_AUTORIZACION_DIRECCION',
+
   AUTORIZADA: 'AUTORIZADA',
+
   ORDEN_GENERADA: 'ORDEN_GENERADA',
   FACTURAS_RECIBIDAS: 'FACTURAS_RECIBIDAS',
+  ORDEN_PAGO_GENERADA: 'ORDEN_PAGO_GENERADA',
   PAGO_GENERADO: 'PAGO_GENERADO',
+
   FINALIZADO: 'FINALIZADO',
   RECHAZADO: 'RECHAZADO'
 } as const;
@@ -96,35 +103,87 @@ export const EstadoCompra = {
 export type EstadoCompra =
   (typeof EstadoCompra)[keyof typeof EstadoCompra];
 
-export const EstadoCompraLabel: { [key in EstadoCompra]: string } = {
-  REQUISICION_CREADA: 'Creada',
-  REQUISICION_REVISADA: 'Revisada',
-  COTIZACIONES_CARGADAS: 'Cotizaciones cargadas',
-  PROVEEDOR_SELECCIONADO: 'Proveedor seleccionado',
-  NEGOCIACION_COMPLETADA: 'Negociación completada',
-  EN_REVISION_ADMIN: 'En revisión admin',
-  EN_AUTORIZACION_DIRECCION: 'Autorización dirección',
-  AUTORIZADA: 'Autorizada',
-  ORDEN_GENERADA: 'Orden generada',
-  FACTURAS_RECIBIDAS: 'Facturas recibidas',
-  PAGO_GENERADO: 'Pago generado',
-  FINALIZADO: 'Finalizado',
-  RECHAZADO: 'Rechazado'
+export const EstadoCompraLabel: {
+  [key in EstadoCompra]: string
+} = {
+
+  REQUISICION_CREADA: 'Requisición creada',
+
+  EN_REVISION_RECURSOS:
+    'Revisión recursos materiales',
+
+  EN_REVISION_COMPRAS:
+    'Compras e inventario',
+
+  EN_REVISION_ADMINISTRACION:
+    'Dirección administrativa',
+
+  EN_REVISION_DIRECCION:
+    'Dirección general',
+
+  COTIZACIONES_CARGADAS:
+    'Cotizaciones cargadas',
+
+  PROVEEDOR_SELECCIONADO:
+    'Proveedor seleccionado',
+
+  NEGOCIACION_COMPLETADA:
+    'Negociación completada',
+
+  AUTORIZADA:
+    'Autorizada',
+
+  ORDEN_GENERADA:
+    'Orden generada',
+
+  FACTURAS_RECIBIDAS:
+    'Facturas recibidas',
+
+  ORDEN_PAGO_GENERADA:
+    'Orden de pago generada',
+
+  PAGO_GENERADO:
+    'Pago generado',
+
+  FINALIZADO:
+    'Finalizado',
+
+  RECHAZADO:
+    'Rechazado'
 };
 
-export const EstadoCompraColor: { [key in EstadoCompra]: string } = {
+export const EstadoCompraColor: {
+  [key in EstadoCompra]: string
+} = {
+
   REQUISICION_CREADA: 'gray',
-  REQUISICION_REVISADA: 'blue',
+
+  EN_REVISION_RECURSOS: 'blue',
+
+  EN_REVISION_COMPRAS: 'orange',
+
+  EN_REVISION_ADMINISTRACION: 'yellow',
+
+  EN_REVISION_DIRECCION: 'pink',
+
   COTIZACIONES_CARGADAS: 'orange',
+
   PROVEEDOR_SELECCIONADO: 'purple',
+
   NEGOCIACION_COMPLETADA: 'cyan',
-  EN_REVISION_ADMIN: 'yellow',
-  EN_AUTORIZACION_DIRECCION: 'amber',
+
   AUTORIZADA: 'green',
+
   ORDEN_GENERADA: 'teal',
+
   FACTURAS_RECIBIDAS: 'indigo',
+
+  ORDEN_PAGO_GENERADA: 'cyan',
+
   PAGO_GENERADO: 'pink',
+
   FINALIZADO: 'green',
+
   RECHAZADO: 'red'
 };
 
@@ -283,11 +342,13 @@ export interface Producto {
   id: number;
   codigo: string;
   nombre: string;
+  descripcion?: string;
   categoria: CategoriaProducto;
   stockActual: number;
   stockMinimo: number;
   estadoStock: EstadoStock;
   unidad?: string;
+  ubicacion?: string;
 }
 
 export interface Movimiento {

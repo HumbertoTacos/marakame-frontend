@@ -38,10 +38,28 @@ export const createRequisicion = async (data: {
 };
 
 // UPDATE ESTADO
-export const updateEstado = async (id: number, estado: EstadoCompra) => {
+export const updateEstado = async (
+    id: number,
+    estado: EstadoCompra,
+    extra?: {
+        observaciones?: string;
+        fechaPago?: string;
+        referenciaBancaria?: string;
+        concepto?: string;
+        monto?: number;
+    }
+) => {
+    const body: Record<string, unknown> = { estado };
+
+    if (extra?.observaciones)       body.observaciones      = extra.observaciones;
+    if (extra?.fechaPago)           body.fechaPago          = extra.fechaPago;
+    if (extra?.referenciaBancaria)  body.referenciaBancaria = extra.referenciaBancaria;
+    if (extra?.concepto)            body.concepto           = extra.concepto;
+    if (extra?.monto !== undefined) body.monto              = extra.monto;
+
     const res = await api.patch<ApiResponse<Requisicion>>(
         `/compras/requisiciones/${id}/estado`,
-        { estado }
+        body
     );
     return res.data.data;
 };
@@ -78,12 +96,44 @@ export const generarOrden = async (
     return res.data.data;
 };
 
+// ORDEN DE PAGO
+export const generarOrdenPago = async (
+    id: number
+) => {
+
+    const res = await api.post(
+        `/compras/requisiciones/${id}/orden-pago`
+    );
+
+    return res.data.data;
+};
+
 // FACTURA
-export const subirFactura = async (id: number, file: File) => {
+export const subirFactura = async (
+    id: number,
+    file: File
+) => {
+
     const form = new FormData();
-    form.append('factura', file);
-    const res = await api.post(`/compras/requisiciones/${id}/factura`, form, {
-        headers: { 'Content-Type': 'multipart/form-data' }
-    });
+
+    form.append(
+        'factura',
+        file
+    );
+
+    const res = await api.post<{
+        success: boolean;
+        url: string;
+    }>(
+        `/compras/requisiciones/${id}/factura`,
+        form,
+        {
+            headers: {
+                'Content-Type':
+                    'multipart/form-data'
+            }
+        }
+    );
+
     return res.data;
 };

@@ -4,7 +4,9 @@ import {
     createRequisicion,
     updateEstado,
     addCotizacion,
-    generarOrden
+    generarOrden,
+    generarOrdenPago,
+    subirFactura
     } from '../services/compras.service';
     import type { EstadoCompra } from '../types';
 
@@ -12,23 +14,45 @@ import {
     const queryClient = useQueryClient();
 
     const requisicionesQuery = useQuery({
-        queryKey: ['requisiciones'],
+        queryKey: ['compras'],
         queryFn: getRequisiciones
     });
 
     const createReq = useMutation({
         mutationFn: createRequisicion,
         onSuccess: () => {
-        queryClient.invalidateQueries({ queryKey: ['requisiciones'] });
+        queryClient.invalidateQueries({ queryKey: ['compras'] });
         }
     });
 
     const changeEstado = useMutation({
-        mutationFn: ({ id, estado }: { id: number; estado: EstadoCompra }) =>
-        updateEstado(id, estado),
+        mutationFn: ({
+            id,
+            estado,
+            observaciones,
+            fechaPago,
+            referenciaBancaria,
+            concepto,
+            monto,
+        }: {
+            id: number;
+            estado: EstadoCompra;
+            observaciones?: string;
+            fechaPago?: string;
+            referenciaBancaria?: string;
+            concepto?: string;
+            monto?: number;
+        }) =>
+            updateEstado(id, estado, {
+                observaciones,
+                fechaPago,
+                referenciaBancaria,
+                concepto,
+                monto,
+            }),
         onSuccess: () => {
-        queryClient.invalidateQueries({ queryKey: ['requisiciones'] });
-        }
+            queryClient.invalidateQueries({ queryKey: ['compras'] });
+        },
     });
 
     const createCot = useMutation({
@@ -47,7 +71,7 @@ import {
 
         onSuccess: () => {
             queryClient.invalidateQueries({
-                queryKey: ['requisiciones']
+                queryKey: ['compras']
             });
         }
     });
@@ -66,17 +90,49 @@ import {
 
         onSuccess: () => {
             queryClient.invalidateQueries({
-                queryKey: ['requisiciones']
+                queryKey: ['compras']
+            });
+        }
+    });
+
+    const createOrdenPago = useMutation({
+        mutationFn: (id: number) =>
+            generarOrdenPago(id),
+
+        onSuccess: () => {
+            queryClient.invalidateQueries({
+                queryKey: ['compras']
+            });
+        }
+    });
+
+    const uploadFactura = useMutation({
+        mutationFn: ({
+            id,
+            file
+        }: {
+            id: number;
+            file: File;
+        }) =>
+            subirFactura(id, file),
+
+        onSuccess: () => {
+            queryClient.invalidateQueries({
+                queryKey: ['compras']
             });
         }
     });
 
     return {
-        requisiciones: requisicionesQuery.data || [],
-        isLoading: requisicionesQuery.isLoading,
+        requisiciones:
+            requisicionesQuery.data || [],
+        isLoading:
+            requisicionesQuery.isLoading,
         createReq,
         changeEstado,
         createCot,
-        createOrden
+        createOrden,
+        createOrdenPago,
+        uploadFactura
     };
 };
