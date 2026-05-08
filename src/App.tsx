@@ -21,6 +21,7 @@ const LaboratorioPage = lazy(() => import('./pages/medica/LaboratorioPage'));
 const PersonalPage = lazy(() => import('./pages/medica/PersonalPage'));
 const SolicitudesPage = lazy(() => import('./pages/medica/SolicitudesPage'));
 const EgresoPacientePage = lazy(() => import('./pages/medica/EgresoPacientePage'));
+const GenerarExpedientePage = lazy(() => import('./pages/medica/GenerarExpedientePage'));
 const MedicoExpedienteDigitalPage = lazy(() => import('./pages/medico/ExpedienteDigitalPage'));
 const Bitacora = lazy(() => import('./pages/transversal/Bitacora').then(m => ({ default: m.Bitacora })));
 const Reportes = lazy(() => import('./pages/transversal/Reportes').then(m => ({ default: m.Reportes })));
@@ -108,6 +109,11 @@ function App() {
               <Route path="egreso/:id" element={
                 <ProtectedRoute allowedRoles={['AREA_MEDICA', 'ADMIN_GENERAL']}>
                   <EgresoPacientePage />
+                </ProtectedRoute>
+              } />
+              <Route path="historia-clinica/:pacienteId" element={
+                <ProtectedRoute allowedRoles={['AREA_MEDICA', 'JEFE_MEDICO', 'ADMIN_GENERAL']}>
+                  <GenerarExpedientePage />
                 </ProtectedRoute>
               } />
             </Route>

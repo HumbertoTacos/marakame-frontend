@@ -93,12 +93,12 @@ export default function EgresoPacientePage() {
 
   const confirmar = useMutation({
     mutationFn: () => apiClient.post(`/egreso/paciente/${pacienteId}`, form),
-    onSuccess: () => navigate('/medica', { state: { egresoExitoso: true } }),
+    onSuccess: () => navigate('/medico/dashboard', { state: { egresoExitoso: true } }),
     onError: (e: any) => setError(e.response?.data?.message ?? 'Error al registrar el egreso'),
   });
 
   if (isLoading) return <Loader />;
-  if (isError || !data) return <ErrorCard onBack={() => navigate('/medica')} />;
+  if (isError || !data) return <ErrorCard onBack={() => navigate('/medica/pacientes')} />;
 
   const { paciente, finanzas, pertenencias, yaInscritoReforzamiento } = data;
 
@@ -116,7 +116,7 @@ export default function EgresoPacientePage() {
   }
 
   function handleBack() {
-    if (step === 0) navigate('/medica');
+    if (step === 0) navigate('/medica/pacientes');
     else setStep(s => s - 1);
   }
 
@@ -131,7 +131,7 @@ export default function EgresoPacientePage() {
         alignItems: 'center', gap: '1.25rem',
       }}>
         <button
-          onClick={() => navigate('/medica')}
+          onClick={() => navigate('/medica/pacientes')}
           style={{ background: 'rgba(255,255,255,0.1)', border: 'none', color: 'white', padding: '0.6rem', borderRadius: '10px', cursor: 'pointer', display: 'flex', alignItems: 'center' }}
         >
           <ArrowLeft size={20} />

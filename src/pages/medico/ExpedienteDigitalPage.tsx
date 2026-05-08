@@ -16,6 +16,7 @@ import {
   MapPin,
   ShieldCheck,
   ArrowLeft,
+  AlertTriangle,
 } from 'lucide-react';
 import { useNavigate, useParams } from 'react-router-dom';
 import apiClient from '../../services/api';
@@ -96,6 +97,7 @@ const ExpedienteDigitalPage: React.FC = () => {
     </div>
   );
   const activeColor = TABS.find(t => t.id === activeTab)?.color ?? '#0891b2';
+  const historiaGenerada = !!(expedienteRaw?.historiaClinica);
 
   return (
     <div style={{ padding: '2rem', maxWidth: '1600px', margin: '0 auto' }}>
@@ -155,6 +157,41 @@ const ExpedienteDigitalPage: React.FC = () => {
           <ArrowLeft size={18} /> Volver
         </button>
       </div>
+
+      {/* Banner: historia clínica pendiente */}
+      {!historiaGenerada && (
+        <div style={{
+          backgroundColor: '#fffbeb', border: '1.5px solid #fcd34d',
+          borderRadius: '20px', padding: '1.25rem 1.75rem',
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+          gap: '1rem', flexWrap: 'wrap',
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.85rem' }}>
+            <div style={{ backgroundColor: '#fef3c7', padding: '0.6rem', borderRadius: '12px', color: '#d97706', flexShrink: 0 }}>
+              <AlertTriangle size={20} />
+            </div>
+            <div>
+              <p style={{ margin: 0, fontWeight: '800', color: '#92400e', fontSize: '14px' }}>
+                Historia Clínica Inicial pendiente
+              </p>
+              <p style={{ margin: 0, fontSize: '12px', color: '#b45309', fontWeight: '600' }}>
+                Para acceder a todas las secciones del expediente es necesario generar la historia clínica inicial del paciente.
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={() => navigate(`/medica/historia-clinica/${paciente.id}`)}
+            style={{
+              padding: '0.7rem 1.4rem', borderRadius: '14px', border: 'none',
+              background: 'linear-gradient(135deg,#d97706,#b45309)',
+              color: 'white', fontWeight: '800', cursor: 'pointer', fontSize: '13px',
+              display: 'flex', alignItems: 'center', gap: '0.5rem', flexShrink: 0,
+            }}
+          >
+            <FileText size={15} /> Generar Historia Clínica Inicial
+          </button>
+        </div>
+      )}
 
       {/* Navegación de pestañas */}
       <div style={{
@@ -229,9 +266,13 @@ const ExpedienteDigitalPage: React.FC = () => {
           <SeccionSesiones expedienteId={expedienteRaw.id} tipo="SEGUIMIENTO" />
         )}
 
-        {!expedienteRaw && ['areaMedica','tratamientos','nutricion','psicologia','consejeria','familia','seguimiento'].includes(activeTab) && (
-          <div style={{ padding: '3rem', textAlign: 'center', color: '#94a3b8', border: '1px dashed #e2e8f0', borderRadius: '20px' }}>
-            El expediente clínico está siendo generado. Recarga la página en un momento.
+        {!historiaGenerada && ['areaMedica','tratamientos','nutricion','psicologia','consejeria','familia','seguimiento'].includes(activeTab) && (
+          <div style={{ padding: '3rem', textAlign: 'center', color: '#94a3b8', border: '1px dashed #fcd34d', borderRadius: '20px', backgroundColor: '#fffbeb' }}>
+            <AlertTriangle size={32} color="#d97706" style={{ marginBottom: '0.75rem' }} />
+            <p style={{ fontWeight: '700', color: '#92400e', margin: '0 0 0.5rem' }}>Historia Clínica Inicial no generada</p>
+            <p style={{ fontSize: '13px', color: '#b45309', margin: 0 }}>
+              Genera la historia clínica inicial para desbloquear esta sección.
+            </p>
           </div>
         )}
       </div>

@@ -1,11 +1,12 @@
 import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
-  Droplets, User, BedDouble, X, Save, CheckCircle, Loader2,
+  Droplets, User, BedDouble, X, Save, Loader2,
   AlertTriangle, Pill, ClipboardList, Users,
 } from 'lucide-react';
 import apiClient from '../../services/api';
 import { useAuthStore } from '../../stores/authStore';
+import { AsignacionCamaModal } from '../../components/admisiones/AsignacionCamaModal';
 import type { Paciente } from '../../types';
 
 // ─── helpers ─────────────────────────────────────────────────────────────────
@@ -38,11 +39,12 @@ const EvolucionDetoxModal: React.FC<EvolucionModalProps> = ({ paciente, onClose 
     enfermera: '',
   });
 
-  const { data: expediente, isLoading: loadingExp } = useQuery<any>({
+  const { data: expediente, isLoading: loadingExp, isError: errorExp } = useQuery<any>({
     queryKey: ['expediente_detox', paciente?.id],
     queryFn: () =>
       apiClient.get(`/expedientes/paciente/${paciente!.id}`).then(r => r.data.data),
     enabled: !!paciente?.id,
+    retry: false,
   });
 
   const saveMutation = useMutation({
@@ -105,9 +107,9 @@ const EvolucionDetoxModal: React.FC<EvolucionModalProps> = ({ paciente, onClose 
               <Loader2 size={28} style={{ margin: '0 auto 0.5rem', display: 'block' }} />
               Cargando expediente...
             </div>
-          ) : !expediente ? (
+          ) : errorExp || !expediente ? (
             <div style={{ textAlign: 'center', padding: '2rem', color: '#ef4444', fontWeight: '600', fontSize: '14px' }}>
-              Este paciente no tiene expediente activo.
+              Este paciente no tiene expediente activo. Debe completar el proceso de admisión antes de registrar evoluciones.
             </div>
           ) : (
             <>
@@ -162,7 +164,7 @@ const EvolucionDetoxModal: React.FC<EvolucionModalProps> = ({ paciente, onClose 
         </div>
 
         {/* Footer */}
-        {expediente && (
+        {expediente && !errorExp && (
           <div style={{ padding: '1.25rem 2rem', borderTop: '1px solid #f1f5f9', display: 'flex', gap: '0.75rem', justifyContent: 'flex-end' }}>
             <button onClick={onClose} style={{ padding: '0.75rem 1.5rem', border: '1.5px solid #e2e8f0', borderRadius: '14px', backgroundColor: 'white', fontWeight: '700', color: '#475569', cursor: 'pointer', fontSize: '14px' }}>
               Cancelar
@@ -182,59 +184,13 @@ const EvolucionDetoxModal: React.FC<EvolucionModalProps> = ({ paciente, onClose 
   );
 };
 
-// ─── Modal: Confirmar Finalizar Détox ─────────────────────────────────────────
-
-interface FinalizarModalProps {
-  paciente: Paciente | null;
-  isPending: boolean;
-  onConfirm: () => void;
-  onClose: () => void;
-}
-
-const FinalizarDetoxModal: React.FC<FinalizarModalProps> = ({ paciente, isPending, onConfirm, onClose }) => {
-  if (!paciente) return null;
-  const nombre = `${paciente.nombre ?? ''} ${paciente.apellidoPaterno ?? ''}`.trim();
-
-  return (
-    <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(15,23,42,0.75)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1200, padding: '1rem' }}>
-      <div style={{ backgroundColor: 'white', borderRadius: '28px', width: '100%', maxWidth: '440px', padding: '2rem', boxShadow: '0 25px 50px -12px rgba(0,0,0,0.3)', textAlign: 'center' }}>
-        <div style={{ width: '64px', height: '64px', borderRadius: '50%', backgroundColor: '#dcfce7', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 1.25rem' }}>
-          <CheckCircle size={32} color="#16a34a" />
-        </div>
-        <h3 style={{ margin: '0 0 0.5rem', fontSize: '20px', fontWeight: '900', color: '#0f172a' }}>
-          ¿Finalizar Desintoxicación?
-        </h3>
-        <p style={{ margin: '0 0 0.5rem', fontSize: '14px', color: '#334155', fontWeight: '600' }}>
-          {nombre}
-        </p>
-        <p style={{ margin: '0 0 2rem', fontSize: '13px', color: '#64748b', backgroundColor: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: '12px', padding: '0.85rem' }}>
-          El paciente regresará al estado <strong>INTERNADO</strong> y quedará disponible en el módulo médico general.
-        </p>
-        <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'center' }}>
-          <button onClick={onClose} disabled={isPending} style={{ padding: '0.75rem 1.5rem', border: '1.5px solid #e2e8f0', borderRadius: '14px', backgroundColor: 'white', fontWeight: '700', color: '#475569', cursor: 'pointer' }}>
-            Cancelar
-          </button>
-          <button
-            onClick={onConfirm}
-            disabled={isPending}
-            style={{ padding: '0.75rem 1.75rem', background: 'linear-gradient(135deg,#22c55e,#16a34a)', color: 'white', border: 'none', borderRadius: '14px', fontWeight: '800', cursor: isPending ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', gap: '0.5rem', opacity: isPending ? 0.7 : 1 }}
-          >
-            {isPending ? <Loader2 size={16} /> : <CheckCircle size={16} />}
-            {isPending ? 'Procesando...' : 'Confirmar Egreso Détox'}
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-};
-
 // ─── Página Principal ─────────────────────────────────────────────────────────
 
 export default function DesintoxicacionPage() {
   const queryClient = useQueryClient();
 
   const [evolucionModal, setEvolucionModal] = useState<Paciente | null>(null);
-  const [finalizarModal, setFinalizarModal] = useState<Paciente | null>(null);
+  const [camaModal, setCamaModal] = useState<Paciente | null>(null);
 
   const { data: pacientes, isLoading } = useQuery<Paciente[]>({
     queryKey: ['pacientes_detox'],
@@ -242,13 +198,17 @@ export default function DesintoxicacionPage() {
   });
 
   const finalizarMutation = useMutation({
-    mutationFn: (id: number) => apiClient.patch(`/pacientes/${id}/finalizar-detox`, {}),
+    mutationFn: ({ pacienteId, camaId }: { pacienteId: number; camaId: number }) =>
+      apiClient.patch(`/pacientes/${pacienteId}/finalizar-detox`, { camaId }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['pacientes_detox'] });
       queryClient.invalidateQueries({ queryKey: ['pacientes_internados'] });
-      setFinalizarModal(null);
+      setCamaModal(null);
     },
-    onError: () => alert('Error al finalizar la desintoxicación.'),
+    onError: () => {
+      setCamaModal(null);
+      alert('Error al finalizar la desintoxicación. Intente nuevamente.');
+    },
   });
 
   const total = pacientes?.length ?? 0;
@@ -355,10 +315,10 @@ export default function DesintoxicacionPage() {
                       <ClipboardList size={14} /> Evolución
                     </button>
                     <button
-                      onClick={() => setFinalizarModal(pac)}
+                      onClick={() => setCamaModal(pac)}
                       style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', padding: '0.55rem 1rem', backgroundColor: '#f0fdf4', color: '#16a34a', border: '1.5px solid #bbf7d0', borderRadius: '12px', fontWeight: '700', fontSize: '13px', cursor: 'pointer', whiteSpace: 'nowrap' }}
                     >
-                      <CheckCircle size={14} /> Finalizar Détox
+                      <BedDouble size={14} /> Finalizar Détox
                     </button>
                   </div>
                 </div>
@@ -378,7 +338,7 @@ export default function DesintoxicacionPage() {
         </div>
       )}
 
-      {/* Modales */}
+      {/* Modal: Evolución */}
       {evolucionModal && (
         <EvolucionDetoxModal
           paciente={evolucionModal}
@@ -386,12 +346,20 @@ export default function DesintoxicacionPage() {
         />
       )}
 
-      <FinalizarDetoxModal
-        paciente={finalizarModal}
-        isPending={finalizarMutation.isPending}
-        onConfirm={() => finalizarModal && finalizarMutation.mutate(finalizarModal.id)}
-        onClose={() => setFinalizarModal(null)}
-      />
+      {/* Modal: Asignación de cama + finalizar détox en una sola transacción */}
+      {camaModal && (
+        <AsignacionCamaModal
+          pacienteId={camaModal.id}
+          onConfirm={async (cama) => {
+            await finalizarMutation.mutateAsync({
+              pacienteId: camaModal.id,
+              camaId: cama.id,
+            });
+          }}
+          onSuccess={() => { /* handled inside onConfirm → finalizarMutation.onSuccess */ }}
+          onCancel={() => setCamaModal(null)}
+        />
+      )}
     </div>
   );
 }

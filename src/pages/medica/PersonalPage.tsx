@@ -4,13 +4,12 @@ import apiClient from '../../services/api';
 
 // ─── Constantes ────────────────────────────────────────────────────────────────
 
-const ROLES_CLINICOS = ['AREA_MEDICA', 'JEFE_MEDICO', 'ENFERMERIA', 'NUTRICION'];
-
 const ROL_LABELS: Record<string, { label: string; color: string; light: string }> = {
   JEFE_MEDICO: { label: 'Jefe Médico',  color: '#1d4ed8', light: '#eff6ff' },
   AREA_MEDICA: { label: 'Médico',        color: '#3b82f6', light: '#dbeafe' },
   ENFERMERIA:  { label: 'Enfermería',    color: '#0891b2', light: '#e0f2fe' },
   NUTRICION:   { label: 'Nutrición',     color: '#059669', light: '#d1fae5' },
+  PSICOLOGIA:  { label: 'Psicología',    color: '#7c3aed', light: '#ede9fe' },
 };
 
 interface Usuario {
@@ -26,16 +25,16 @@ interface Usuario {
 // ─── Componente Principal ──────────────────────────────────────────────────────
 
 export default function PersonalPage() {
-  const { data: usuarios, isLoading, isError } = useQuery<Usuario[]>({
+  const { data: usuarios = [], isLoading, isError } = useQuery<Usuario[]>({
     queryKey: ['personal_clinico'],
     queryFn: () =>
       apiClient
-        .get(`/usuarios?roles=${ROLES_CLINICOS.join(',')}`)
+        .get('/usuarios/personal-clinico')
         .then(r => r.data.data),
   });
 
-  const total = usuarios?.length ?? 0;
-  const activos = usuarios?.filter(u => u.activo).length ?? 0;
+  const total = usuarios.length;
+  const activos = usuarios.filter(u => u.activo).length;
 
   return (
     <div style={{ maxWidth: '1100px', margin: '0 auto', display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
@@ -84,7 +83,7 @@ export default function PersonalPage() {
               </tr>
             </thead>
             <tbody>
-              {(usuarios ?? []).map((u, idx) => {
+              {usuarios.map((u, idx) => {
                 const rolCfg = ROL_LABELS[u.rol] ?? { label: u.rol, color: '#64748b', light: '#f8fafc' };
                 const ultimoAcceso = u.ultimoAcceso
                   ? new Date(u.ultimoAcceso).toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: 'numeric' })
