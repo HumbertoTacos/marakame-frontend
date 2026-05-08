@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { useAuthStore } from '../stores/authStore';
+import marakameLogo from '../assets/Marakame_Logo.png';
 
 export function Login() {
   const [correo, setCorreo] = useState('');
@@ -47,10 +48,7 @@ export function Login() {
     <div style={{ height: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: '#f3f4f6' }}>
       <div style={{ width: '100%', maxWidth: '400px', padding: '2rem', backgroundColor: 'white', borderRadius: '8px', boxShadow: '0 4px 6px rgba(0,0,0,0.1)' }}>
         <div style={{ textAlign: 'center', marginBottom: '2rem' }}>
-          <div style={{ width: '80px', height: '80px', backgroundColor: '#3182ce', borderRadius: '50%', margin: '0 auto 1rem', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', fontWeight: 'bold', fontSize: '24px' }}>
-            M
-          </div>
-          <h1 style={{ fontSize: '1.5rem', fontWeight: 'bold' }}>Marakame</h1>
+          <img src={marakameLogo} alt="Marakame" style={{ width: '100%', maxWidth: '260px', objectFit: 'contain', marginBottom: '1rem' }} />
           <p style={{ color: '#718096' }}>Ingresa tus credenciales</p>
         </div>
 
