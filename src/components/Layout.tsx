@@ -63,7 +63,9 @@ export function Layout() {
   const getHomeRoute = () => {
     const rol = usuario?.rol?.toUpperCase();
     if (rol === 'ADMIN_GENERAL') return '/directora';
-    if (rol === 'RRHH_FINANZAS') return '/nominas';
+    if (rol === 'RRHH_FINANZAS' || rol === 'RECURSOS_HUMANOS') return '/nominas';
+    if (rol === 'RECURSOS_FINANCIEROS') return '/finanzas';
+    if (rol === 'JEFE_ADMINISTRATIVO') return '/administracion';
     if (rol === 'ADMISIONES') return '/admisiones/dashboard';
     return '/dashboard';
   };
@@ -110,7 +112,7 @@ export function Layout() {
           {/* ========================================================= */}
           {/* Módulo Transversal: ASISTENCIAS (Visible para todos los jefes) */}
           {/* ========================================================= */}
-          {(['ADMIN_GENERAL', 'RRHH_FINANZAS', 'JEFE_MEDICO', 'AREA_MEDICA', 'ADMISIONES', 'ALMACEN', 'PSICOLOGIA', 'NUTRICION', 'ENFERMERIA'].includes(usuario?.rol || '')) && (
+          {(['ADMIN_GENERAL', 'RRHH_FINANZAS', 'RECURSOS_HUMANOS', 'JEFE_MEDICO', 'AREA_MEDICA', 'ADMISIONES', 'ALMACEN', 'PSICOLOGIA', 'NUTRICION', 'ENFERMERIA'].includes(usuario?.rol || '')) && (
             <>
               <div style={{ fontSize: '11px', color: '#64748b', textTransform: 'uppercase', letterSpacing: '1.5px', margin: '1rem 0 1rem 0', fontWeight: '700' }}>Operación Diaria</div>
               <div style={navItemStyle('asistencias')} onClick={() => navigate('/asistencias')}
@@ -221,11 +223,33 @@ export function Layout() {
             </>
           )}
 
-          {/* Módulo Operativo - RRHH y Compras */}
-          {(usuario?.rol === 'RRHH_FINANZAS' || usuario?.rol === 'ADMIN_GENERAL') && (
+          {/* Recursos Humanos: gestiona empleados, sube prenómina y cierra el ciclo */}
+          {(['RRHH_FINANZAS', 'RECURSOS_HUMANOS', 'ADMIN_GENERAL'].includes(usuario?.rol || '')) && (
             <>
-              <div style={{ fontSize: '11px', color: '#64748b', textTransform: 'uppercase', letterSpacing: '1.5px', margin: '2rem 0 1rem 0', fontWeight: '700' }}>Administración</div>
-              
+              <div style={{ fontSize: '11px', color: '#64748b', textTransform: 'uppercase', letterSpacing: '1.5px', margin: '2rem 0 1rem 0', fontWeight: '700' }}>Recursos Humanos</div>
+              <div style={navItemStyle('nominas')} onClick={() => navigate('/nominas')}
+                  onMouseEnter={(e) => { if (!location.pathname.includes('nominas')) { e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.05)'; e.currentTarget.style.color = '#e2e8f0'; } }}
+                  onMouseLeave={(e) => { if (!location.pathname.includes('nominas')) { e.currentTarget.style.backgroundColor = 'transparent'; e.currentTarget.style.color = '#94a3b8'; } }}
+              >
+                <Banknote size={20} style={{ marginRight: '1rem' }}/> Nóminas y Personal
+              </div>
+            </>
+          )}
+
+          {/* Recursos Financieros: solicitud de subsidio + compras + pagos */}
+          {(['RRHH_FINANZAS', 'RECURSOS_FINANCIEROS', 'ADMIN_GENERAL'].includes(usuario?.rol || '')) && (
+            <>
+              <div style={{ fontSize: '11px', color: '#64748b', textTransform: 'uppercase', letterSpacing: '1.5px', margin: '2rem 0 1rem 0', fontWeight: '700' }}>Recursos Financieros</div>
+
+              {(['RECURSOS_FINANCIEROS', 'ADMIN_GENERAL'].includes(usuario?.rol || '')) && (
+                <div style={navItemStyle('finanzas')} onClick={() => navigate('/finanzas')}
+                    onMouseEnter={(e) => { if (!location.pathname.includes('finanzas')) { e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.05)'; e.currentTarget.style.color = '#e2e8f0'; } }}
+                    onMouseLeave={(e) => { if (!location.pathname.includes('finanzas')) { e.currentTarget.style.backgroundColor = 'transparent'; e.currentTarget.style.color = '#94a3b8'; } }}
+                >
+                  <Banknote size={20} style={{ marginRight: '1rem' }}/> Panel de Finanzas
+                </div>
+              )}
+
               <div style={navItemStyle('compras')} onClick={() => navigate('/compras')}
                   onMouseEnter={(e) => { if (!location.pathname.includes('compras')) { e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.05)'; e.currentTarget.style.color = '#e2e8f0'; } }}
                   onMouseLeave={(e) => { if (!location.pathname.includes('compras')) { e.currentTarget.style.backgroundColor = 'transparent'; e.currentTarget.style.color = '#94a3b8'; } }}
@@ -233,18 +257,30 @@ export function Layout() {
                 <ShoppingCart size={20} style={{ marginRight: '1rem' }}/> Control de Compras
               </div>
 
-              <div style={navItemStyle('nominas')} onClick={() => navigate('/nominas')}
-                  onMouseEnter={(e) => { if (!location.pathname.includes('nominas')) { e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.05)'; e.currentTarget.style.color = '#e2e8f0'; } }}
-                  onMouseLeave={(e) => { if (!location.pathname.includes('nominas')) { e.currentTarget.style.backgroundColor = 'transparent'; e.currentTarget.style.color = '#94a3b8'; } }}
-              >
-                <Banknote size={20} style={{ marginRight: '1rem' }}/> Nóminas y RRHH
-              </div>
-
               <div style={navItemStyle('pagos')} onClick={() => navigate('/pagos')}
                   onMouseEnter={(e) => { if (!location.pathname.includes('pagos')) { e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.05)'; e.currentTarget.style.color = '#e2e8f0'; } }}
                   onMouseLeave={(e) => { if (!location.pathname.includes('pagos')) { e.currentTarget.style.backgroundColor = 'transparent'; e.currentTarget.style.color = '#94a3b8'; } }}
               >
                 <Wallet size={20} style={{ marginRight: '1rem' }}/> Pagos de Pacientes
+              </div>
+            </>
+          )}
+
+          {/* Jefatura Administrativa: paso intermedio del flujo de nómina antes de Dirección */}
+          {(['JEFE_ADMINISTRATIVO', 'ADMIN_GENERAL'].includes(usuario?.rol || '')) && (
+            <>
+              <div style={{ fontSize: '11px', color: '#64748b', textTransform: 'uppercase', letterSpacing: '1.5px', margin: '2rem 0 1rem 0', fontWeight: '700' }}>Jefatura Administrativa</div>
+              <div style={navItemStyle('administracion')} onClick={() => navigate('/administracion')}
+                  onMouseEnter={(e) => { if (!location.pathname.includes('administracion')) { e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.05)'; e.currentTarget.style.color = '#e2e8f0'; } }}
+                  onMouseLeave={(e) => { if (!location.pathname.includes('administracion')) { e.currentTarget.style.backgroundColor = 'transparent'; e.currentTarget.style.color = '#94a3b8'; } }}
+              >
+                <ClipboardCheck size={20} style={{ marginRight: '1rem' }}/> Revisión de Pre-Nóminas
+              </div>
+              <div style={navItemStyle('nominas')} onClick={() => navigate('/nominas')}
+                  onMouseEnter={(e) => { if (!location.pathname.includes('nominas')) { e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.05)'; e.currentTarget.style.color = '#e2e8f0'; } }}
+                  onMouseLeave={(e) => { if (!location.pathname.includes('nominas')) { e.currentTarget.style.backgroundColor = 'transparent'; e.currentTarget.style.color = '#94a3b8'; } }}
+              >
+                <Banknote size={20} style={{ marginRight: '1rem' }}/> Histórico de Nóminas
               </div>
             </>
           )}

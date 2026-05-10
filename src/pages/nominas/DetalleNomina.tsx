@@ -1,48 +1,30 @@
-import React, { useEffect } from 'react';
+import { useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, PenTool, CheckCircle, Printer, Archive, Banknote } from 'lucide-react';
+import { ArrowLeft, PenTool, CheckCircle, Printer, Archive, Banknote, FileText, ExternalLink } from 'lucide-react';
 import { useNominaStore } from '../../stores/nominaStore';
-
-// 1. CORRECCIÓN: Función blindada para aceptar números o textos y convertirlos a moneda
-const formatCurrency = (amount: any) => {
-  const validAmount = Number(amount) || 0;
-  return new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' }).format(validAmount);
-};
+import { useAuthStore } from '../../stores/authStore';
+import apiClient from '../../services/api';
 
 export const DetalleNomina = () => {
   const { id } = useParams();
   const navigate = useNavigate();
   const nominaId = Number(id);
 
-  const { 
-    nominaActual: nomina, 
-    isLoading: loading, 
-    fetchNominaById, 
+  const {
+    nominaActual: nomina,
+    isLoading: loading,
+    fetchNominaById,
     firmarNomina,
     archivarNomina
   } = useNominaStore();
 
-  const userRol = "RECURSOS_HUMANOS"; 
+  const userRol = useAuthStore(s => s.usuario?.rol);
 
   useEffect(() => {
     if (nominaId) {
       fetchNominaById(nominaId);
     }
   }, [nominaId, fetchNominaById]);
-
-  // Agrupamos de forma segura
-  const prenominasPorDepto = nomina?.prenominas?.reduce((acc: any, pn: any) => {
-    const depto = pn.empleado?.departamento || "GENERAL";
-    if (!acc[depto]) acc[depto] = [];
-    acc[depto].push(pn);
-    return acc;
-  }, {}) || {};
-
-  // 2. CORRECCIÓN: Sumamos los totales en TIEMPO REAL leyendo a los empleados
-  // Así nunca saldrá en $0 aunque el backend no lo haya actualizado
-  const totalPercepcionesCalc = nomina?.prenominas?.reduce((sum: number, pn: any) => sum + (Number(pn.totalPercepciones) || 0), 0) || 0;
-  const totalDeduccionesCalc = nomina?.prenominas?.reduce((sum: number, pn: any) => sum + (Number(pn.totalDeducciones) || 0), 0) || 0;
-  const totalNetoPagarCalc = nomina?.prenominas?.reduce((sum: number, pn: any) => sum + (Number(pn.totalAPagar) || 0), 0) || 0;
 
   const handleFirmar = async () => {
     if (window.confirm("¿Confirmas tu firma oficial para esta nómina?")) {
@@ -70,21 +52,33 @@ export const DetalleNomina = () => {
   let estadoReal = nomina.estado;
   if (firmasCompletadas === 4 && estadoReal === 'EN_REVISION') estadoReal = 'AUTORIZADO';
 
+  // Secuencia: Finanzas → Jefatura Administrativa → Dirección General → cierre RH.
+  // Cada paso lo firma su rol específico. Compatibilidad con el rol legacy RRHH_FINANZAS y
+  // con ADMIN_GENERAL (super-admin) para no bloquear pruebas.
+  const esFinanzas    = userRol === 'RECURSOS_FINANCIEROS' || userRol === 'RRHH_FINANZAS' || userRol === 'ADMIN_GENERAL';
+  const esJefatura    = userRol === 'JEFE_ADMINISTRATIVO' || userRol === 'ADMIN_GENERAL';
+  const esDireccion   = userRol === 'ADMIN_GENERAL';
+  const esRH          = userRol === 'RECURSOS_HUMANOS' || userRol === 'RRHH_FINANZAS' || userRol === 'ADMIN_GENERAL';
+
   let mensajeTurno = "";
   let sePuedeFirmar = false;
   if (!nomina.firmaFinanzas) {
     mensajeTurno = "Turno: Recursos Financieros (Solicitud de Subsidio)";
-    if (userRol === 'RRHH_FINANZAS') sePuedeFirmar = true;
+    if (esFinanzas) sePuedeFirmar = true;
   } else if (!nomina.firmaAdministracion) {
-    mensajeTurno = "Turno: Depto. de Administración (Revisión)";
-    if (userRol === 'ADMINISTRACION') sePuedeFirmar = true;
+    mensajeTurno = "Turno: Jefatura Administrativa (Revisión)";
+    if (esJefatura) sePuedeFirmar = true;
   } else if (!nomina.firmaDireccion) {
     mensajeTurno = "Turno: Dirección General (Autorización)";
-    if (userRol === 'DIRECCION_GENERAL' || userRol === 'ADMIN_GENERAL') sePuedeFirmar = true;
+    if (esDireccion) sePuedeFirmar = true;
   } else if (!nomina.firmaRecursosHumanos) {
-    mensajeTurno = "Turno: Recursos Humanos (Cierre de Incidencias)";
-    if (userRol === 'RECURSOS_HUMANOS') sePuedeFirmar = true;
+    mensajeTurno = "Turno: Recursos Humanos (Cierre del ciclo)";
+    if (esRH) sePuedeFirmar = true;
   }
+
+  // Link absoluto al archivo subido por RH (si existe). Servido desde /uploads en el backend.
+  const apiBase = (apiClient.defaults.baseURL || '').replace(/\/api\/v1\/?$/, '');
+  const archivoUrlAbs = (nomina as any).archivoUrl ? `${apiBase}${(nomina as any).archivoUrl}` : null;
 
   return (
     <div style={{ padding: '2rem', maxWidth: '1600px', margin: '0 auto', backgroundColor: '#f8fafc', minHeight: '100vh' }}>
@@ -166,12 +160,12 @@ export const DetalleNomina = () => {
         </div>
       )}
 
-      {/* ZONA DE IMPRESIÓN */}
+      {/* RESUMEN + ARCHIVO DE CONTPAQi */}
       <div className="zona-impresion">
         <div style={{ backgroundColor: 'white', padding: '2rem', borderRadius: '20px', border: '1px solid #e2e8f0', marginBottom: '2rem' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '1.5rem' }}>
             <div>
-              <h2 style={{ fontSize: '24px', fontWeight: '900', color: '#1e293b', margin: '0 0 4px 0' }}>Reporte de Nómina</h2>
+              <h2 style={{ fontSize: '24px', fontWeight: '900', color: '#1e293b', margin: '0 0 4px 0' }}>Pre-Nómina</h2>
               <p style={{ margin: 0, color: '#64748b', fontWeight: '600' }}>{nomina.periodo}</p>
             </div>
             <div style={{ textAlign: 'right' }}>
@@ -181,60 +175,28 @@ export const DetalleNomina = () => {
               </span>
             </div>
           </div>
-          
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1.5rem' }}>
-            <div style={{ backgroundColor: '#f0fdf4', padding: '1rem', borderRadius: '12px', border: '1px solid #bbf7d0' }}>
-              <p style={{ margin: 0, fontSize: '11px', color: '#166534', fontWeight: 'bold' }}>PERCEPCIONES</p>
-              <p style={{ margin: 0, fontSize: '20px', fontWeight: '900', color: '#14532d' }}>{formatCurrency(totalPercepcionesCalc)}</p>
-            </div>
-            <div style={{ backgroundColor: '#fef2f2', padding: '1rem', borderRadius: '12px', border: '1px solid #fecaca' }}>
-              <p style={{ margin: 0, fontSize: '11px', color: '#991b1b', fontWeight: 'bold' }}>DEDUCCIONES</p>
-              <p style={{ margin: 0, fontSize: '20px', fontWeight: '900', color: '#7f1d1d' }}>{formatCurrency(totalDeduccionesCalc)}</p>
-            </div>
-            <div style={{ backgroundColor: '#eff6ff', padding: '1rem', borderRadius: '12px', border: '1px solid #bfdbfe' }}>
-              <p style={{ margin: 0, fontSize: '11px', color: '#1e40af', fontWeight: 'bold' }}>NETO A PAGAR</p>
-              <p style={{ margin: 0, fontSize: '20px', fontWeight: '900', color: '#1e3a8a' }}>{formatCurrency(totalNetoPagarCalc)}</p>
-            </div>
-          </div>
-        </div>
 
-        <div style={{ backgroundColor: 'white', borderRadius: '20px', border: '1px solid #e2e8f0', overflow: 'hidden' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
-            <thead>
-              <tr style={{ backgroundColor: '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
-                <th style={{ padding: '1rem 1.5rem', fontSize: '11px', color: '#64748b' }}>EMPLEADO</th>
-                <th style={{ padding: '1rem 1.5rem', fontSize: '11px', color: '#64748b' }}>SUELDO BASE</th>
-                <th style={{ padding: '1rem 1.5rem', fontSize: '11px', color: '#64748b' }}>COMPENSACIÓN</th>
-                <th style={{ padding: '1rem 1.5rem', fontSize: '11px', color: '#ef4444' }}>ISR</th>
-                <th style={{ padding: '1rem 1.5rem', fontSize: '11px', color: '#ef4444' }}>FALTAS</th>
-                <th style={{ padding: '1rem 1.5rem', fontSize: '11px', color: '#1e293b' }}>NETO A PAGAR</th>
-                <th className="no-imprimir" style={{ padding: '1rem 1.5rem' }}></th>
-              </tr>
-            </thead>
-            <tbody>
-              {Object.keys(prenominasPorDepto).map((deptoNombre) => (
-                <React.Fragment key={deptoNombre}>
-                  <tr style={{ backgroundColor: '#f1f5f9' }}>
-                    <td colSpan={7} style={{ padding: '0.6rem 1.5rem', fontWeight: '900', color: '#475569', fontSize: '12px' }}>
-                      DEPARTAMENTO: {deptoNombre.toUpperCase()}
-                    </td>
-                  </tr>
+          <p style={{ margin: '0 0 1rem 0', fontSize: '13px', color: '#64748b', lineHeight: 1.5 }}>
+            El desglose por empleado, percepciones, deducciones y totales viven en el archivo de CONTPAQi/Nomipaq adjuntado por Recursos Humanos.
+            Los responsables del flujo deben descargarlo para revisar y firmar.
+          </p>
 
-                  {prenominasPorDepto[deptoNombre].map((pn: any) => (
-                    <tr key={pn.id} style={{ borderBottom: '1px solid #e2e8f0' }}>
-                      <td style={{ padding: '1rem 1.5rem', fontWeight: '700' }}>{pn.empleado?.nombre} {pn.empleado?.apellidos}</td>
-                      <td style={{ padding: '1rem 1.5rem' }}>{formatCurrency(pn.sueldoBruto)}</td>
-                      <td style={{ padding: '1rem 1.5rem' }}>{formatCurrency(pn.compensacion)}</td>
-                      <td style={{ padding: '1rem 1.5rem', color: '#ef4444' }}>-{formatCurrency(pn.retencionISR)}</td>
-                      <td style={{ padding: '1rem 1.5rem', color: '#ef4444' }}>-{formatCurrency(pn.descuentoIncidencias)}</td>
-                      <td style={{ padding: '1rem 1.5rem', fontWeight: '900' }}>{formatCurrency(pn.totalAPagar)}</td>
-                      <td className="no-imprimir" style={{ padding: '1rem 1.5rem' }}></td>
-                    </tr>
-                  ))}
-                </React.Fragment>
-              ))}
-            </tbody>
-          </table>
+          {archivoUrlAbs ? (
+            <a
+              href={archivoUrlAbs}
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{ display: 'inline-flex', alignItems: 'center', gap: '10px', padding: '0.85rem 1.25rem', backgroundColor: '#eff6ff', borderRadius: '12px', border: '1px solid #bfdbfe', color: '#1d4ed8', textDecoration: 'none', fontWeight: '700' }}
+            >
+              <FileText size={18} />
+              <span>Ver archivo de CONTPAQi</span>
+              <ExternalLink size={14} />
+            </a>
+          ) : (
+            <div style={{ padding: '1rem', backgroundColor: '#fef2f2', border: '1px solid #fecaca', borderRadius: '12px', color: '#b91c1c', fontSize: '13px', fontWeight: '700' }}>
+              No hay archivo adjunto. Las pre-nóminas creadas antes de este flujo pueden no tener archivo asociado.
+            </div>
+          )}
         </div>
       </div>
 

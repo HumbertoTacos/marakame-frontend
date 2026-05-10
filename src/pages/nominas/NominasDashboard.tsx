@@ -1,11 +1,12 @@
 import React, { useEffect, useState } from 'react';
 import {
-  Users, Banknote, FileSignature, CheckCircle, 
+  Users, Banknote, FileSignature, CheckCircle,
   AlertCircle, Calendar, ChevronRight, FileText, UserPlus, X, Briefcase, Trash2, Filter
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useNominaStore } from '../../stores/nominaStore';
-import type { Nomina } from '../../types'; 
+import { useAuthStore } from '../../stores/authStore';
+import type { Nomina } from '../../types';
 
 const getNominaStatusConfig = (estado: string) => {
   switch (estado) {
@@ -25,13 +26,17 @@ const formatCurrency = (amount: number) => {
 
 const NominasDashboard: React.FC = () => {
   const navigate = useNavigate();
+  const userRol = useAuthStore(s => s.usuario?.rol);
 
-  const { 
-    nominas, 
-    empleados, 
-    isLoading: isLoadingNominas, 
-    fetchNominas, 
-    fetchEmpleados 
+  // Solo RH (y el rol legacy combinado y el super-admin) puede crear empleados o subir prenómina.
+  const puedeCrear = userRol === 'RECURSOS_HUMANOS' || userRol === 'RRHH_FINANZAS' || userRol === 'ADMIN_GENERAL';
+
+  const {
+    nominas,
+    empleados,
+    isLoading: isLoadingNominas,
+    fetchNominas,
+    fetchEmpleados
   } = useNominaStore();
 
   const [activeTab, setActiveTab] = useState<'nominas' | 'empleados'>('nominas');
@@ -165,22 +170,24 @@ const NominasDashboard: React.FC = () => {
           <p style={{ color: '#64748b', fontSize: '16px', marginTop: '4px' }}>Gestión de personal, pre-nóminas y control de asistencias.</p>
         </div>
         
-        <div style={{ display: 'flex', gap: '1rem' }}>
-          <button 
-            onClick={openCreateModal}
-            style={{ backgroundColor: 'white', color: '#1e293b', border: '1px solid #e2e8f0', padding: '0.75rem 1.5rem', borderRadius: '12px', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}
-          >
-            <UserPlus size={20} color="#3b82f6" />
-            Nuevo Empleado
-          </button>
-          <button 
-            onClick={() => navigate('/nominas/nueva')}
-            style={{ backgroundColor: '#3b82f6', color: 'white', border: 'none', padding: '0.75rem 1.5rem', borderRadius: '12px', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', boxShadow: '0 4px 6px -1px rgba(59,130,246,0.3)' }}
-          >
-            <FileText size={20} />
-            Importar Nómina
-          </button>
-        </div>
+        {puedeCrear && (
+          <div style={{ display: 'flex', gap: '1rem' }}>
+            <button
+              onClick={openCreateModal}
+              style={{ backgroundColor: 'white', color: '#1e293b', border: '1px solid #e2e8f0', padding: '0.75rem 1.5rem', borderRadius: '12px', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}
+            >
+              <UserPlus size={20} color="#3b82f6" />
+              Nuevo Empleado
+            </button>
+            <button
+              onClick={() => navigate('/nominas/nueva')}
+              style={{ backgroundColor: '#3b82f6', color: 'white', border: 'none', padding: '0.75rem 1.5rem', borderRadius: '12px', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', boxShadow: '0 4px 6px -1px rgba(59,130,246,0.3)' }}
+            >
+              <FileText size={20} />
+              Importar Nómina
+            </button>
+          </div>
+        )}
       </div>
 
       {/* MÉTRICAS SUPERIORES */}

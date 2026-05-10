@@ -2,7 +2,19 @@
 
 // --- Enums and Unions (Base Types) ---
 
-export type Rol = 'ADMIN_GENERAL' | 'AREA_MEDICA' | 'ENFERMERIA' | 'NUTRICION' | 'PSICOLOGIA' | 'RRHH_FINANZAS' | 'ADMISIONES' | 'ALMACEN' | 'JEFE_MEDICO';
+export type Rol =
+  | 'ADMIN_GENERAL'
+  | 'AREA_MEDICA'
+  | 'ENFERMERIA'
+  | 'NUTRICION'
+  | 'PSICOLOGIA'
+  | 'RRHH_FINANZAS'           // legacy combinado: actúa como super-RH/Finanzas
+  | 'RECURSOS_HUMANOS'
+  | 'RECURSOS_FINANCIEROS'
+  | 'JEFE_ADMINISTRATIVO'
+  | 'ADMISIONES'
+  | 'ALMACEN'
+  | 'JEFE_MEDICO';
 
 export const EstadoPaciente = {
   PROSPECTO: 'PROSPECTO',

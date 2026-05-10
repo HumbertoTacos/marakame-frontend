@@ -14,7 +14,7 @@ interface NominaState {
   fetchNominas: () => Promise<void>;
   fetchNominaById: (id: number | string) => Promise<void>;
   setNominaActual: (nomina: Nomina | null) => void;
-  createNomina: (nomina: Partial<Nomina>) => Promise<void>; 
+  createNomina: (nomina: FormData | Partial<Nomina>) => Promise<void>;
   firmarNomina: (id: number) => Promise<boolean>;
   archivarNomina: (id: number) => Promise<boolean>; // <--- FALTABA ESTO AQUÍ
   actualizarPreNomina: (id: number, data: any) => Promise<boolean>;
@@ -65,15 +65,20 @@ export const useNominaStore = create<NominaState>((set, get) => ({
   createNomina: async (nuevaNomina) => {
     set({ isLoading: true, error: null });
     try {
-      const response = await apiClient.post('/nominas/ciclo', nuevaNomina);
-      set((state) => ({ 
+      const isFormData = typeof FormData !== 'undefined' && nuevaNomina instanceof FormData;
+      const response = await apiClient.post(
+        '/nominas/ciclo',
+        nuevaNomina,
+        isFormData ? { headers: { 'Content-Type': 'multipart/form-data' } } : undefined
+      );
+      set((state) => ({
         nominas: [response.data.data, ...state.nominas],
-        isLoading: false 
+        isLoading: false
       }));
     } catch (error: any) {
       console.error("Error al guardar nómina:", error);
       set({ error: error.message || 'Error al guardar', isLoading: false });
-      throw error; 
+      throw error;
     }
   },
 

@@ -27,8 +27,12 @@ export function Login() {
         // --- LÓGICA DE REDIRECCIÓN POR ROL ---
         const rol = usuario.rol?.toUpperCase(); // Convertimos a mayúsculas para evitar errores de dedo
 
-        if (rol === 'RRHH_FINANZAS') {
+        if (rol === 'RRHH_FINANZAS' || rol === 'RECURSOS_HUMANOS') {
           navigate('/nominas');
+        } else if (rol === 'RECURSOS_FINANCIEROS') {
+          navigate('/finanzas');
+        } else if (rol === 'JEFE_ADMINISTRATIVO') {
+          navigate('/administracion');
         } else if (rol === 'ADMISIONES') {
           navigate('/admisiones');
         } else {

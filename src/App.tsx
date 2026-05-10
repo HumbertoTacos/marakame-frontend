@@ -16,6 +16,9 @@ const GenerarPreNomina = lazy(() => import('./pages/nominas/GenerarPrenomina'));
 const DetalleNomina = lazy(() => import('./pages/nominas/DetalleNomina').then(m => ({ default: m.DetalleNomina })));
 // NUEVO: Importación del control de asistencias
 const ControlAsistencias = lazy(() => import('./pages/nominas/ControlAsistencias'));
+// NUEVOS dashboards por rol del flujo de nómina
+const DashboardFinanzas = lazy(() => import('./pages/operativos/DashboardFinanzas'));
+const DashboardAdministracion = lazy(() => import('./pages/operativos/DashboardAdministracion'));
 
 const AreaMedica = lazy(() => import('./pages/medica/AreaMedica').then(m => ({ default: m.AreaMedica })));
 const DashboardMedico = lazy(() => import('./pages/medico/DashboardMedico').then(m => ({ default: m.DashboardMedico })));
@@ -139,32 +142,50 @@ function App() {
             } />
 
             <Route path="compras" element={
-              <ProtectedRoute allowedRoles={['RRHH_FINANZAS', 'ADMIN_GENERAL']}>
+              <ProtectedRoute allowedRoles={['RRHH_FINANZAS', 'RECURSOS_FINANCIEROS', 'JEFE_ADMINISTRATIVO', 'ADMIN_GENERAL']}>
                 <Compras />
               </ProtectedRoute>
             } />
 
             <Route path="pagos" element={
-              <ProtectedRoute allowedRoles={['RRHH_FINANZAS', 'ADMIN_GENERAL', 'ADMISIONES']}>
+              <ProtectedRoute allowedRoles={['RRHH_FINANZAS', 'RECURSOS_FINANCIEROS', 'ADMIN_GENERAL', 'ADMISIONES']}>
                 <PagosPacientePage />
+              </ProtectedRoute>
+            } />
+
+            {/* Dashboard de Recursos Financieros */}
+            <Route path="finanzas" element={
+              <ProtectedRoute allowedRoles={['RECURSOS_FINANCIEROS', 'RRHH_FINANZAS', 'ADMIN_GENERAL']}>
+                <DashboardFinanzas />
+              </ProtectedRoute>
+            } />
+
+            {/* Dashboard de Jefatura Administrativa */}
+            <Route path="administracion" element={
+              <ProtectedRoute allowedRoles={['JEFE_ADMINISTRATIVO', 'ADMIN_GENERAL']}>
+                <DashboardAdministracion />
               </ProtectedRoute>
             } />
 
             {/* NUEVO: Módulo de Asistencias (Para todos los Jefes de Departamento) */}
             <Route path="asistencias" element={
-              <ProtectedRoute allowedRoles={['ADMIN_GENERAL', 'RRHH_FINANZAS', 'JEFE_MEDICO', 'AREA_MEDICA', 'ADMISIONES', 'ALMACEN', 'PSICOLOGIA', 'NUTRICION', 'ENFERMERIA']}>
+              <ProtectedRoute allowedRoles={['ADMIN_GENERAL', 'RRHH_FINANZAS', 'RECURSOS_HUMANOS', 'JEFE_MEDICO', 'AREA_MEDICA', 'ADMISIONES', 'ALMACEN', 'PSICOLOGIA', 'NUTRICION', 'ENFERMERIA']}>
                 <ControlAsistencias />
               </ProtectedRoute>
             } />
 
-            {/* Módulo de Nóminas Protegido (Exclusivo RRHH / ADMIN) */}
+            {/* Módulo de Nóminas: RH crea, Finanzas/Jefatura/Dirección firman en orden */}
             <Route path="nominas" element={
-              <ProtectedRoute allowedRoles={['RRHH_FINANZAS', 'ADMIN_GENERAL']}>
+              <ProtectedRoute allowedRoles={['RRHH_FINANZAS', 'RECURSOS_HUMANOS', 'RECURSOS_FINANCIEROS', 'JEFE_ADMINISTRATIVO', 'ADMIN_GENERAL']}>
                 <Outlet />
               </ProtectedRoute>
             }>
               <Route index element={<Nominas />} />
-              <Route path="nueva" element={<GenerarPreNomina />} />
+              <Route path="nueva" element={
+                <ProtectedRoute allowedRoles={['RRHH_FINANZAS', 'RECURSOS_HUMANOS', 'ADMIN_GENERAL']}>
+                  <GenerarPreNomina />
+                </ProtectedRoute>
+              } />
               <Route path=":id" element={<DetalleNomina />} />
             </Route>
 

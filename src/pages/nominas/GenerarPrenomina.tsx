@@ -83,25 +83,23 @@ const GenerarPreNomina: React.FC = () => {
     setIsSubmitting(true);
 
     try {
-      const payload = {
-        periodo: periodoStr,
-        fechaInicio: new Date(anioActual, mesSeleccionadoIdx, quincena === 1 ? 1 : 16).toISOString(),
-        fechaFin: new Date(anioActual, mesSeleccionadoIdx, quincena === 1 ? 15 : 30).toISOString(),
-        regimen: regimen,
-        totalPercepciones: 0,
-        totalDeducciones: 0,
-        totalNetoPagar: 0
-      };
+      // Mandamos sólo metadata + archivo; los totales y el desglose viven en el archivo de CONTPAQi.
+      const formData = new FormData();
+      formData.append('periodo', periodoStr);
+      formData.append('fechaInicio', new Date(anioActual, mesSeleccionadoIdx, quincena === 1 ? 1 : 16).toISOString());
+      formData.append('fechaFin', new Date(anioActual, mesSeleccionadoIdx, quincena === 1 ? 15 : 30).toISOString());
+      formData.append('regimen', regimen);
+      formData.append('archivo', file);
 
-      await createNomina(payload);
+      await createNomina(formData);
       navigate('/nominas');
-      
+
     } catch (error: any) {
       console.error("Error al registrar pre-nómina:", error);
       if (error?.response?.status === 401) {
          alert("Tu sesión expiró o no tienes permiso. Vuelve a iniciar sesión.");
       } else {
-         alert("Hubo un error al registrar la pre-nómina. Revisa la consola.");
+         alert(error?.response?.data?.message || "Hubo un error al registrar la pre-nómina. Revisa la consola.");
       }
     } finally {
       setIsSubmitting(false);

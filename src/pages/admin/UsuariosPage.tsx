@@ -6,7 +6,8 @@ import apiClient from '../../services/api';
 type Rol =
   | 'ADMIN_GENERAL' | 'AREA_MEDICA' | 'ENFERMERIA'
   | 'NUTRICION' | 'PSICOLOGIA' | 'RRHH_FINANZAS'
-  | 'ADMISIONES' | 'ALMACEN';
+  | 'RECURSOS_HUMANOS' | 'RECURSOS_FINANCIEROS' | 'JEFE_ADMINISTRATIVO'
+  | 'ADMISIONES' | 'ALMACEN' | 'JEFE_MEDICO';
 
 interface UsuarioItem {
   id: number;
@@ -29,29 +30,38 @@ interface FormData {
 
 const ROLES: Rol[] = [
   'ADMIN_GENERAL', 'AREA_MEDICA', 'ENFERMERIA', 'NUTRICION',
-  'PSICOLOGIA', 'RRHH_FINANZAS', 'ADMISIONES', 'ALMACEN',
+  'PSICOLOGIA', 'RRHH_FINANZAS', 'RECURSOS_HUMANOS', 'RECURSOS_FINANCIEROS',
+  'JEFE_ADMINISTRATIVO', 'ADMISIONES', 'ALMACEN', 'JEFE_MEDICO',
 ];
 
 const ROL_LABELS: Record<Rol, string> = {
-  ADMIN_GENERAL: 'Admin General',
-  AREA_MEDICA:   'Área Médica',
-  ENFERMERIA:    'Enfermería',
-  NUTRICION:     'Nutrición',
-  PSICOLOGIA:    'Psicología',
-  RRHH_FINANZAS: 'RRHH / Finanzas',
-  ADMISIONES:    'Admisiones',
-  ALMACEN:       'Almacén',
+  ADMIN_GENERAL:        'Admin General',
+  AREA_MEDICA:          'Área Médica',
+  ENFERMERIA:           'Enfermería',
+  NUTRICION:            'Nutrición',
+  PSICOLOGIA:           'Psicología',
+  RRHH_FINANZAS:        'RRHH / Finanzas (legacy)',
+  RECURSOS_HUMANOS:     'Recursos Humanos',
+  RECURSOS_FINANCIEROS: 'Recursos Financieros',
+  JEFE_ADMINISTRATIVO:  'Jefatura Administrativa',
+  ADMISIONES:           'Admisiones',
+  ALMACEN:              'Almacén',
+  JEFE_MEDICO:          'Jefe Médico',
 };
 
 const ROL_COLORS: Record<Rol, string> = {
-  ADMIN_GENERAL: '#6366f1',
-  AREA_MEDICA:   '#0891b2',
-  ENFERMERIA:    '#0d9488',
-  NUTRICION:     '#d97706',
-  PSICOLOGIA:    '#7c3aed',
-  RRHH_FINANZAS: '#059669',
-  ADMISIONES:    '#2563eb',
-  ALMACEN:       '#dc2626',
+  ADMIN_GENERAL:        '#6366f1',
+  AREA_MEDICA:          '#0891b2',
+  ENFERMERIA:           '#0d9488',
+  NUTRICION:             '#d97706',
+  PSICOLOGIA:           '#7c3aed',
+  RRHH_FINANZAS:        '#059669',
+  RECURSOS_HUMANOS:     '#0891b2',
+  RECURSOS_FINANCIEROS: '#0ea5e9',
+  JEFE_ADMINISTRATIVO:  '#7c3aed',
+  ADMISIONES:           '#2563eb',
+  ALMACEN:              '#dc2626',
+  JEFE_MEDICO:          '#0e7490',
 };
 
 const EMPTY_FORM: FormData = { nombre: '', apellidos: '', correo: '', rol: 'ADMISIONES', password: '' };
