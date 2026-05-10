@@ -13,6 +13,9 @@ const Compras = lazy(() => import('./pages/operativos/Compras').then(m => ({ def
 
 const Nominas = lazy(() => import('./pages/nominas/NominasDashboard'));
 const GenerarPreNomina = lazy(() => import('./pages/nominas/GenerarPrenomina'));
+const DetalleNomina = lazy(() => import('./pages/nominas/DetalleNomina').then(m => ({ default: m.DetalleNomina })));
+// NUEVO: Importación del control de asistencias
+const ControlAsistencias = lazy(() => import('./pages/nominas/ControlAsistencias'));
 
 const AreaMedica = lazy(() => import('./pages/medica/AreaMedica').then(m => ({ default: m.AreaMedica })));
 const DashboardMedico = lazy(() => import('./pages/medico/DashboardMedico').then(m => ({ default: m.DashboardMedico })));
@@ -36,11 +39,11 @@ const ValoracionMedicaPage = lazy(() => import('./pages/admisiones/ValoracionMed
 const ExpedienteDigitalPage = lazy(() => import('./pages/admisiones/ExpedienteDigitalPage').then(m => ({ default: m.ExpedienteDigitalPage })));
 const SeguimientoProspectosPage = lazy(() => import('./pages/admisiones/SeguimientoProspectosPage'));
 const WizardPertenencias = lazy(() => import('./pages/admisiones/WizardPertenencias'));
-const DetalleNomina = lazy(() => import('./pages/nominas/DetalleNomina').then(m => ({ default: m.DetalleNomina })));
 
 const UsuariosPage = lazy(() => import('./pages/admin/UsuariosPage'));
 const DashboardDirectora = lazy(() => import('./pages/admin/DashboardDirectora'));
 const PagosPacientePage = lazy(() => import('./pages/operativos/PagosPacientePage'));
+
 // Loader Premium para Suspense
 const PageLoader = () => (
   <div style={{
@@ -147,7 +150,14 @@ function App() {
               </ProtectedRoute>
             } />
 
-            {/* Módulo de Nóminas Protegido */}
+            {/* NUEVO: Módulo de Asistencias (Para todos los Jefes de Departamento) */}
+            <Route path="asistencias" element={
+              <ProtectedRoute allowedRoles={['ADMIN_GENERAL', 'RRHH_FINANZAS', 'JEFE_MEDICO', 'AREA_MEDICA', 'ADMISIONES', 'ALMACEN', 'PSICOLOGIA', 'NUTRICION', 'ENFERMERIA']}>
+                <ControlAsistencias />
+              </ProtectedRoute>
+            } />
+
+            {/* Módulo de Nóminas Protegido (Exclusivo RRHH / ADMIN) */}
             <Route path="nominas" element={
               <ProtectedRoute allowedRoles={['RRHH_FINANZAS', 'ADMIN_GENERAL']}>
                 <Outlet />
@@ -163,7 +173,6 @@ function App() {
                 <Bitacora />
               </ProtectedRoute>
             } />
-
 
             <Route path="exportaciones" element={
               <ProtectedRoute allowedRoles={['ADMIN_GENERAL']}>

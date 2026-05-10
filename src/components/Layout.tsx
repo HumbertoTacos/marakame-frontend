@@ -1,5 +1,5 @@
 import { Outlet, useNavigate, useLocation } from 'react-router-dom';
-import { LogOut, Search, Bell, HeartPulse, Stethoscope, PackageOpen, ShoppingCart, Banknote, ShieldAlert, FileOutput, ChevronRight, Users, Clock, ClipboardList, LayoutDashboard, Droplets, FlaskConical, UserCog, ClipboardCheck, Wallet } from 'lucide-react';
+import { LogOut, Search, Bell, HeartPulse, Stethoscope, PackageOpen, ShoppingCart, Banknote, ShieldAlert, FileOutput, ChevronRight, Users, Clock, ClipboardList, LayoutDashboard, Droplets, FlaskConical, UserCog, ClipboardCheck, Wallet, CalendarCheck } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { useAuthStore } from '../stores/authStore';
 import { notificacionService, type Notificacion } from '../services/notificacion.service';
@@ -107,10 +107,29 @@ export function Layout() {
         
         <div style={{ padding: '0 1.5rem 1.5rem', flex: 1, overflowY: 'auto' }} className="custom-scrollbar">
           
+          {/* ========================================================= */}
+          {/* Módulo Transversal: ASISTENCIAS (Visible para todos los jefes) */}
+          {/* ========================================================= */}
+          {(['ADMIN_GENERAL', 'RRHH_FINANZAS', 'JEFE_MEDICO', 'AREA_MEDICA', 'ADMISIONES', 'ALMACEN', 'PSICOLOGIA', 'NUTRICION', 'ENFERMERIA'].includes(usuario?.rol || '')) && (
+            <>
+              <div style={{ fontSize: '11px', color: '#64748b', textTransform: 'uppercase', letterSpacing: '1.5px', margin: '1rem 0 1rem 0', fontWeight: '700' }}>Operación Diaria</div>
+              <div style={navItemStyle('asistencias')} onClick={() => navigate('/asistencias')}
+                   onMouseEnter={(e) => { if (!location.pathname.includes('asistencias')) { e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.05)'; e.currentTarget.style.color = '#e2e8f0'; } }}
+                   onMouseLeave={(e) => { if (!location.pathname.includes('asistencias')) { e.currentTarget.style.backgroundColor = 'transparent'; e.currentTarget.style.color = '#94a3b8'; } }}
+              >
+                <CalendarCheck size={20} style={{ marginRight: '1rem' }}/> 
+                {/* CONDICIONAL DEL TÍTULO SEGÚN EL ROL */}
+                {usuario?.rol === 'ADMIN_GENERAL' || usuario?.rol === 'JEFE_MEDICO' 
+                  ? 'Reporte de Asistencias' 
+                  : 'Pasar Asistencia'}
+              </div>
+            </>
+          )}
+
           {/* Módulo de Admisiones */}
           {(usuario?.rol === 'ADMISIONES' || usuario?.rol === 'ADMIN_GENERAL') && (
             <>
-              <div style={{ fontSize: '11px', color: '#64748b', textTransform: 'uppercase', letterSpacing: '1.5px', margin: '1rem 0 1rem 0', fontWeight: '700' }}>Admisiones</div>
+              <div style={{ fontSize: '11px', color: '#64748b', textTransform: 'uppercase', letterSpacing: '1.5px', margin: '2rem 0 1rem 0', fontWeight: '700' }}>Admisiones</div>
               <div style={navItemStyle('admisiones/dashboard')} onClick={() => navigate('/admisiones/dashboard')}
                    onMouseEnter={(e) => { if (!location.pathname.includes('admisiones/dashboard')) { e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.05)'; e.currentTarget.style.color = '#e2e8f0'; } }}
                    onMouseLeave={(e) => { if (!location.pathname.includes('admisiones/dashboard')) { e.currentTarget.style.backgroundColor = 'transparent'; e.currentTarget.style.color = '#94a3b8'; } }}
@@ -214,7 +233,6 @@ export function Layout() {
                 <ShoppingCart size={20} style={{ marginRight: '1rem' }}/> Control de Compras
               </div>
 
-              {/* RUTA CORREGIDA: Apunta a /nominas para cargar el nuevo Dashboard */}
               <div style={navItemStyle('nominas')} onClick={() => navigate('/nominas')}
                   onMouseEnter={(e) => { if (!location.pathname.includes('nominas')) { e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.05)'; e.currentTarget.style.color = '#e2e8f0'; } }}
                   onMouseLeave={(e) => { if (!location.pathname.includes('nominas')) { e.currentTarget.style.backgroundColor = 'transparent'; e.currentTarget.style.color = '#94a3b8'; } }}
@@ -274,12 +292,12 @@ export function Layout() {
           borderBottom: '1px solid var(--glass-border)', 
           display: 'flex', 
           alignItems: 'center', 
-          justifyContent: 'space-between', /* ¡AQUÍ ESTABA EL DETALLE! */
+          justifyContent: 'space-between',
           padding: '0 2.5rem', 
           zIndex: 10,
           boxShadow: '0 4px 30px rgba(0, 0, 0, 0.03)',
-          width: '100%', /* Añadido para mayor seguridad */
-          boxSizing: 'border-box' /* Añadido para que el padding no desborde */
+          width: '100%', 
+          boxSizing: 'border-box'
         }}>
           
           {/* Breadcrumb / Title area */}
