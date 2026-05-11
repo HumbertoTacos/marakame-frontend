@@ -112,17 +112,17 @@ export function Layout() {
           {/* ========================================================= */}
           {/* Módulo Transversal: ASISTENCIAS (Visible para todos los jefes) */}
           {/* ========================================================= */}
-          {(['ADMIN_GENERAL', 'RRHH_FINANZAS', 'RECURSOS_HUMANOS', 'JEFE_MEDICO', 'AREA_MEDICA', 'ADMISIONES', 'ALMACEN', 'PSICOLOGIA', 'NUTRICION', 'ENFERMERIA'].includes(usuario?.rol || '')) && (
+          {(['ADMIN_GENERAL', 'RRHH_FINANZAS', 'RECURSOS_HUMANOS', 'JEFE_ADMINISTRATIVO', 'JEFE_MEDICO', 'AREA_MEDICA', 'ADMISIONES', 'ALMACEN', 'PSICOLOGIA', 'NUTRICION', 'ENFERMERIA'].includes(usuario?.rol || '')) && (
             <>
               <div style={{ fontSize: '11px', color: '#64748b', textTransform: 'uppercase', letterSpacing: '1.5px', margin: '1rem 0 1rem 0', fontWeight: '700' }}>Operación Diaria</div>
               <div style={navItemStyle('asistencias')} onClick={() => navigate('/asistencias')}
                    onMouseEnter={(e) => { if (!location.pathname.includes('asistencias')) { e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.05)'; e.currentTarget.style.color = '#e2e8f0'; } }}
                    onMouseLeave={(e) => { if (!location.pathname.includes('asistencias')) { e.currentTarget.style.backgroundColor = 'transparent'; e.currentTarget.style.color = '#94a3b8'; } }}
               >
-                <CalendarCheck size={20} style={{ marginRight: '1rem' }}/> 
+                <CalendarCheck size={20} style={{ marginRight: '1rem' }}/>
                 {/* CONDICIONAL DEL TÍTULO SEGÚN EL ROL */}
-                {usuario?.rol === 'ADMIN_GENERAL' || usuario?.rol === 'JEFE_MEDICO' 
-                  ? 'Reporte de Asistencias' 
+                {usuario?.rol === 'ADMIN_GENERAL' || usuario?.rol === 'JEFE_MEDICO' || usuario?.rol === 'JEFE_ADMINISTRATIVO'
+                  ? 'Reporte de Asistencias'
                   : 'Pasar Asistencia'}
               </div>
             </>

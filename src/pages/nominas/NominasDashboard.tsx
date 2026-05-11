@@ -35,9 +35,24 @@ const NominasDashboard: React.FC = () => {
     nominas,
     empleados,
     isLoading: isLoadingNominas,
+    error: nominasError,
     fetchNominas,
-    fetchEmpleados
+    fetchEmpleados,
+    createEmpleado,
+    updateEmpleado
   } = useNominaStore();
+
+  // Departamentos válidos del Instituto (restringe el select para evitar valores inventados).
+  const DEPARTAMENTOS = [
+    'ADMISIONES',
+    'ALMACEN',
+    'ADMINISTRACION',
+    'RECURSOS HUMANOS',
+    'CLINICO',
+    'MEDICO',
+    'MANTENIMIENTO',
+    'COCINA',
+  ];
 
   const [activeTab, setActiveTab] = useState<'nominas' | 'empleados'>('nominas');
   
@@ -95,31 +110,58 @@ const NominasDashboard: React.FC = () => {
 
   const handleGuardarEmpleado = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    // Validaciones básicas
+    if (!empleadoForm.nombre.trim() || !empleadoForm.apellidos.trim()) {
+      alert("Nombre y apellidos son obligatorios.");
+      return;
+    }
+    if (!DEPARTAMENTOS.includes(empleadoForm.departamento)) {
+      alert("Selecciona un departamento válido de la lista.");
+      return;
+    }
+    if (!empleadoForm.salarioBase || Number(empleadoForm.salarioBase) <= 0) {
+      alert("El salario base debe ser un número mayor a 0.");
+      return;
+    }
+
+    const payload = {
+      nombre: empleadoForm.nombre.trim(),
+      apellidos: empleadoForm.apellidos.trim(),
+      puesto: empleadoForm.puesto.trim() || 'Sin especificar',
+      departamento: empleadoForm.departamento,
+      regimen: empleadoForm.regimen as 'CONFIANZA' | 'LISTA_RAYA',
+      salarioBase: Number(empleadoForm.salarioBase),
+    };
+
     try {
       if (modalMode === 'crear') {
-        console.log("Creando empleado:", empleadoForm);
+        await createEmpleado(payload);
         alert("Empleado registrado correctamente.");
-      } else {
-        console.log("Actualizando empleado:", empleadoForm);
+      } else if (empleadoForm.id != null) {
+        await updateEmpleado(empleadoForm.id, payload);
         alert("Datos del empleado actualizados.");
       }
       setShowModal(false);
-    } catch (error) {
-      alert("Error al guardar el empleado");
+      await fetchEmpleados();
+    } catch (error: any) {
+      alert(error?.response?.data?.message || "Error al guardar el empleado.");
     }
   };
 
   const toggleEstadoEmpleado = async () => {
-    const nuevoEstado = empleadoForm.estado === 'ACTIVO' ? 'BAJA' : 'ACTIVO';
-    const accion = nuevoEstado === 'BAJA' ? 'dar de baja' : 'reactivar';
-    
+    if (empleadoForm.id == null) return;
+    const nuevoActivo = empleadoForm.estado === 'ACTIVO' ? false : true;
+    const accion = nuevoActivo ? 'reactivar' : 'dar de baja';
+
     if (window.confirm(`¿Estás seguro de que deseas ${accion} a este empleado?`)) {
       try {
-        console.log(`Cambiando estado a ${nuevoEstado} para ID:`, empleadoForm.id);
-        alert(`Empleado marcado como ${nuevoEstado}.`);
+        await updateEmpleado(empleadoForm.id, { activo: nuevoActivo });
+        alert(`Empleado ${nuevoActivo ? 'reactivado' : 'dado de baja'}.`);
         setShowModal(false);
-      } catch (error) {
-        alert("Error al cambiar el estado.");
+        await fetchEmpleados();
+      } catch (error: any) {
+        alert(error?.response?.data?.message || "Error al cambiar el estado.");
       }
     }
   };
@@ -127,9 +169,11 @@ const NominasDashboard: React.FC = () => {
   const empleadosActivos = empleados.filter((e: any) => e.estado !== 'BAJA').length;
   const nominaEnProceso = nominas.find((n: Nomina) => n.estado !== 'PAGADO' && n.estado !== 'BORRADOR');
   
+  // El flujo ya no incluye "Dirección" como paso explícito (se autocompleta con Administración).
+  // Visiblemente contamos 3 firmas: Finanzas, Administración y RH.
   const nominasPendientesFirma = nominas.filter((n: Nomina) => {
-    const firmas = [n.firmaRecursosHumanos, n.firmaFinanzas, n.firmaAdministracion, n.firmaDireccion];
-    return firmas.filter(Boolean).length < 4 && n.estado !== 'BORRADOR';
+    const firmas = [n.firmaRecursosHumanos, n.firmaFinanzas, n.firmaAdministracion];
+    return firmas.filter(Boolean).length < 3 && n.estado !== 'BORRADOR';
   }).length;
 
   const stats = [
@@ -143,12 +187,12 @@ const NominasDashboard: React.FC = () => {
   const nominasFiltradas = nominas.filter((nomina: Nomina) => {
     if (filtroNomina === 'TODAS') return true;
     
-    // Evaluamos las firmas para saber si visualmente ya está autorizada
-    const firmas = [nomina.firmaRecursosHumanos, nomina.firmaFinanzas, nomina.firmaAdministracion, nomina.firmaDireccion];
+    // Evaluamos las 3 firmas visibles del flujo (Finanzas, Administración, RH).
+    const firmas = [nomina.firmaRecursosHumanos, nomina.firmaFinanzas, nomina.firmaAdministracion];
     const firmasCompletadas = firmas.filter(Boolean).length;
 
     let estadoFiltro = nomina.estado;
-    if (firmasCompletadas === 4 && (estadoFiltro === 'EN_REVISION' || estadoFiltro === 'SOLICITUD_SUBSIDIO')) {
+    if (firmasCompletadas === 3 && (estadoFiltro === 'EN_REVISION' || estadoFiltro === 'SOLICITUD_SUBSIDIO')) {
       estadoFiltro = 'AUTORIZADO';
     }
 
@@ -190,6 +234,25 @@ const NominasDashboard: React.FC = () => {
         )}
       </div>
 
+      {/* Banner de error si fetchNominas falló */}
+      {nominasError && (
+        <div style={{ backgroundColor: '#fef2f2', border: '1px solid #fecaca', padding: '1rem 1.25rem', borderRadius: '12px', marginBottom: '1.5rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '12px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <AlertCircle size={20} color="#b91c1c" />
+            <div>
+              <p style={{ margin: 0, fontWeight: '800', color: '#b91c1c' }}>No se pudo cargar la lista de nóminas</p>
+              <p style={{ margin: '2px 0 0 0', fontSize: '12px', color: '#7f1d1d' }}>{nominasError}</p>
+            </div>
+          </div>
+          <button
+            onClick={() => { fetchNominas(); fetchEmpleados(); }}
+            style={{ backgroundColor: '#b91c1c', color: 'white', border: 'none', padding: '0.5rem 1rem', borderRadius: '8px', fontWeight: '700', cursor: 'pointer' }}
+          >
+            Reintentar
+          </button>
+        </div>
+      )}
+
       {/* MÉTRICAS SUPERIORES */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '1.5rem', marginBottom: '2.5rem' }}>
         {stats.map((stat, i) => (
@@ -227,9 +290,10 @@ const NominasDashboard: React.FC = () => {
         {/* TAB 1: NÓMINAS */}
         {activeTab === 'nominas' && (
           <div style={{ padding: '1.5rem' }}>
-            
-            {/* PÍLDORAS DE FILTRADO */}
-            <div style={{ display: 'flex', gap: '10px', marginBottom: '1.5rem', backgroundColor: '#f1f5f9', padding: '6px', borderRadius: '12px', width: 'fit-content' }}>
+
+            {/* CABECERA: filtros + botón refrescar */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', gap: '1rem', flexWrap: 'wrap' }}>
+              <div style={{ display: 'flex', gap: '10px', backgroundColor: '#f1f5f9', padding: '6px', borderRadius: '12px', width: 'fit-content' }}>
               <button 
                 onClick={() => setFiltroNomina('EN_PROCESO')}
                 style={{ border: 'none', padding: '8px 16px', borderRadius: '8px', fontSize: '13px', fontWeight: '800', cursor: 'pointer', transition: '0.2s', backgroundColor: filtroNomina === 'EN_PROCESO' ? 'white' : 'transparent', color: filtroNomina === 'EN_PROCESO' ? '#1e293b' : '#64748b', boxShadow: filtroNomina === 'EN_PROCESO' ? '0 1px 3px rgba(0,0,0,0.1)' : 'none' }}
@@ -242,11 +306,21 @@ const NominasDashboard: React.FC = () => {
               >
                 Autorizadas / Pagadas
               </button>
-              <button 
+              <button
                 onClick={() => setFiltroNomina('TODAS')}
                 style={{ border: 'none', padding: '8px 16px', borderRadius: '8px', fontSize: '13px', fontWeight: '800', cursor: 'pointer', transition: '0.2s', backgroundColor: filtroNomina === 'TODAS' ? 'white' : 'transparent', color: filtroNomina === 'TODAS' ? '#1e293b' : '#64748b', boxShadow: filtroNomina === 'TODAS' ? '0 1px 3px rgba(0,0,0,0.1)' : 'none' }}
               >
                 Ver Todas
+              </button>
+              </div>
+
+              {/* Botón refrescar — útil si el listado se queda stale después de subir una pre-nómina */}
+              <button
+                onClick={() => { fetchNominas(); fetchEmpleados(); }}
+                disabled={isLoadingNominas}
+                style={{ display: 'flex', alignItems: 'center', gap: '8px', backgroundColor: '#3b82f6', color: 'white', border: 'none', padding: '0.55rem 1rem', borderRadius: '10px', fontWeight: '700', cursor: isLoadingNominas ? 'not-allowed' : 'pointer', opacity: isLoadingNominas ? 0.6 : 1 }}
+              >
+                <Filter size={14} /> {isLoadingNominas ? 'Cargando…' : 'Actualizar'}
               </button>
             </div>
 
@@ -260,17 +334,18 @@ const NominasDashboard: React.FC = () => {
                       <th style={{ padding: '1.25rem 1.5rem', fontSize: '12px', fontWeight: '800', color: '#64748b', textTransform: 'uppercase' }}>Folio / Periodo</th>
                       <th style={{ padding: '1.25rem 1.5rem', fontSize: '12px', fontWeight: '800', color: '#64748b', textTransform: 'uppercase' }}>Estado Actual</th>
                       <th style={{ padding: '1.25rem 1.5rem', fontSize: '12px', fontWeight: '800', color: '#64748b', textTransform: 'uppercase' }}>Progreso de Firmas</th>
-                      <th style={{ padding: '1.25rem 1.5rem', fontSize: '12px', fontWeight: '800', color: '#64748b', textTransform: 'uppercase' }}>Total a Pagar</th>
                       <th style={{ padding: '1.25rem 1.5rem', fontSize: '12px', fontWeight: '800', color: '#64748b', textTransform: 'uppercase', textAlign: 'right' }}>Acciones</th>
                     </tr>
                   </thead>
                   <tbody>
                     {nominasFiltradas.length > 0 ? nominasFiltradas.map((nomina: Nomina) => {
-                      const firmas = [nomina.firmaRecursosHumanos, nomina.firmaFinanzas, nomina.firmaAdministracion, nomina.firmaDireccion];
+                      // Sólo contamos las 3 firmas visibles del flujo (Finanzas, Administración, RH).
+                      // firmaDireccion se setea automáticamente cuando Administración firma.
+                      const firmas = [nomina.firmaRecursosHumanos, nomina.firmaFinanzas, nomina.firmaAdministracion];
                       const firmasCompletadas = firmas.filter(Boolean).length;
 
                       let estadoVisual = nomina.estado;
-                      if (firmasCompletadas === 4 && (estadoVisual === 'EN_REVISION' || estadoVisual === 'SOLICITUD_SUBSIDIO')) {
+                      if (firmasCompletadas === 3 && (estadoVisual === 'EN_REVISION' || estadoVisual === 'SOLICITUD_SUBSIDIO')) {
                         estadoVisual = 'AUTORIZADO';
                       }
 
@@ -292,15 +367,10 @@ const NominasDashboard: React.FC = () => {
                           <td style={{ padding: '1.25rem 1.5rem' }}>
                             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                               <div style={{ width: '100px', height: '6px', backgroundColor: '#e2e8f0', borderRadius: '3px', overflow: 'hidden' }}>
-                                <div style={{ width: `${(firmasCompletadas / 4) * 100}%`, height: '100%', backgroundColor: firmasCompletadas === 4 ? '#10b981' : '#3b82f6' }}></div>
+                                <div style={{ width: `${(firmasCompletadas / 3) * 100}%`, height: '100%', backgroundColor: firmasCompletadas === 3 ? '#10b981' : '#3b82f6' }}></div>
                               </div>
-                              <span style={{ fontSize: '12px', fontWeight: '700', color: '#64748b' }}>{firmasCompletadas}/4</span>
+                              <span style={{ fontSize: '12px', fontWeight: '700', color: '#64748b' }}>{firmasCompletadas}/3</span>
                             </div>
-                          </td>
-                          <td style={{ padding: '1.25rem 1.5rem' }}>
-                            <span style={{ fontWeight: '800', color: '#1e293b' }}>
-                              {nomina.totalNetoPagar ? formatCurrency(nomina.totalNetoPagar) : 'Pendiente Cálculo'}
-                            </span>
                           </td>
                           <td style={{ padding: '1.25rem 1.5rem', textAlign: 'right' }}>
                             <button onClick={() => navigate(`/nominas/${nomina.id}`)} style={{ backgroundColor: 'transparent', border: 'none', color: '#3b82f6', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', padding: '8px', borderRadius: '8px' }}>
@@ -311,7 +381,7 @@ const NominasDashboard: React.FC = () => {
                       );
                     }) : (
                       <tr>
-                        <td colSpan={5} style={{ padding: '3rem', textAlign: 'center', color: '#64748b', fontWeight: '600' }}>
+                        <td colSpan={4} style={{ padding: '3rem', textAlign: 'center', color: '#64748b', fontWeight: '600' }}>
                           No hay nóminas en esta categoría.
                         </td>
                       </tr>
@@ -417,7 +487,17 @@ const NominasDashboard: React.FC = () => {
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
                 <div>
                   <label style={{ display: 'block', fontSize: '12px', fontWeight: '700', color: '#64748b', marginBottom: '4px' }}>Departamento *</label>
-                  <input required type="text" placeholder="Ej. Administración..." value={empleadoForm.departamento} onChange={(e) => setEmpleadoForm({...empleadoForm, departamento: e.target.value})} style={{ width: '100%', boxSizing: 'border-box', padding: '0.75rem', borderRadius: '10px', border: '1px solid #cbd5e1', outline: 'none' }} />
+                  <select
+                    required
+                    value={empleadoForm.departamento}
+                    onChange={(e) => setEmpleadoForm({ ...empleadoForm, departamento: e.target.value })}
+                    style={{ width: '100%', boxSizing: 'border-box', padding: '0.75rem', borderRadius: '10px', border: '1px solid #cbd5e1', outline: 'none', backgroundColor: 'white' }}
+                  >
+                    <option value="" disabled>Selecciona un departamento</option>
+                    {DEPARTAMENTOS.map(d => (
+                      <option key={d} value={d}>{d}</option>
+                    ))}
+                  </select>
                 </div>
                 <div>
                   <label style={{ display: 'block', fontSize: '12px', fontWeight: '700', color: '#64748b', marginBottom: '4px' }}>Puesto</label>

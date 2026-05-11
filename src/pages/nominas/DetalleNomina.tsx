@@ -1,6 +1,9 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, PenTool, CheckCircle, Printer, Archive, Banknote, FileText, ExternalLink } from 'lucide-react';
+import {
+  ArrowLeft, PenTool, CheckCircle, Archive, Banknote, FileText, ExternalLink,
+  UploadCloud, Loader2
+} from 'lucide-react';
 import { useNominaStore } from '../../stores/nominaStore';
 import { useAuthStore } from '../../stores/authStore';
 import apiClient from '../../services/api';
@@ -20,10 +23,14 @@ export const DetalleNomina = () => {
 
   const userRol = useAuthStore(s => s.usuario?.rol);
 
+  // Estados para los uploads del flujo
+  const [archivoSubsidio, setArchivoSubsidio] = useState<File | null>(null);
+  const [archivoFinal, setArchivoFinal] = useState<File | null>(null);
+  const [subiendoSubsidio, setSubiendoSubsidio] = useState(false);
+  const [subiendoFinal, setSubiendoFinal] = useState(false);
+
   useEffect(() => {
-    if (nominaId) {
-      fetchNominaById(nominaId);
-    }
+    if (nominaId) fetchNominaById(nominaId);
   }, [nominaId, fetchNominaById]);
 
   const handleFirmar = async () => {
@@ -33,170 +40,205 @@ export const DetalleNomina = () => {
     }
   };
 
-  const handleImprimirRecibos = () => {
-    window.print();
-  };
-
   const handleArchivar = async () => {
-    if (window.confirm("¿Confirmas que los recibos fueron firmados y entregados a Finanzas? Esta acción cerrará la nómina definitivamente.")) {
+    if (window.confirm("¿Confirmas archivar esta nómina? Cerrará definitivamente el ciclo.")) {
       const exito = await archivarNomina(nominaId);
       if (exito) alert("Nómina archivada y cerrada.");
+    }
+  };
+
+  const handleSubirSubsidio = async () => {
+    if (!archivoSubsidio) return alert("Selecciona el documento de subsidio antes de subir.");
+    try {
+      setSubiendoSubsidio(true);
+      const fd = new FormData();
+      fd.append('archivo', archivoSubsidio);
+      const res = await apiClient.post(`/nominas/ciclo/${nominaId}/subsidio`, fd, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      });
+      if (res.data.success) {
+        alert(res.data.message);
+        setArchivoSubsidio(null);
+        await fetchNominaById(nominaId);
+      }
+    } catch (err: any) {
+      alert(err.response?.data?.message || 'Error al subir el documento de subsidio.');
+    } finally {
+      setSubiendoSubsidio(false);
+    }
+  };
+
+  const handleSubirNominaFinal = async () => {
+    if (!archivoFinal) return alert("Selecciona la nómina escaneada con la firma del trabajador.");
+    try {
+      setSubiendoFinal(true);
+      const fd = new FormData();
+      fd.append('archivo', archivoFinal);
+      const res = await apiClient.post(`/nominas/ciclo/${nominaId}/nomina-final`, fd, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      });
+      if (res.data.success) {
+        alert(res.data.message);
+        setArchivoFinal(null);
+        await fetchNominaById(nominaId);
+      }
+    } catch (err: any) {
+      alert(err.response?.data?.message || 'Error al subir la nómina firmada.');
+    } finally {
+      setSubiendoFinal(false);
     }
   };
 
   if (loading) return <div style={{ padding: '4rem', textAlign: 'center', color: '#64748b', fontWeight: 'bold' }}>Cargando detalles de la nómina...</div>;
   if (!nomina) return <div style={{ padding: '4rem', textAlign: 'center', color: '#ef4444' }}>No se encontró la nómina.</div>;
 
-  const firmasCompletadas = [nomina.firmaRecursosHumanos, nomina.firmaFinanzas, nomina.firmaAdministracion, nomina.firmaDireccion].filter(Boolean).length;
-  
   let estadoReal = nomina.estado;
-  if (firmasCompletadas === 4 && estadoReal === 'EN_REVISION') estadoReal = 'AUTORIZADO';
+  const firmaRH = !!nomina.firmaRecursosHumanos;
 
-  // Secuencia: Finanzas → Jefatura Administrativa → Dirección General → cierre RH.
-  // Cada paso lo firma su rol específico. Compatibilidad con el rol legacy RRHH_FINANZAS y
-  // con ADMIN_GENERAL (super-admin) para no bloquear pruebas.
-  const esFinanzas    = userRol === 'RECURSOS_FINANCIEROS' || userRol === 'RRHH_FINANZAS' || userRol === 'ADMIN_GENERAL';
-  const esJefatura    = userRol === 'JEFE_ADMINISTRATIVO' || userRol === 'ADMIN_GENERAL';
-  const esDireccion   = userRol === 'ADMIN_GENERAL';
-  const esRH          = userRol === 'RECURSOS_HUMANOS' || userRol === 'RRHH_FINANZAS' || userRol === 'ADMIN_GENERAL';
+  // Roles del flujo. admin@marakame.com no participa: administracion@marakame.com (RRHH_FINANZAS)
+  // hace el paso intermedio (revisión + autorización). Su firma cubre Jefatura y Dirección.
+  const esFinanzas       = userRol === 'RECURSOS_FINANCIEROS' || userRol === 'RRHH_FINANZAS';
+  const esAdministracion = userRol === 'JEFE_ADMINISTRATIVO' || userRol === 'RRHH_FINANZAS';
+  const esRH             = userRol === 'RECURSOS_HUMANOS' || userRol === 'RRHH_FINANZAS';
 
+  // Mensaje del turno actual
   let mensajeTurno = "";
-  let sePuedeFirmar = false;
-  if (!nomina.firmaFinanzas) {
-    mensajeTurno = "Turno: Recursos Financieros (Solicitud de Subsidio)";
-    if (esFinanzas) sePuedeFirmar = true;
-  } else if (!nomina.firmaAdministracion) {
-    mensajeTurno = "Turno: Jefatura Administrativa (Revisión)";
-    if (esJefatura) sePuedeFirmar = true;
-  } else if (!nomina.firmaDireccion) {
-    mensajeTurno = "Turno: Dirección General (Autorización)";
-    if (esDireccion) sePuedeFirmar = true;
-  } else if (!nomina.firmaRecursosHumanos) {
-    mensajeTurno = "Turno: Recursos Humanos (Cierre del ciclo)";
-    if (esRH) sePuedeFirmar = true;
-  }
+  if (!nomina.firmaFinanzas)             mensajeTurno = "Turno: Recursos Financieros (subir documento de subsidio)";
+  else if (!nomina.firmaAdministracion)  mensajeTurno = "Turno: Administración General (revisión y autorización)";
+  else if (!firmaRH)                     mensajeTurno = "Turno: Recursos Humanos (subir nómina firmada por el trabajador)";
+  else                                   mensajeTurno = "Turno: Recursos Financieros (archivar nómina)";
 
-  // Link absoluto al archivo subido por RH (si existe). Servido desde /uploads en el backend.
+  // Links absolutos a los archivos
   const apiBase = (apiClient.defaults.baseURL || '').replace(/\/api\/v1\/?$/, '');
-  const archivoUrlAbs = (nomina as any).archivoUrl ? `${apiBase}${(nomina as any).archivoUrl}` : null;
+  const link = (rel?: string | null) => (rel ? `${apiBase}${rel}` : null);
+  const archivoUrlAbs       = link((nomina as any).archivoUrl);
+  const subsidioUrlAbs      = link((nomina as any).archivoSubsidioUrl);
+  const nominaFinalUrlAbs   = link((nomina as any).archivoNominaFinalUrl);
 
   return (
-    <div style={{ padding: '2rem', maxWidth: '1600px', margin: '0 auto', backgroundColor: '#f8fafc', minHeight: '100vh' }}>
-      
-      <style>{`
-        @media print {
-          body * { visibility: hidden; }
-          .zona-impresion, .zona-impresion * { visibility: visible; }
-          .zona-impresion { position: absolute; left: 0; top: 0; width: 100%; }
-          .no-imprimir { display: none !important; }
-        }
-      `}</style>
+    <div style={{ padding: '2rem', maxWidth: '1400px', margin: '0 auto', backgroundColor: '#f8fafc', minHeight: '100vh' }}>
 
-      <button className="no-imprimir" onClick={() => navigate('/nominas')} style={{ display: 'flex', alignItems: 'center', gap: '8px', background: 'none', border: 'none', color: '#64748b', cursor: 'pointer', fontWeight: '600', marginBottom: '1.5rem' }}>
+      <button onClick={() => navigate('/nominas')} style={{ display: 'flex', alignItems: 'center', gap: '8px', background: 'none', border: 'none', color: '#64748b', cursor: 'pointer', fontWeight: '600', marginBottom: '1.5rem' }}>
         <ArrowLeft size={20} /> Volver al Dashboard
       </button>
 
-      {/* PANEL DE CIERRE (Solo AUTORIZADO) */}
-      {estadoReal === 'AUTORIZADO' && (
-        <div className="no-imprimir" style={{ backgroundColor: '#1e293b', padding: '2rem', borderRadius: '20px', marginBottom: '2rem', color: 'white', display: 'flex', justifyContent: 'space-between', alignItems: 'center', boxShadow: '0 10px 15px -3px rgba(0,0,0,0.1)' }}>
-          <div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '8px' }}>
-              <Banknote size={24} color="#34d399" />
-              <h2 style={{ margin: 0, fontSize: '22px', fontWeight: '900' }}>Nómina Autorizada - Fase de Dispersión</h2>
-            </div>
-            <p style={{ margin: 0, color: '#94a3b8', fontSize: '14px', maxWidth: '600px', lineHeight: '1.5' }}>
-              La nómina ha sido aprobada por Dirección. Imprime los recibos para recabar las firmas físicas de los trabajadores. Una vez entregados a Finanzas, archiva la nómina para cerrar el procedimiento.
-            </p>
-          </div>
-          <div style={{ display: 'flex', gap: '1rem' }}>
-            <button onClick={handleImprimirRecibos} style={{ backgroundColor: 'white', color: '#1e293b', border: 'none', padding: '0.8rem 1.5rem', borderRadius: '12px', fontWeight: 'bold', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px', transition: '0.2s' }}>
-              <Printer size={18} /> 1. Imprimir Recibos
-            </button>
-            <button onClick={handleArchivar} style={{ backgroundColor: '#34d399', color: '#064e3b', border: 'none', padding: '0.8rem 1.5rem', borderRadius: '12px', fontWeight: '900', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px', transition: '0.2s' }}>
-              <Archive size={18} /> 2. Archivar Nómina
-            </button>
-          </div>
-        </div>
-      )}
-
       {/* BANNER PAGADO */}
       {estadoReal === 'PAGADO' && (
-        <div className="no-imprimir" style={{ backgroundColor: '#dcfce7', border: '1px solid #86efac', padding: '1.5rem 2rem', borderRadius: '20px', marginBottom: '2rem', display: 'flex', alignItems: 'center', gap: '1rem' }}>
+        <div style={{ backgroundColor: '#dcfce7', border: '1px solid #86efac', padding: '1.5rem 2rem', borderRadius: '20px', marginBottom: '2rem', display: 'flex', alignItems: 'center', gap: '1rem' }}>
           <CheckCircle size={32} color="#166534" />
           <div>
             <h2 style={{ margin: 0, fontSize: '18px', fontWeight: '900', color: '#166534' }}>Procedimiento Terminado</h2>
-            <p style={{ margin: 0, color: '#15803d', fontSize: '14px', marginTop: '4px' }}>Esta nómina ha sido pagada, los recibos físicos fueron resguardados y el ciclo está cerrado.</p>
+            <p style={{ margin: 0, color: '#15803d', fontSize: '14px', marginTop: '4px' }}>Esta nómina ya fue archivada por Finanzas. Ciclo cerrado.</p>
           </div>
         </div>
       )}
 
-      {/* FIRMAS SECUENCIALES */}
+      {/* PROGRESO DE FIRMAS */}
       {estadoReal !== 'PAGADO' && (
-        <div className="no-imprimir" style={{ backgroundColor: 'white', padding: '1.5rem 2rem', borderRadius: '20px', border: '1px solid #e2e8f0', marginBottom: '2rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)' }}>
-          <div style={{ display: 'flex', gap: '2.5rem' }}>
-            <FirmaPaso label="Financieros" firmado={nomina.firmaFinanzas} />
-            <FirmaPaso label="Administración" firmado={nomina.firmaAdministracion} />
-            <FirmaPaso label="Dirección" firmado={nomina.firmaDireccion} />
-            <FirmaPaso label="Rec. Humanos" firmado={nomina.firmaRecursosHumanos} />
-          </div>
-          <div style={{ textAlign: 'right' }}>
-            {estadoReal !== 'AUTORIZADO' ? (
-              <>
-                <p style={{ margin: '0 0 8px 0', fontSize: '13px', fontWeight: '800', color: sePuedeFirmar ? '#3b82f6' : '#64748b' }}>
-                  {mensajeTurno}
-                </p>
-                {sePuedeFirmar && (
-                  <button onClick={handleFirmar} style={{ backgroundColor: '#3b82f6', color: 'white', border: 'none', padding: '0.8rem 1.5rem', borderRadius: '12px', fontWeight: 'bold', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <PenTool size={18} /> Aplicar Firma Oficial
-                  </button>
-                )}
-              </>
-            ) : (
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#10b981', fontWeight: '900' }}>
-                <CheckCircle size={20} /> 100% AUTORIZADA
-              </div>
-            )}
+        <div style={{ backgroundColor: 'white', padding: '1.5rem 2rem', borderRadius: '20px', border: '1px solid #e2e8f0', marginBottom: '2rem', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem' }}>
+            <div style={{ display: 'flex', gap: '2.5rem' }}>
+              <FirmaPaso label="Financieros" firmado={nomina.firmaFinanzas} />
+              <FirmaPaso label="Administración" firmado={nomina.firmaAdministracion} />
+              <FirmaPaso label="Rec. Humanos" firmado={firmaRH} />
+            </div>
+            <p style={{ margin: 0, fontSize: '13px', fontWeight: '800', color: '#3b82f6' }}>{mensajeTurno}</p>
           </div>
         </div>
       )}
 
-      {/* RESUMEN + ARCHIVO DE CONTPAQi */}
-      <div className="zona-impresion">
-        <div style={{ backgroundColor: 'white', padding: '2rem', borderRadius: '20px', border: '1px solid #e2e8f0', marginBottom: '2rem' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '1.5rem' }}>
-            <div>
-              <h2 style={{ fontSize: '24px', fontWeight: '900', color: '#1e293b', margin: '0 0 4px 0' }}>Pre-Nómina</h2>
-              <p style={{ margin: 0, color: '#64748b', fontWeight: '600' }}>{nomina.periodo}</p>
-            </div>
-            <div style={{ textAlign: 'right' }}>
-              <h3 style={{ fontSize: '18px', fontWeight: '900', color: '#1e293b', margin: 0 }}>Folio: {nomina.folio}</h3>
-              <span style={{ fontSize: '12px', fontWeight: 'bold', color: estadoReal === 'PAGADO' ? '#166534' : '#3b82f6', backgroundColor: estadoReal === 'PAGADO' ? '#dcfce7' : '#eff6ff', padding: '4px 12px', borderRadius: '8px', display: 'inline-block', marginTop: '8px' }}>
-                ESTADO: {estadoReal}
-              </span>
-            </div>
-          </div>
+      {/* ACCIONES SEGÚN PASO Y ROL */}
+      {estadoReal !== 'PAGADO' && (
+        <div style={{ marginBottom: '2rem' }}>
 
-          <p style={{ margin: '0 0 1rem 0', fontSize: '13px', color: '#64748b', lineHeight: 1.5 }}>
-            El desglose por empleado, percepciones, deducciones y totales viven en el archivo de CONTPAQi/Nomipaq adjuntado por Recursos Humanos.
-            Los responsables del flujo deben descargarlo para revisar y firmar.
-          </p>
+          {/* PASO 1: Finanzas sube documento de subsidio */}
+          {!nomina.firmaFinanzas && esFinanzas && (
+            <UploadCard
+              titulo="Subir documento de solicitud de subsidio"
+              descripcion="Al cargar el oficio de subsidio se aplica automáticamente la firma de Recursos Financieros y la nómina pasa al siguiente paso."
+              file={archivoSubsidio}
+              onFile={setArchivoSubsidio}
+              onSubmit={handleSubirSubsidio}
+              loading={subiendoSubsidio}
+              ctaLabel="Subir documento y firmar"
+              accept=".pdf,.jpg,.jpeg,.png,.xlsx,.xls,.csv"
+            />
+          )}
 
-          {archivoUrlAbs ? (
-            <a
-              href={archivoUrlAbs}
-              target="_blank"
-              rel="noopener noreferrer"
-              style={{ display: 'inline-flex', alignItems: 'center', gap: '10px', padding: '0.85rem 1.25rem', backgroundColor: '#eff6ff', borderRadius: '12px', border: '1px solid #bfdbfe', color: '#1d4ed8', textDecoration: 'none', fontWeight: '700' }}
-            >
-              <FileText size={18} />
-              <span>Ver archivo de CONTPAQi</span>
-              <ExternalLink size={14} />
-            </a>
-          ) : (
-            <div style={{ padding: '1rem', backgroundColor: '#fef2f2', border: '1px solid #fecaca', borderRadius: '12px', color: '#b91c1c', fontSize: '13px', fontWeight: '700' }}>
-              No hay archivo adjunto. Las pre-nóminas creadas antes de este flujo pueden no tener archivo asociado.
+          {/* PASO 2: Administración revisa y autoriza (cubre Jefatura + Dirección) */}
+          {nomina.firmaFinanzas && !nomina.firmaAdministracion && esAdministracion && (
+            <FirmarCard etiqueta="Firmar como Administración General (revisión y autorización)" onFirmar={handleFirmar} />
+          )}
+
+          {/* PASO 4: AUTORIZADO + RH sube nómina firmada */}
+          {estadoReal === 'AUTORIZADO' && !firmaRH && esRH && (
+            <UploadCard
+              titulo="Subir nómina firmada por el trabajador"
+              descripcion="Adjunta la nómina formal escaneada con las firmas físicas del personal. Al subirla se aplica la firma de RH y queda lista para que Finanzas archive el ciclo."
+              file={archivoFinal}
+              onFile={setArchivoFinal}
+              onSubmit={handleSubirNominaFinal}
+              loading={subiendoFinal}
+              ctaLabel="Subir nómina firmada"
+              accept=".pdf,.jpg,.jpeg,.png"
+            />
+          )}
+
+          {/* PASO 5: Finanzas archiva */}
+          {estadoReal === 'AUTORIZADO' && firmaRH && esFinanzas && (
+            <div style={{ backgroundColor: '#1e293b', padding: '1.5rem 2rem', borderRadius: '20px', color: 'white', display: 'flex', justifyContent: 'space-between', alignItems: 'center', boxShadow: '0 10px 15px -3px rgba(0,0,0,0.1)' }}>
+              <div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '6px' }}>
+                  <Banknote size={22} color="#34d399" />
+                  <h2 style={{ margin: 0, fontSize: '18px', fontWeight: '900' }}>Lista para archivar</h2>
+                </div>
+                <p style={{ margin: 0, color: '#94a3b8', fontSize: '13px', maxWidth: '600px' }}>
+                  RH ya entregó la nómina firmada por el trabajador. Archiva para cerrar el ciclo.
+                </p>
+              </div>
+              <button onClick={handleArchivar} style={{ backgroundColor: '#34d399', color: '#064e3b', border: 'none', padding: '0.8rem 1.5rem', borderRadius: '12px', fontWeight: '900', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <Archive size={18} /> Archivar Nómina
+              </button>
             </div>
           )}
+        </div>
+      )}
+
+      {/* RESUMEN + ARCHIVOS */}
+      <div style={{ backgroundColor: 'white', padding: '2rem', borderRadius: '20px', border: '1px solid #e2e8f0' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '1.5rem' }}>
+          <div>
+            <h2 style={{ fontSize: '22px', fontWeight: '900', color: '#1e293b', margin: '0 0 4px 0' }}>Pre-Nómina</h2>
+            <p style={{ margin: 0, color: '#64748b', fontWeight: '600' }}>{nomina.periodo}</p>
+          </div>
+          <div style={{ textAlign: 'right' }}>
+            <h3 style={{ fontSize: '16px', fontWeight: '900', color: '#1e293b', margin: 0 }}>Folio: {nomina.folio}</h3>
+            <span style={{ fontSize: '12px', fontWeight: 'bold', color: estadoReal === 'PAGADO' ? '#166534' : '#3b82f6', backgroundColor: estadoReal === 'PAGADO' ? '#dcfce7' : '#eff6ff', padding: '4px 12px', borderRadius: '8px', display: 'inline-block', marginTop: '8px' }}>
+              ESTADO: {estadoReal}
+            </span>
+          </div>
+        </div>
+
+        <p style={{ margin: '0 0 1rem 0', fontSize: '13px', color: '#64748b', lineHeight: 1.5 }}>
+          Documentos del ciclo. Cada paso del flujo agrega su archivo correspondiente.
+        </p>
+
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+          <ArchivoLink
+            url={archivoUrlAbs}
+            etiqueta="Pre-nómina (CONTPAQi/Nomipaq) — subido por RH"
+            faltaTexto="Sin archivo de pre-nómina"
+          />
+          <ArchivoLink
+            url={subsidioUrlAbs}
+            etiqueta="Solicitud de subsidio — subido por Finanzas"
+            faltaTexto="Aún no se sube el documento de subsidio"
+          />
+          <ArchivoLink
+            url={nominaFinalUrlAbs}
+            etiqueta="Nómina firmada por el trabajador — subido por RH"
+            faltaTexto="Aún no se sube la nómina firmada"
+          />
         </div>
       </div>
 
@@ -214,3 +256,69 @@ const FirmaPaso = ({ label, firmado }: { label: string, firmado: boolean }) => (
     )}
   </div>
 );
+
+const FirmarCard = ({ etiqueta, onFirmar }: { etiqueta: string, onFirmar: () => void }) => (
+  <div style={{ backgroundColor: 'white', padding: '1.5rem 2rem', borderRadius: '20px', border: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)' }}>
+    <p style={{ margin: 0, fontWeight: '700', color: '#1e293b' }}>{etiqueta}</p>
+    <button onClick={onFirmar} style={{ backgroundColor: '#3b82f6', color: 'white', border: 'none', padding: '0.8rem 1.5rem', borderRadius: '12px', fontWeight: 'bold', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px' }}>
+      <PenTool size={18} /> Aplicar Firma Oficial
+    </button>
+  </div>
+);
+
+const UploadCard = ({
+  titulo, descripcion, file, onFile, onSubmit, loading, ctaLabel, accept
+}: {
+  titulo: string;
+  descripcion: string;
+  file: File | null;
+  onFile: (f: File | null) => void;
+  onSubmit: () => void;
+  loading: boolean;
+  ctaLabel: string;
+  accept: string;
+}) => (
+  <div style={{ backgroundColor: 'white', padding: '1.5rem 2rem', borderRadius: '20px', border: '1px solid #e2e8f0', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)' }}>
+    <h3 style={{ margin: '0 0 6px 0', color: '#1e293b' }}>{titulo}</h3>
+    <p style={{ margin: '0 0 1rem 0', fontSize: '13px', color: '#64748b', lineHeight: 1.5 }}>{descripcion}</p>
+    <div style={{ display: 'flex', gap: '12px', alignItems: 'center', flexWrap: 'wrap' }}>
+      <label style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', padding: '0.7rem 1rem', backgroundColor: '#f8fafc', border: '1px dashed #cbd5e1', borderRadius: '10px', cursor: 'pointer', fontSize: '13px', color: '#475569', fontWeight: '600', flex: 1, minWidth: '260px' }}>
+        <UploadCloud size={16} color="#3b82f6" />
+        <span style={{ flex: 1 }}>{file ? file.name : `Seleccionar archivo (${accept})`}</span>
+        <input type="file" accept={accept} style={{ display: 'none' }}
+          onChange={(e) => onFile(e.target.files?.[0] || null)} />
+      </label>
+      <button
+        onClick={onSubmit}
+        disabled={!file || loading}
+        style={{
+          backgroundColor: (!file || loading) ? '#94a3b8' : '#10b981',
+          color: 'white', border: 'none', padding: '0.7rem 1.4rem', borderRadius: '10px',
+          fontWeight: '800', cursor: (!file || loading) ? 'not-allowed' : 'pointer',
+          display: 'flex', alignItems: 'center', gap: '8px'
+        }}
+      >
+        {loading ? <Loader2 size={16} className="animate-spin" /> : <UploadCloud size={16} />}
+        {ctaLabel}
+      </button>
+    </div>
+  </div>
+);
+
+const ArchivoLink = ({ url, etiqueta, faltaTexto }: { url: string | null, etiqueta: string, faltaTexto: string }) => {
+  if (!url) {
+    return (
+      <div style={{ padding: '0.75rem 1rem', backgroundColor: '#f8fafc', borderRadius: '10px', border: '1px dashed #cbd5e1', fontSize: '13px', color: '#94a3b8', fontStyle: 'italic' }}>
+        {faltaTexto}
+      </div>
+    );
+  }
+  return (
+    <a href={url} target="_blank" rel="noopener noreferrer"
+       style={{ display: 'inline-flex', alignItems: 'center', gap: '10px', padding: '0.75rem 1rem', backgroundColor: '#eff6ff', borderRadius: '10px', border: '1px solid #bfdbfe', color: '#1d4ed8', textDecoration: 'none', fontWeight: '700', fontSize: '13px' }}>
+      <FileText size={16} />
+      <span style={{ flex: 1 }}>{etiqueta}</span>
+      <ExternalLink size={14} />
+    </a>
+  );
+};

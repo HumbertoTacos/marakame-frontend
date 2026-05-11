@@ -42,10 +42,13 @@ export const useNominaStore = create<NominaState>((set, get) => ({
     set({ isLoading: true, error: null });
     try {
       const response = await apiClient.get('/nominas/ciclo');
-      set({ nominas: response.data.data || [], isLoading: false });
+      const lista = response.data?.data || [];
+      console.log(`[Nominas] cargadas ${lista.length} nóminas`, lista);
+      set({ nominas: lista, isLoading: false });
     } catch (error: any) {
-      console.error("Error al cargar la lista de nóminas:", error);
-      set({ error: error.message || 'Error al cargar nóminas', isLoading: false });
+      // No borramos el listado si el fetch falla: dejamos lo que ya había y mostramos el error.
+      console.error("Error al cargar la lista de nóminas:", error?.response?.status, error?.response?.data || error.message);
+      set({ error: error?.response?.data?.message || error.message || 'Error al cargar nóminas', isLoading: false });
     }
   },
 

@@ -24,6 +24,15 @@ const toYMD = (val: any): string => {
   return `${y}-${m}-${day}`;
 };
 
+// Devuelve la fecha de hoy (o de un Date dado) como "YYYY-MM-DD" en HORA LOCAL.
+// Usar `new Date().toISOString()` rompe en UTC: por la noche en México (UTC-6) devuelve mañana.
+const ymdLocal = (d: Date = new Date()): string => {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+};
+
 // El backend podría devolver el id del empleado como `empleadoId`, `empleado_id`
 // o anidado dentro de `empleado.id`. Lo resolvemos aquí para que el filtro no falle silencioso.
 const getEmpleadoId = (registro: any): number | null => {
@@ -37,10 +46,13 @@ const ControlAsistencias: React.FC = () => {
   const { empleados, fetchEmpleados } = useNominaStore();
   const { usuario } = useAuthStore();
   
-  const esModoSupervision = usuario?.rol === 'ADMIN_GENERAL' || usuario?.rol === 'JEFE_MEDICO';
+  const esModoSupervision =
+    usuario?.rol === 'ADMIN_GENERAL' ||
+    usuario?.rol === 'JEFE_MEDICO' ||
+    usuario?.rol === 'JEFE_ADMINISTRATIVO';
 
   // ================= ESTADOS PARA CAPTURA DIARIA (JEFES) =================
-  const [fechaDia, setFechaDia] = useState(new Date().toISOString().split('T')[0]);
+  const [fechaDia, setFechaDia] = useState(ymdLocal());
   const [captura, setCaptura] = useState<Record<number, any>>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -125,10 +137,16 @@ const ControlAsistencias: React.FC = () => {
       
       if (rolUsuario === 'ADMISIONES') return deptoEmp === 'ADMISIONES';
       if (rolUsuario === 'ALMACEN') return deptoEmp === 'ALMACEN';
-      if (rolUsuario === 'RRHH_FINANZAS') return deptoEmp === 'ADMINISTRACION' || deptoEmp === 'RECURSOS HUMANOS';
-      
-      const rolesClinicos = ['AREA_MEDICA', 'ENFERMERIA', 'PSICOLOGIA', 'NUTRICION'];
-      if (rolesClinicos.includes(rolUsuario)) return deptoEmp === 'CLINICO' || deptoEmp === 'MEDICO';
+      if (rolUsuario === 'RRHH_FINANZAS' || rolUsuario === 'RECURSOS_HUMANOS') {
+        return deptoEmp === 'ADMINISTRACION' || deptoEmp === 'RECURSOS HUMANOS';
+      }
+      if (rolUsuario === 'RECURSOS_FINANCIEROS') return deptoEmp === 'ADMINISTRACION';
+
+      // Personal clínico (enfermería, nutrición, psicología) sólo ve al equipo clínico.
+      // El área médica es un departamento aparte y sólo lo ve AREA_MEDICA.
+      const rolesClinicos = ['ENFERMERIA', 'PSICOLOGIA', 'NUTRICION'];
+      if (rolesClinicos.includes(rolUsuario)) return deptoEmp === 'CLINICO';
+      if (rolUsuario === 'AREA_MEDICA') return deptoEmp === 'MEDICO';
 
       return deptoEmp === rolUsuario;
     });
@@ -252,6 +270,59 @@ const ControlAsistencias: React.FC = () => {
   const departamentosDisponibles = Array.from(new Set(empleados.map(e => e.departamento)));
   const listaDepartamentos = Object.keys(empleadosPorDepartamento).sort();
 
+  // ============== EXPORTAR REPORTE QUINCENAL A CSV (modo supervisión) ==============
+  const handleExportarCSV = () => {
+    if (!esModoSupervision) return;
+    const meses = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+    const periodoStr = `${meses[mesSeleccionado]} ${anioSeleccionado} - ${quincenaSeleccionada === 1 ? '1ra' : '2da'} Quincena`;
+
+    const filas: string[] = [];
+    // Cabecera: Departamento, Empleado, Puesto, día1, día2, ..., FALTAS, RETARDOS
+    const cabeceraDias = diasQuincena.map(d => `Día ${d.dia}`).join(',');
+    filas.push(`"REPORTE DE ASISTENCIAS - ${periodoStr}"`);
+    filas.push('');
+    filas.push(`Departamento,Empleado,Puesto,${cabeceraDias},Faltas,Retardos`);
+
+    listaDepartamentos.forEach(depto => {
+      empleadosPorDepartamento[depto].forEach(emp => {
+        const asistEmp = asistenciasGuardadas.filter(a => getEmpleadoId(a) === emp.id);
+        let faltas = 0, retardos = 0;
+        const celdas = diasQuincena.map(d => {
+          const r = asistEmp.find(a => toYMD(a.fecha) === d.fechaStr);
+          if (!r) return '';
+          if (r.tipo === 'ASISTENCIA') return 'A';
+          if (r.tipo === 'RETARDO') {
+            if (r.estadoJustificacion !== 'APROBADA') retardos++;
+            return r.estadoJustificacion === 'APROBADA' ? 'R(J)' : 'R';
+          }
+          if (r.tipo === 'FALTA') {
+            if (r.estadoJustificacion !== 'APROBADA') faltas++;
+            return r.estadoJustificacion === 'APROBADA' ? 'F(J)' : 'F';
+          }
+          return '';
+        });
+        const nombre = `${emp.nombre} ${emp.apellidos}`.replace(/"/g, '""');
+        const puesto = (emp.puesto || '').replace(/"/g, '""');
+        filas.push(`"${depto}","${nombre}","${puesto}",${celdas.join(',')},${faltas},${retardos}`);
+      });
+    });
+
+    filas.push('');
+    filas.push('Leyenda: A=Asistencia, R=Retardo, F=Falta, (J)=Justificada (no descuenta)');
+
+    // BOM para que Excel reconozca acentos
+    const csv = '﻿' + filas.join('\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `Asistencias_${anioSeleccionado}-${String(mesSeleccionado + 1).padStart(2,'0')}_Q${quincenaSeleccionada}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
   // Decidir aprobación/rechazo de un justificante (modal del admin)
   const handleDecidirJustificacion = async (aprobar: boolean) => {
     if (!incidenciaSeleccionada) return;
@@ -324,6 +395,15 @@ const ControlAsistencias: React.FC = () => {
                 <RefreshCw size={16} className={isLoadingAsistencias ? 'animate-spin' : ''} />
                 {isLoadingAsistencias ? 'Actualizando...' : 'Actualizar'}
               </button>
+
+              <button
+                onClick={handleExportarCSV}
+                title="Descargar reporte de asistencias en CSV (para entregar a RH)"
+                style={{ display: 'flex', alignItems: 'center', gap: '8px', backgroundColor: '#10b981', color: 'white', border: 'none', padding: '0.5rem 1rem', borderRadius: '12px', cursor: 'pointer', fontWeight: '700' }}
+              >
+                <FileText size={16} />
+                Exportar CSV
+              </button>
             </>
           ) : (
             /* CONTROLES MODO CAPTURA */
@@ -380,9 +460,11 @@ const ControlAsistencias: React.FC = () => {
                             // Comparamos como string YYYY-MM-DD: inmune a zonas horarias y a formatos de fecha del backend
                             const registroDia = asistenciasEmp.find(a => toYMD(a.fecha) === d.fechaStr);
 
-                            // Solo cuentan como falta/retardo si NO están aprobadas (las aprobadas no descuentan en nómina)
-                            const aprobada = registroDia?.estadoJustificacion === 'APROBADA';
-                            const rechazada = registroDia?.estadoJustificacion === 'RECHAZADA';
+                            const estado = registroDia?.estadoJustificacion;
+                            const aprobada = estado === 'APROBADA';
+                            const rechazada = estado === 'RECHAZADA';
+                            const pendiente = estado === 'PENDIENTE';
+                            const tieneJustificante = !!(registroDia?.motivoJustificacion || registroDia?.documentoUrl);
 
                             let icono = <span style={{ color: '#e2e8f0' }}>-</span>;
                             let esIncidencia = false;
@@ -402,26 +484,36 @@ const ControlAsistencias: React.FC = () => {
                                 }
                             }
 
-                            const clickable = esIncidencia;
+                            // Sólo es clickable si hay algo para revisar:
+                            // - tiene justificante adjunto (motivo o documento) — pendiente o ya decidida
+                            // - o ya fue aprobada (puede revertirse)
+                            // Las faltas SIN justificante solicitado no son clickables (no hay nada que decidir).
+                            const clickable = esIncidencia && (tieneJustificante || aprobada);
                             return (
                                 <td
                                   key={d.dia}
                                   onClick={clickable ? () => setIncidenciaSeleccionada({ ...registroDia, empleado: emp }) : undefined}
-                                  title={clickable ? 'Click para revisar justificación' : undefined}
+                                  title={
+                                    clickable ? 'Click para revisar justificación'
+                                    : esIncidencia ? 'Incidencia sin justificación solicitada'
+                                    : undefined
+                                  }
                                   style={{
                                     padding: '0.5rem',
                                     borderLeft: '1px solid #f1f5f9',
                                     cursor: clickable ? 'pointer' : 'default',
                                     position: 'relative',
-                                    backgroundColor: clickable && !aprobada && !rechazada ? '#fefce8' : undefined
+                                    // Fondo amarillo SOLO cuando está pendiente y hay justificante por revisar
+                                    backgroundColor: pendiente && tieneJustificante ? '#fefce8' : undefined
                                   }}
                                 >
                                   {icono}
-                                  {/* Indicador de estado de revisión */}
+                                  {/* Punto verde si la justificación fue aprobada */}
                                   {esIncidencia && aprobada && (
                                     <span style={{ position: 'absolute', top: 2, right: 2, width: 6, height: 6, borderRadius: '50%', backgroundColor: '#10b981' }} />
                                   )}
-                                  {esIncidencia && rechazada && (
+                                  {/* Punto rojo SÓLO si admin rechazó una justificación que SÍ existía */}
+                                  {esIncidencia && rechazada && tieneJustificante && (
                                     <span style={{ position: 'absolute', top: 2, right: 2, width: 6, height: 6, borderRadius: '50%', backgroundColor: '#b91c1c' }} />
                                   )}
                                 </td>
