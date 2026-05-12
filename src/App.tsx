@@ -189,7 +189,7 @@ function App() {
               <Route path=":id" element={<DetalleNomina />} />
             </Route>
 
-            <Route path="auditoria" element={
+            <Route path="bitacora" element={
               <ProtectedRoute allowedRoles={['ADMIN_GENERAL']}>
                 <Bitacora />
               </ProtectedRoute>

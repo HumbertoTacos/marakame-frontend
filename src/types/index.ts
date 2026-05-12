@@ -543,7 +543,7 @@ export interface PreNomina {
   empleado?: Empleado;
 }
 
-export interface Auditoria {
+export interface RegistroBitacora {
   id: number;
   createdAt: string;
   usuario: Usuario;

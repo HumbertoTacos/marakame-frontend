@@ -303,11 +303,11 @@ export function Layout() {
               >
                 <LayoutDashboard size={20} style={{ marginRight: '1rem' }}/> Panel Ejecutivo
               </div>
-              <div style={navItemStyle('auditoria')} onClick={() => navigate('/auditoria')}
-                   onMouseEnter={(e) => { if (!location.pathname.includes('auditoria')) { e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.05)'; e.currentTarget.style.color = '#e2e8f0'; } }}
-                   onMouseLeave={(e) => { if (!location.pathname.includes('auditoria')) { e.currentTarget.style.backgroundColor = 'transparent'; e.currentTarget.style.color = '#94a3b8'; } }}
+              <div style={navItemStyle('bitacora')} onClick={() => navigate('/bitacora')}
+                   onMouseEnter={(e) => { if (!location.pathname.includes('bitacora')) { e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.05)'; e.currentTarget.style.color = '#e2e8f0'; } }}
+                   onMouseLeave={(e) => { if (!location.pathname.includes('bitacora')) { e.currentTarget.style.backgroundColor = 'transparent'; e.currentTarget.style.color = '#94a3b8'; } }}
               >
-                <ShieldAlert size={20} style={{ marginRight: '1rem' }}/> Auditoría
+                <ShieldAlert size={20} style={{ marginRight: '1rem' }}/> Bitácora
               </div>
               <div style={navItemStyle('exportaciones')} onClick={() => navigate('/exportaciones')}
                    onMouseEnter={(e) => { if (!location.pathname.includes('exportaciones')) { e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.05)'; e.currentTarget.style.color = '#e2e8f0'; } }}
