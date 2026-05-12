@@ -70,7 +70,7 @@ const NominasDashboard: React.FC = () => {
     puesto: '',
     regimen: 'CONFIANZA',
     salarioBase: '' as number | string,
-    estado: 'ACTIVO'
+    activo: true
   });
 
   useEffect(() => {
@@ -89,7 +89,7 @@ const NominasDashboard: React.FC = () => {
   // --- HANDLERS DEL FORMULARIO DE EMPLEADOS ---
   const openCreateModal = () => {
     setModalMode('crear');
-    setEmpleadoForm({ id: null, nombre: '', apellidos: '', departamento: '', puesto: '', regimen: 'CONFIANZA', salarioBase: '', estado: 'ACTIVO' });
+    setEmpleadoForm({ id: null, nombre: '', apellidos: '', departamento: '', puesto: '', regimen: 'CONFIANZA', salarioBase: '', activo: true });
     setShowModal(true);
   };
 
@@ -103,7 +103,7 @@ const NominasDashboard: React.FC = () => {
       puesto: emp.puesto || '',
       regimen: emp.regimen || 'CONFIANZA',
       salarioBase: emp.salarioBase || '',
-      estado: emp.estado || 'ACTIVO'
+      activo: emp.activo !== false   // true por default; sólo false cuando explícitamente está dado de baja
     });
     setShowModal(true);
   };
@@ -151,7 +151,7 @@ const NominasDashboard: React.FC = () => {
 
   const toggleEstadoEmpleado = async () => {
     if (empleadoForm.id == null) return;
-    const nuevoActivo = empleadoForm.estado === 'ACTIVO' ? false : true;
+    const nuevoActivo = !empleadoForm.activo;
     const accion = nuevoActivo ? 'reactivar' : 'dar de baja';
 
     if (window.confirm(`¿Estás seguro de que deseas ${accion} a este empleado?`)) {
@@ -166,7 +166,7 @@ const NominasDashboard: React.FC = () => {
     }
   };
 
-  const empleadosActivos = empleados.filter((e: any) => e.estado !== 'BAJA').length;
+  const empleadosActivos = empleados.filter((e: any) => e.activo !== false).length;
   const nominaEnProceso = nominas.find((n: Nomina) => n.estado !== 'PAGADO' && n.estado !== 'BORRADOR');
   
   // El flujo ya no incluye "Dirección" como paso explícito (se autocompleta con Administración).
@@ -183,22 +183,12 @@ const NominasDashboard: React.FC = () => {
     { label: 'Pendientes de Firma', value: nominasPendientesFirma, icon: FileSignature, color: '#ef4444', bg: '#fef2f2' },
   ];
 
-  // --- LÓGICA DE FILTRADO DE NÓMINAS CORREGIDA ---
+  // --- LÓGICA DE FILTRADO DE NÓMINAS ---
+  // Una nómina está "activa" mientras le falte cualquier acción: firmar Finanzas, firmar Administración,
+  // subir nómina firmada (RH) o archivar (Finanzas). Sólo PAGADO se considera finalizada.
   const nominasFiltradas = nominas.filter((nomina: Nomina) => {
     if (filtroNomina === 'TODAS') return true;
-    
-    // Evaluamos las 3 firmas visibles del flujo (Finanzas, Administración, RH).
-    const firmas = [nomina.firmaRecursosHumanos, nomina.firmaFinanzas, nomina.firmaAdministracion];
-    const firmasCompletadas = firmas.filter(Boolean).length;
-
-    let estadoFiltro = nomina.estado;
-    if (firmasCompletadas === 3 && (estadoFiltro === 'EN_REVISION' || estadoFiltro === 'SOLICITUD_SUBSIDIO')) {
-      estadoFiltro = 'AUTORIZADO';
-    }
-
-    // Ahora sí, si es AUTORIZADO o PAGADO, pertenece a la pestaña "Finalizadas"
-    const esFinalizada = estadoFiltro === 'AUTORIZADO' || estadoFiltro === 'PAGADO';
-    
+    const esFinalizada = nomina.estado === 'PAGADO';
     if (filtroNomina === 'FINALIZADAS') return esFinalizada;
     if (filtroNomina === 'EN_PROCESO') return !esFinalizada;
     return true;
@@ -300,11 +290,11 @@ const NominasDashboard: React.FC = () => {
               >
                 Activas / En Proceso
               </button>
-              <button 
+              <button
                 onClick={() => setFiltroNomina('FINALIZADAS')}
                 style={{ border: 'none', padding: '8px 16px', borderRadius: '8px', fontSize: '13px', fontWeight: '800', cursor: 'pointer', transition: '0.2s', backgroundColor: filtroNomina === 'FINALIZADAS' ? 'white' : 'transparent', color: filtroNomina === 'FINALIZADAS' ? '#10b981' : '#64748b', boxShadow: filtroNomina === 'FINALIZADAS' ? '0 1px 3px rgba(0,0,0,0.1)' : 'none' }}
               >
-                Autorizadas / Pagadas
+                Pagadas / Archivadas
               </button>
               <button
                 onClick={() => setFiltroNomina('TODAS')}
@@ -418,7 +408,7 @@ const NominasDashboard: React.FC = () => {
                   </tr>
                   
                   {empleadosPorDepto[depto].map((emp: any) => (
-                    <tr key={emp.id} style={{ borderBottom: '1px solid #e2e8f0', opacity: emp.estado === 'BAJA' ? 0.6 : 1 }}>
+                    <tr key={emp.id} style={{ borderBottom: '1px solid #e2e8f0', opacity: emp.activo === false ? 0.6 : 1 }}>
                       <td style={{ padding: '1.25rem 1.5rem', fontWeight: '700', color: '#1e293b' }}>
                         {emp.nombre} {emp.apellidos}
                       </td>
@@ -434,7 +424,7 @@ const NominasDashboard: React.FC = () => {
                         {emp.salarioBase ? formatCurrency(Number(emp.salarioBase)) : '-'}
                       </td>
                       <td style={{ padding: '1.25rem 1.5rem' }}>
-                        {emp.estado === 'BAJA' ? (
+                        {emp.activo === false ? (
                           <span style={{ backgroundColor: '#fef2f2', color: '#991b1b', padding: '4px 10px', borderRadius: '6px', fontSize: '11px', fontWeight: '800' }}>BAJA</span>
                         ) : (
                           <span style={{ backgroundColor: '#dcfce7', color: '#166534', padding: '4px 10px', borderRadius: '6px', fontSize: '11px', fontWeight: '800' }}>ACTIVO</span>
@@ -525,9 +515,9 @@ const NominasDashboard: React.FC = () => {
                   <button 
                     type="button" 
                     onClick={toggleEstadoEmpleado}
-                    style={{ padding: '0.8rem 1rem', borderRadius: '12px', border: '1px solid', borderColor: empleadoForm.estado === 'ACTIVO' ? '#fca5a5' : '#86efac', backgroundColor: empleadoForm.estado === 'ACTIVO' ? '#fef2f2' : '#f0fdf4', color: empleadoForm.estado === 'ACTIVO' ? '#ef4444' : '#10b981', fontWeight: 'bold', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px' }}
+                    style={{ padding: '0.8rem 1rem', borderRadius: '12px', border: '1px solid', borderColor: empleadoForm.activo ? '#fca5a5' : '#86efac', backgroundColor: empleadoForm.activo ? '#fef2f2' : '#f0fdf4', color: empleadoForm.activo ? '#ef4444' : '#10b981', fontWeight: 'bold', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px' }}
                   >
-                    {empleadoForm.estado === 'ACTIVO' ? <><Trash2 size={18} /> Dar de Baja</> : <><CheckCircle size={18} /> Reactivar</>}
+                    {empleadoForm.activo ? <><Trash2 size={18} /> Dar de Baja</> : <><CheckCircle size={18} /> Reactivar</>}
                   </button>
                 )}
 

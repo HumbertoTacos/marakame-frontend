@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
-  ArrowLeft, PenTool, CheckCircle, Archive, Banknote, FileText, ExternalLink,
+  ArrowLeft, CheckCircle, Archive, Banknote, FileText, ExternalLink,
   UploadCloud, Loader2
 } from 'lucide-react';
 import { useNominaStore } from '../../stores/nominaStore';
@@ -17,7 +17,6 @@ export const DetalleNomina = () => {
     nominaActual: nomina,
     isLoading: loading,
     fetchNominaById,
-    firmarNomina,
     archivarNomina
   } = useNominaStore();
 
@@ -27,18 +26,12 @@ export const DetalleNomina = () => {
   const [archivoSubsidio, setArchivoSubsidio] = useState<File | null>(null);
   const [archivoFinal, setArchivoFinal] = useState<File | null>(null);
   const [subiendoSubsidio, setSubiendoSubsidio] = useState(false);
+  const [enviandoAsistencias, setEnviandoAsistencias] = useState(false);
   const [subiendoFinal, setSubiendoFinal] = useState(false);
 
   useEffect(() => {
     if (nominaId) fetchNominaById(nominaId);
   }, [nominaId, fetchNominaById]);
-
-  const handleFirmar = async () => {
-    if (window.confirm("¿Confirmas tu firma oficial para esta nómina?")) {
-      const exito = await firmarNomina(nominaId);
-      if (exito) alert("Firma aplicada exitosamente.");
-    }
-  };
 
   const handleArchivar = async () => {
     if (window.confirm("¿Confirmas archivar esta nómina? Cerrará definitivamente el ciclo.")) {
@@ -65,6 +58,22 @@ export const DetalleNomina = () => {
       alert(err.response?.data?.message || 'Error al subir el documento de subsidio.');
     } finally {
       setSubiendoSubsidio(false);
+    }
+  };
+
+  const handleEnviarAsistenciasARH = async () => {
+    if (!window.confirm("Vas a firmar tu paso y enviar la lista quincenal de asistencias a RH. ¿Continuar?")) return;
+    try {
+      setEnviandoAsistencias(true);
+      const res = await apiClient.post(`/nominas/ciclo/${nominaId}/asistencias-firmadas`);
+      if (res.data.success) {
+        alert(res.data.message);
+        await fetchNominaById(nominaId);
+      }
+    } catch (err: any) {
+      alert(err.response?.data?.message || 'Error al enviar la lista de asistencias.');
+    } finally {
+      setEnviandoAsistencias(false);
     }
   };
 
@@ -95,10 +104,10 @@ export const DetalleNomina = () => {
   let estadoReal = nomina.estado;
   const firmaRH = !!nomina.firmaRecursosHumanos;
 
-  // Roles del flujo. admin@marakame.com no participa: administracion@marakame.com (RRHH_FINANZAS)
-  // hace el paso intermedio (revisión + autorización). Su firma cubre Jefatura y Dirección.
+  // Roles del flujo. admin@marakame.com NO participa.
+  // El paso intermedio (firmar y enviar lista de asistencias a RH) lo hace SOLAMENTE Jefatura.
   const esFinanzas       = userRol === 'RECURSOS_FINANCIEROS' || userRol === 'RRHH_FINANZAS';
-  const esAdministracion = userRol === 'JEFE_ADMINISTRATIVO' || userRol === 'RRHH_FINANZAS';
+  const esAdministracion = userRol === 'JEFE_ADMINISTRATIVO';
   const esRH             = userRol === 'RECURSOS_HUMANOS' || userRol === 'RRHH_FINANZAS';
 
   // Mensaje del turno actual
@@ -113,6 +122,7 @@ export const DetalleNomina = () => {
   const link = (rel?: string | null) => (rel ? `${apiBase}${rel}` : null);
   const archivoUrlAbs       = link((nomina as any).archivoUrl);
   const subsidioUrlAbs      = link((nomina as any).archivoSubsidioUrl);
+  const asistenciasUrlAbs   = link((nomina as any).archivoAsistenciasUrl);
   const nominaFinalUrlAbs   = link((nomina as any).archivoNominaFinalUrl);
 
   return (
@@ -165,9 +175,29 @@ export const DetalleNomina = () => {
             />
           )}
 
-          {/* PASO 2: Administración revisa y autoriza (cubre Jefatura + Dirección) */}
+          {/* PASO 2: Administración revisa y autoriza (cubre Jefatura + Dirección).
+              Un solo click: el sistema genera la lista de asistencias del periodo, la firma y la envía a RH. */}
           {nomina.firmaFinanzas && !nomina.firmaAdministracion && esAdministracion && (
-            <FirmarCard etiqueta="Firmar como Administración General (revisión y autorización)" onFirmar={handleFirmar} />
+            <div style={{ backgroundColor: 'white', padding: '1.5rem 2rem', borderRadius: '20px', border: '1px solid #e2e8f0', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)' }}>
+              <h3 style={{ margin: '0 0 6px 0', color: '#1e293b' }}>Firmar y enviar lista de asistencias a RH</h3>
+              <p style={{ margin: '0 0 1rem 0', fontSize: '13px', color: '#64748b', lineHeight: 1.5 }}>
+                Al confirmar, el sistema genera el reporte quincenal de asistencias del periodo de esta nómina,
+                aplica tu firma de Administración y lo envía automáticamente a Recursos Humanos para que arme la nómina final.
+              </p>
+              <button
+                onClick={handleEnviarAsistenciasARH}
+                disabled={enviandoAsistencias}
+                style={{
+                  display: 'inline-flex', alignItems: 'center', gap: '8px',
+                  backgroundColor: enviandoAsistencias ? '#94a3b8' : '#10b981',
+                  color: 'white', border: 'none', padding: '0.8rem 1.4rem', borderRadius: '10px',
+                  fontWeight: '800', cursor: enviandoAsistencias ? 'not-allowed' : 'pointer'
+                }}
+              >
+                {enviandoAsistencias ? <Loader2 size={18} className="animate-spin" /> : <UploadCloud size={18} />}
+                {enviandoAsistencias ? 'Enviando…' : 'Firmar y enviar lista'}
+              </button>
+            </div>
           )}
 
           {/* PASO 4: AUTORIZADO + RH sube nómina firmada */}
@@ -235,6 +265,11 @@ export const DetalleNomina = () => {
             faltaTexto="Aún no se sube el documento de subsidio"
           />
           <ArchivoLink
+            url={asistenciasUrlAbs}
+            etiqueta="Reporte de asistencias quincenal firmado — subido por Administración"
+            faltaTexto="Aún no se sube el reporte de asistencias firmado"
+          />
+          <ArchivoLink
             url={nominaFinalUrlAbs}
             etiqueta="Nómina firmada por el trabajador — subido por RH"
             faltaTexto="Aún no se sube la nómina firmada"
@@ -254,15 +289,6 @@ const FirmaPaso = ({ label, firmado }: { label: string, firmado: boolean }) => (
     ) : (
       <div style={{ width: '22px', height: '22px', borderRadius: '50%', border: '2px dashed #cbd5e1' }} />
     )}
-  </div>
-);
-
-const FirmarCard = ({ etiqueta, onFirmar }: { etiqueta: string, onFirmar: () => void }) => (
-  <div style={{ backgroundColor: 'white', padding: '1.5rem 2rem', borderRadius: '20px', border: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)' }}>
-    <p style={{ margin: 0, fontWeight: '700', color: '#1e293b' }}>{etiqueta}</p>
-    <button onClick={onFirmar} style={{ backgroundColor: '#3b82f6', color: 'white', border: 'none', padding: '0.8rem 1.5rem', borderRadius: '12px', fontWeight: 'bold', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px' }}>
-      <PenTool size={18} /> Aplicar Firma Oficial
-    </button>
   </div>
 );
 
