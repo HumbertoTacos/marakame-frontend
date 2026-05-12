@@ -190,7 +190,7 @@ function App() {
             </Route>
 
             <Route path="bitacora" element={
-              <ProtectedRoute allowedRoles={['ADMIN_GENERAL']}>
+              <ProtectedRoute>
                 <Bitacora />
               </ProtectedRoute>
             } />
