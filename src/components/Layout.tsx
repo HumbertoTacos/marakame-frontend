@@ -39,9 +39,17 @@ export function Layout() {
 
     const intervalNotif  = setInterval(fetchNotificaciones, 60000);   // cada 60s
     const intervalPing   = setInterval(pingUltimoAcceso,   5 * 60000); // cada 5 min
+
+    // Refresco inmediato cuando una acción del usuario apaga notificaciones en el backend
+    // (p.ej. firmar/subir/archivar nómina). Cualquier vista puede disparar:
+    //   window.dispatchEvent(new Event('notif-refresh'))
+    const onRefresh = () => { fetchNotificaciones(); };
+    window.addEventListener('notif-refresh', onRefresh);
+
     return () => {
       clearInterval(intervalNotif);
       clearInterval(intervalPing);
+      window.removeEventListener('notif-refresh', onRefresh);
     };
   }, []);
 

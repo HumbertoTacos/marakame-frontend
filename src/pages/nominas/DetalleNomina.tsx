@@ -26,6 +26,7 @@ export const DetalleNomina = () => {
   const [archivoSubsidio, setArchivoSubsidio] = useState<File | null>(null);
   const [archivoFinal, setArchivoFinal] = useState<File | null>(null);
   const [subiendoSubsidio, setSubiendoSubsidio] = useState(false);
+  const [firmandoAdmin, setFirmandoAdmin] = useState(false);
   const [enviandoAsistencias, setEnviandoAsistencias] = useState(false);
   const [subiendoFinal, setSubiendoFinal] = useState(false);
 
@@ -33,10 +34,19 @@ export const DetalleNomina = () => {
     if (nominaId) fetchNominaById(nominaId);
   }, [nominaId, fetchNominaById]);
 
+  // El backend marca como leídas las notificaciones del paso recién cerrado. Disparamos este
+  // evento para que el Layout recargue el badge al instante en vez de esperar al polling de 60s.
+  const refrescarNotificacionesHeader = () => {
+    window.dispatchEvent(new Event('notif-refresh'));
+  };
+
   const handleArchivar = async () => {
     if (window.confirm("¿Confirmas archivar esta nómina? Cerrará definitivamente el ciclo.")) {
       const exito = await archivarNomina(nominaId);
-      if (exito) alert("Nómina archivada y cerrada.");
+      if (exito) {
+        alert("Nómina archivada y cerrada.");
+        refrescarNotificacionesHeader();
+      }
     }
   };
 
@@ -53,11 +63,29 @@ export const DetalleNomina = () => {
         alert(res.data.message);
         setArchivoSubsidio(null);
         await fetchNominaById(nominaId);
+        refrescarNotificacionesHeader();
       }
     } catch (err: any) {
       alert(err.response?.data?.message || 'Error al subir el documento de subsidio.');
     } finally {
       setSubiendoSubsidio(false);
+    }
+  };
+
+  const handleFirmarAdministracion = async () => {
+    if (!window.confirm("Vas a aplicar la firma de Administración a esta pre-nómina. ¿Continuar?")) return;
+    try {
+      setFirmandoAdmin(true);
+      const res = await apiClient.post(`/nominas/ciclo/${nominaId}/administracion-firma`);
+      if (res.data.success) {
+        alert(res.data.message);
+        await fetchNominaById(nominaId);
+        refrescarNotificacionesHeader();
+      }
+    } catch (err: any) {
+      alert(err.response?.data?.message || 'Error al firmar Administración.');
+    } finally {
+      setFirmandoAdmin(false);
     }
   };
 
@@ -69,6 +97,7 @@ export const DetalleNomina = () => {
       if (res.data.success) {
         alert(res.data.message);
         await fetchNominaById(nominaId);
+        refrescarNotificacionesHeader();
       }
     } catch (err: any) {
       alert(err.response?.data?.message || 'Error al enviar la lista de asistencias.');
@@ -90,6 +119,7 @@ export const DetalleNomina = () => {
         alert(res.data.message);
         setArchivoFinal(null);
         await fetchNominaById(nominaId);
+        refrescarNotificacionesHeader();
       }
     } catch (err: any) {
       alert(err.response?.data?.message || 'Error al subir la nómina firmada.');
@@ -103,17 +133,23 @@ export const DetalleNomina = () => {
 
   let estadoReal = nomina.estado;
   const firmaRH = !!nomina.firmaRecursosHumanos;
+  const firmaJefatura = !!(nomina as any).firmaDireccion;
 
-  // Roles del flujo. admin@marakame.com NO participa.
-  // El paso intermedio (firmar y enviar lista de asistencias a RH) lo hace SOLAMENTE Jefatura.
+  // Roles del flujo (4 firmas: Finanzas → Administración → Jefatura → RH).
+  //   Finanzas       → RECURSOS_FINANCIEROS o RRHH_FINANZAS  (sube subsidio)
+  //   Administración → RRHH_FINANZAS                          (firma con botón)
+  //   Jefatura       → JEFE_ADMINISTRATIVO                    (firma y envía lista a RH)
+  //   RH cierre      → RECURSOS_HUMANOS o RRHH_FINANZAS       (sube nómina firmada)
   const esFinanzas       = userRol === 'RECURSOS_FINANCIEROS' || userRol === 'RRHH_FINANZAS';
-  const esAdministracion = userRol === 'JEFE_ADMINISTRATIVO';
+  const esAdministracion = userRol === 'RRHH_FINANZAS';
+  const esJefatura       = userRol === 'JEFE_ADMINISTRATIVO';
   const esRH             = userRol === 'RECURSOS_HUMANOS' || userRol === 'RRHH_FINANZAS';
 
   // Mensaje del turno actual
   let mensajeTurno = "";
   if (!nomina.firmaFinanzas)             mensajeTurno = "Turno: Recursos Financieros (subir documento de subsidio)";
-  else if (!nomina.firmaAdministracion)  mensajeTurno = "Turno: Administración General (revisión y autorización)";
+  else if (!nomina.firmaAdministracion)  mensajeTurno = "Turno: Administración (revisar y firmar)";
+  else if (!firmaJefatura)               mensajeTurno = "Turno: Jefatura Administrativa (firmar y enviar lista de asistencias a RH)";
   else if (!firmaRH)                     mensajeTurno = "Turno: Recursos Humanos (subir nómina firmada por el trabajador)";
   else                                   mensajeTurno = "Turno: Recursos Financieros (archivar nómina)";
 
@@ -143,13 +179,14 @@ export const DetalleNomina = () => {
         </div>
       )}
 
-      {/* PROGRESO DE FIRMAS */}
+      {/* PROGRESO DE FIRMAS (4/4) */}
       {estadoReal !== 'PAGADO' && (
         <div style={{ backgroundColor: 'white', padding: '1.5rem 2rem', borderRadius: '20px', border: '1px solid #e2e8f0', marginBottom: '2rem', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem' }}>
             <div style={{ display: 'flex', gap: '2.5rem' }}>
               <FirmaPaso label="Financieros" firmado={nomina.firmaFinanzas} />
               <FirmaPaso label="Administración" firmado={nomina.firmaAdministracion} />
+              <FirmaPaso label="Jefatura" firmado={firmaJefatura} />
               <FirmaPaso label="Rec. Humanos" firmado={firmaRH} />
             </div>
             <p style={{ margin: 0, fontSize: '13px', fontWeight: '800', color: '#3b82f6' }}>{mensajeTurno}</p>
@@ -175,14 +212,37 @@ export const DetalleNomina = () => {
             />
           )}
 
-          {/* PASO 2: Administración revisa y autoriza (cubre Jefatura + Dirección).
-              Un solo click: el sistema genera la lista de asistencias del periodo, la firma y la envía a RH. */}
+          {/* PASO 2: Administración revisa y firma con un botón (sin subir documento). */}
           {nomina.firmaFinanzas && !nomina.firmaAdministracion && esAdministracion && (
+            <div style={{ backgroundColor: 'white', padding: '1.5rem 2rem', borderRadius: '20px', border: '1px solid #e2e8f0', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)' }}>
+              <h3 style={{ margin: '0 0 6px 0', color: '#1e293b' }}>Firma de Administración</h3>
+              <p style={{ margin: '0 0 1rem 0', fontSize: '13px', color: '#64748b', lineHeight: 1.5 }}>
+                Revisa el documento de subsidio que subió Recursos Financieros y aplica tu firma.
+                Después, la pre-nómina pasará a Jefatura Administrativa para generar el reporte de asistencias.
+              </p>
+              <button
+                onClick={handleFirmarAdministracion}
+                disabled={firmandoAdmin}
+                style={{
+                  display: 'inline-flex', alignItems: 'center', gap: '8px',
+                  backgroundColor: firmandoAdmin ? '#94a3b8' : '#0ea5e9',
+                  color: 'white', border: 'none', padding: '0.8rem 1.4rem', borderRadius: '10px',
+                  fontWeight: '800', cursor: firmandoAdmin ? 'not-allowed' : 'pointer'
+                }}
+              >
+                {firmandoAdmin ? <Loader2 size={18} className="animate-spin" /> : <CheckCircle size={18} />}
+                {firmandoAdmin ? 'Firmando…' : 'Firmar como Administración'}
+              </button>
+            </div>
+          )}
+
+          {/* PASO 3: Jefatura Administrativa firma y envía la lista quincenal de asistencias a RH. */}
+          {nomina.firmaAdministracion && !firmaJefatura && esJefatura && (
             <div style={{ backgroundColor: 'white', padding: '1.5rem 2rem', borderRadius: '20px', border: '1px solid #e2e8f0', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)' }}>
               <h3 style={{ margin: '0 0 6px 0', color: '#1e293b' }}>Firmar y enviar lista de asistencias a RH</h3>
               <p style={{ margin: '0 0 1rem 0', fontSize: '13px', color: '#64748b', lineHeight: 1.5 }}>
                 Al confirmar, el sistema genera el reporte quincenal de asistencias del periodo de esta nómina,
-                aplica tu firma de Administración y lo envía automáticamente a Recursos Humanos para que arme la nómina final.
+                aplica tu firma de Jefatura y lo envía automáticamente a Recursos Humanos para que arme la nómina final.
               </p>
               <button
                 onClick={handleEnviarAsistenciasARH}
@@ -202,16 +262,56 @@ export const DetalleNomina = () => {
 
           {/* PASO 4: AUTORIZADO + RH sube nómina firmada */}
           {estadoReal === 'AUTORIZADO' && !firmaRH && esRH && (
-            <UploadCard
-              titulo="Subir nómina firmada por el trabajador"
-              descripcion="Adjunta la nómina formal escaneada con las firmas físicas del personal. Al subirla se aplica la firma de RH y queda lista para que Finanzas archive el ciclo."
-              file={archivoFinal}
-              onFile={setArchivoFinal}
-              onSubmit={handleSubirNominaFinal}
-              loading={subiendoFinal}
-              ctaLabel="Subir nómina firmada"
-              accept=".pdf,.jpg,.jpeg,.png"
-            />
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+              {/* Acceso directo a documentos del flujo (pre-nómina + lista final de asistencias). */}
+              <div style={{ backgroundColor: 'white', padding: '1.25rem 2rem', borderRadius: '20px', border: '1px solid #e2e8f0', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)' }}>
+                <h3 style={{ margin: '0 0 6px 0', color: '#1e293b', fontSize: '16px' }}>Documentos del proceso autorizado</h3>
+                <p style={{ margin: '0 0 1rem 0', fontSize: '13px', color: '#64748b', lineHeight: 1.5 }}>
+                  Consulta la pre-nómina y la lista quincenal de asistencias autorizadas (firmadas por Administración y Jefatura) antes de subir la nómina firmada por el trabajador.
+                </p>
+                <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+                  {archivoUrlAbs && (
+                    <a
+                      href={archivoUrlAbs}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', padding: '0.7rem 1.2rem', backgroundColor: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: '10px', color: '#1d4ed8', textDecoration: 'none', fontWeight: '800', fontSize: '13px' }}
+                    >
+                      <FileText size={16} />
+                      Ver pre-nómina
+                      <ExternalLink size={14} />
+                    </a>
+                  )}
+                  {asistenciasUrlAbs ? (
+                    <a
+                      href={asistenciasUrlAbs}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', padding: '0.7rem 1.2rem', backgroundColor: '#ecfdf5', border: '1px solid #a7f3d0', borderRadius: '10px', color: '#047857', textDecoration: 'none', fontWeight: '800', fontSize: '13px' }}
+                    >
+                      <FileText size={16} />
+                      Ver lista final de asistencias
+                      <ExternalLink size={14} />
+                    </a>
+                  ) : (
+                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', padding: '0.7rem 1.2rem', backgroundColor: '#f1f5f9', border: '1px dashed #cbd5e1', borderRadius: '10px', color: '#94a3b8', fontStyle: 'italic', fontSize: '13px', fontWeight: '600' }}>
+                      Lista final aún no generada
+                    </span>
+                  )}
+                </div>
+              </div>
+
+              <UploadCard
+                titulo="Subir nómina firmada por el trabajador"
+                descripcion="Adjunta la nómina formal escaneada con las firmas físicas del personal. Al subirla se aplica la firma de RH y queda lista para que Finanzas archive el ciclo."
+                file={archivoFinal}
+                onFile={setArchivoFinal}
+                onSubmit={handleSubirNominaFinal}
+                loading={subiendoFinal}
+                ctaLabel="Subir nómina firmada"
+                accept=".pdf,.jpg,.jpeg,.png"
+              />
+            </div>
           )}
 
           {/* PASO 5: Finanzas archiva */}
@@ -266,7 +366,7 @@ export const DetalleNomina = () => {
           />
           <ArchivoLink
             url={asistenciasUrlAbs}
-            etiqueta="Reporte de asistencias quincenal firmado — subido por Administración"
+            etiqueta="Reporte de asistencias quincenal firmado — generado por Jefatura"
             faltaTexto="Aún no se sube el reporte de asistencias firmado"
           />
           <ArchivoLink

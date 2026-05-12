@@ -270,59 +270,6 @@ const ControlAsistencias: React.FC = () => {
   const departamentosDisponibles = Array.from(new Set(empleados.map(e => e.departamento)));
   const listaDepartamentos = Object.keys(empleadosPorDepartamento).sort();
 
-  // ============== EXPORTAR REPORTE QUINCENAL A CSV (modo supervisión) ==============
-  const handleExportarCSV = () => {
-    if (!esModoSupervision) return;
-    const meses = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
-    const periodoStr = `${meses[mesSeleccionado]} ${anioSeleccionado} - ${quincenaSeleccionada === 1 ? '1ra' : '2da'} Quincena`;
-
-    const filas: string[] = [];
-    // Cabecera: Departamento, Empleado, Puesto, día1, día2, ..., FALTAS, RETARDOS
-    const cabeceraDias = diasQuincena.map(d => `Día ${d.dia}`).join(',');
-    filas.push(`"REPORTE DE ASISTENCIAS - ${periodoStr}"`);
-    filas.push('');
-    filas.push(`Departamento,Empleado,Puesto,${cabeceraDias},Faltas,Retardos`);
-
-    listaDepartamentos.forEach(depto => {
-      empleadosPorDepartamento[depto].forEach(emp => {
-        const asistEmp = asistenciasGuardadas.filter(a => getEmpleadoId(a) === emp.id);
-        let faltas = 0, retardos = 0;
-        const celdas = diasQuincena.map(d => {
-          const r = asistEmp.find(a => toYMD(a.fecha) === d.fechaStr);
-          if (!r) return '';
-          if (r.tipo === 'ASISTENCIA') return 'A';
-          if (r.tipo === 'RETARDO') {
-            if (r.estadoJustificacion !== 'APROBADA') retardos++;
-            return r.estadoJustificacion === 'APROBADA' ? 'R(J)' : 'R';
-          }
-          if (r.tipo === 'FALTA') {
-            if (r.estadoJustificacion !== 'APROBADA') faltas++;
-            return r.estadoJustificacion === 'APROBADA' ? 'F(J)' : 'F';
-          }
-          return '';
-        });
-        const nombre = `${emp.nombre} ${emp.apellidos}`.replace(/"/g, '""');
-        const puesto = (emp.puesto || '').replace(/"/g, '""');
-        filas.push(`"${depto}","${nombre}","${puesto}",${celdas.join(',')},${faltas},${retardos}`);
-      });
-    });
-
-    filas.push('');
-    filas.push('Leyenda: A=Asistencia, R=Retardo, F=Falta, (J)=Justificada (no descuenta)');
-
-    // BOM para que Excel reconozca acentos
-    const csv = '﻿' + filas.join('\n');
-    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `Asistencias_${anioSeleccionado}-${String(mesSeleccionado + 1).padStart(2,'0')}_Q${quincenaSeleccionada}.csv`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-  };
-
   // Decidir aprobación/rechazo de un justificante (modal del admin)
   const handleDecidirJustificacion = async (aprobar: boolean) => {
     if (!incidenciaSeleccionada) return;
@@ -394,15 +341,6 @@ const ControlAsistencias: React.FC = () => {
               >
                 <RefreshCw size={16} className={isLoadingAsistencias ? 'animate-spin' : ''} />
                 {isLoadingAsistencias ? 'Actualizando...' : 'Actualizar'}
-              </button>
-
-              <button
-                onClick={handleExportarCSV}
-                title="Descargar reporte de asistencias en CSV (para entregar a RH)"
-                style={{ display: 'flex', alignItems: 'center', gap: '8px', backgroundColor: '#10b981', color: 'white', border: 'none', padding: '0.5rem 1rem', borderRadius: '12px', cursor: 'pointer', fontWeight: '700' }}
-              >
-                <FileText size={16} />
-                Exportar CSV
               </button>
             </>
           ) : (
