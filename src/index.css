@@ -88,11 +88,12 @@ input, textarea, select {
   background-color: white !important;
   transition: all 0.2s ease !important;
   outline: none !important;
+  cursor: pointer !important;
 }
 
 .marakame-datepicker:focus {
-  border-color: #dc2626 !important;
-  box-shadow: 0 0 0 3px rgba(220, 38, 38, 0.1) !important;
+  border-color: #cbd5e1 !important;
+  box-shadow: 0 0 0 3px rgba(220, 38, 38, 0.05) !important;
 }
 
 .react-datepicker-wrapper {
@@ -106,6 +107,10 @@ input, textarea, select {
   box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05) !important;
   overflow: hidden !important;
   background-color: white !important;
+  z-index: 9999 !important;
+}
+
+.react-datepicker-popper {
   z-index: 9999 !important;
 }
 

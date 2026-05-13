@@ -42,9 +42,9 @@ export const CustomDatePicker: React.FC<CustomDatePickerProps> = ({
           selected={selected}
           onChange={onChange}
           locale="es"
+          onKeyDown={(e) => e.preventDefault()}
           dateFormat="dd/MM/yyyy"
           placeholderText={placeholderText}
-          required={required}
           disabled={disabled}
           peekNextMonth
           showMonthDropdown
@@ -126,9 +126,6 @@ export const CustomDatePicker: React.FC<CustomDatePickerProps> = ({
               </button>
             </div>
           )}
-          popperProps={{
-            strategy: "fixed"
-          }}
         />
         <div style={{ 
           position: 'absolute', 

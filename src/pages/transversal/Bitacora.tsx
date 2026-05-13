@@ -3,14 +3,29 @@ import { useQuery } from '@tanstack/react-query';
 import { ShieldAlert, Server, Calendar, Filter, Eye, X, FileJson, CheckCircle, Trash2, Edit3, Activity } from 'lucide-react';
 import apiClient from '../../services/api';
 import type { RegistroBitacora } from '../../types';
+import { CustomDatePicker } from '../../components/common/DatePicker';
+import { format } from 'date-fns';
 
 export function Bitacora() {
   const [modulo, setModulo] = useState('');
+  const [busqueda, setBusqueda] = useState('');
+  const [accion, setAccion] = useState('');
+  const [fechaInicio, setFechaInicio] = useState<Date | null>(null);
+  const [fechaFin, setFechaFin] = useState<Date | null>(null);
   const [selectedLog, setSelectedLog] = useState<RegistroBitacora | null>(null);
   
   const { data: logs, isLoading } = useQuery<RegistroBitacora[]>({
-    queryKey: ['bitacora', modulo],
-    queryFn: () => apiClient.get(`/bitacora${modulo ? `?modulo=${modulo}` : ''}`).then(res => res.data.data)
+    queryKey: ['bitacora', modulo, busqueda, accion, fechaInicio, fechaFin],
+    queryFn: () => {
+      const params = new URLSearchParams();
+      if (modulo) params.append('modulo', modulo);
+      if (busqueda) params.append('busqueda', busqueda);
+      if (accion) params.append('accion', accion);
+      if (fechaInicio) params.append('fechaInicio', format(fechaInicio, 'yyyy-MM-dd'));
+      if (fechaFin) params.append('fechaFin', format(fechaFin, 'yyyy-MM-dd'));
+      
+      return apiClient.get(`/bitacora?${params.toString()}`).then(res => res.data.data);
+    }
   });
 
   const formatearDetalles = (detalle: unknown) => {
@@ -91,44 +106,138 @@ export function Bitacora() {
   };
 
   return (
-    <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '1rem' }}>
+    <div style={{ maxWidth: '1400px', margin: '0 auto', padding: '1.5rem' }}>
       
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem' }}>
-        <div style={{ display: 'flex', alignItems: 'center' }}>
-          <ShieldAlert size={28} color="#e53e3e" style={{ marginRight: '1rem' }} />
-          <h1 style={{ fontSize: '24px', fontWeight: 'bold', color: '#2d3748' }}>Bitácora del Sistema</h1>
+      <div style={{ 
+        backgroundColor: 'white', 
+        borderRadius: '24px', 
+        padding: '2rem', 
+        marginBottom: '2rem',
+        boxShadow: '0 4px 20px rgba(0,0,0,0.04)',
+        border: '1px solid #f1f5f9'
+      }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem' }}>
+          <div style={{ display: 'flex', alignItems: 'center' }}>
+            <div style={{ backgroundColor: '#fef2f2', padding: '0.75rem', borderRadius: '16px', marginRight: '1rem', border: '1px solid #fee2e2' }}>
+              <ShieldAlert size={28} color="#dc2626" />
+            </div>
+            <div>
+              <h1 style={{ fontSize: '24px', fontWeight: '900', color: '#0f172a', margin: 0 }}>Bitácora del Sistema</h1>
+              <p style={{ margin: 0, fontSize: '14px', color: '#64748b', fontWeight: '500' }}>Registro de auditoría transversal y control operativo</p>
+            </div>
+          </div>
         </div>
-        
-        <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-          <Filter size={18} color="#718096" />
-          <select 
-            value={modulo} 
-            onChange={(e) => setModulo(e.target.value)}
-            style={{ padding: '0.5rem', border: '1px solid #cbd5e0', borderRadius: '4px', color: '#4a5568' }}
-          >
-            <option value="">Todos los Módulos</option>
-            <option value="auth">Autenticación (Login)</option>
-            <option value="Compras">Compras / Gastos</option>
-            <option value="Expediente Clínico">Expediente Clínico</option>
-            <option value="Admisiones">Admisiones</option>
-            <option value="Almacén">Kardex y Almacén</option>
-            <option value="Nóminas">Nóminas</option>
-          </select>
+
+        {/* Panel de Filtros Robustos */}
+        <div style={{ 
+          display: 'grid', 
+          gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', 
+          gap: '1rem',
+          padding: '1.5rem',
+          backgroundColor: '#f8fafc',
+          borderRadius: '16px',
+          border: '1px solid #e2e8f0'
+        }}>
+          <div>
+            <label style={{ display: 'block', fontSize: '11px', fontWeight: '800', color: '#64748b', marginBottom: '0.5rem', textTransform: 'uppercase' }}>Búsqueda de Usuario</label>
+            <input 
+              type="text"
+              placeholder="Nombre o apellidos..."
+              value={busqueda}
+              onChange={(e) => setBusqueda(e.target.value)}
+              style={{ width: '100%', padding: '0.6rem 1rem', border: '1px solid #cbd5e1', borderRadius: '10px', fontSize: '14px', outline: 'none' }}
+            />
+          </div>
+
+          <div>
+            <label style={{ display: 'block', fontSize: '11px', fontWeight: '800', color: '#64748b', marginBottom: '0.5rem', textTransform: 'uppercase' }}>Acción / Evento</label>
+            <select 
+              value={accion}
+              onChange={(e) => setAccion(e.target.value)}
+              style={{ width: '100%', padding: '0.6rem 1rem', border: '1px solid #cbd5e1', borderRadius: '10px', fontSize: '14px', outline: 'none', backgroundColor: 'white' }}
+            >
+              <option value="">Todas las Acciones</option>
+              <option value="CREATE">Crear / Nuevo</option>
+              <option value="UPDATE">Actualizar / Editar</option>
+              <option value="DELETE">Eliminar / Borrar</option>
+              <option value="LOGIN">Inicio de Sesión</option>
+              <option value="RECHAZADO">Rechazos</option>
+            </select>
+          </div>
+
+          <div>
+            <label style={{ display: 'block', fontSize: '11px', fontWeight: '800', color: '#64748b', marginBottom: '0.5rem', textTransform: 'uppercase' }}>Módulo</label>
+            <select 
+              value={modulo} 
+              onChange={(e) => setModulo(e.target.value)}
+              style={{ width: '100%', padding: '0.6rem 1rem', border: '1px solid #cbd5e1', borderRadius: '10px', fontSize: '14px', outline: 'none', backgroundColor: 'white' }}
+            >
+              <option value="">Todos los Módulos</option>
+              <option value="auth">Autenticación (Login)</option>
+              <option value="Compras">Compras / Gastos</option>
+              <option value="Expediente Clínico">Expediente Clínico</option>
+              <option value="Admisiones">Admisiones</option>
+              <option value="Almacén">Kardex y Almacén</option>
+              <option value="Nóminas">Nóminas</option>
+              <option value="Socioeconómico">Socioeconómico</option>
+            </select>
+          </div>
+
+          <div>
+            <label style={{ display: 'block', fontSize: '11px', fontWeight: '800', color: '#64748b', marginBottom: '0.5rem', textTransform: 'uppercase' }}>Desde</label>
+            <CustomDatePicker 
+              selected={fechaInicio}
+              onChange={setFechaInicio}
+              placeholderText="Desde..."
+            />
+          </div>
+
+          <div>
+            <label style={{ display: 'block', fontSize: '11px', fontWeight: '800', color: '#64748b', marginBottom: '0.5rem', textTransform: 'uppercase' }}>Hasta</label>
+            <CustomDatePicker 
+              selected={fechaFin}
+              onChange={setFechaFin}
+              placeholderText="Hasta..."
+            />
+          </div>
+
+          <div style={{ display: 'flex', alignItems: 'flex-end' }}>
+            <button 
+              onClick={() => {
+                setBusqueda('');
+                setModulo('');
+                setAccion('');
+                setFechaInicio(null);
+                setFechaFin(null);
+              }}
+              style={{ width: '100%', padding: '0.6rem', background: '#f1f5f9', border: '1px solid #e2e8f0', borderRadius: '10px', fontSize: '13px', fontWeight: '700', color: '#64748b', cursor: 'pointer' }}
+            >
+              Limpiar Filtros
+            </button>
+          </div>
         </div>
       </div>
 
-      <div style={{ backgroundColor: 'white', borderRadius: '8px', boxShadow: '0 4px 6px rgba(0,0,0,0.05)', overflow: 'hidden' }}>
-        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '14px' }}>
-          <thead style={{ backgroundColor: '#2d3748', color: 'white' }}>
-            <tr>
-              <th style={{ padding: '1rem', textAlign: 'left' }}>Fecha y Hora</th>
-              <th style={{ padding: '1rem', textAlign: 'left' }}>Usuario Autor</th>
-              <th style={{ padding: '1rem', textAlign: 'left' }}>Acción</th>
-              <th style={{ padding: '1rem', textAlign: 'left' }}>Módulo</th>
-              <th style={{ padding: '1rem', textAlign: 'left' }}>Detalles</th>
-              <th style={{ padding: '1rem', textAlign: 'center' }}>IP Intranet</th>
-            </tr>
-          </thead>
+      <div style={{ 
+        backgroundColor: 'white', 
+        borderRadius: '24px', 
+        boxShadow: '0 4px 20px rgba(0,0,0,0.04)', 
+        overflow: 'hidden',
+        border: '1px solid #f1f5f9'
+      }}>
+        {/* Contenedor con Scroll Interno */}
+        <div style={{ maxHeight: '600px', overflowY: 'auto', position: 'relative' }}>
+          <table style={{ width: '100%', borderCollapse: 'separate', borderSpacing: 0, fontSize: '14px' }}>
+            <thead style={{ position: 'sticky', top: 0, zIndex: 5, backgroundColor: '#f8fafc' }}>
+              <tr>
+                <th style={{ padding: '1.25rem 1.5rem', textAlign: 'left', color: '#64748b', fontWeight: '700', textTransform: 'uppercase', fontSize: '11px', borderBottom: '1px solid #e2e8f0' }}>Fecha y Hora</th>
+                <th style={{ padding: '1.25rem 1.5rem', textAlign: 'left', color: '#64748b', fontWeight: '700', textTransform: 'uppercase', fontSize: '11px', borderBottom: '1px solid #e2e8f0' }}>Usuario Autor</th>
+                <th style={{ padding: '1.25rem 1.5rem', textAlign: 'left', color: '#64748b', fontWeight: '700', textTransform: 'uppercase', fontSize: '11px', borderBottom: '1px solid #e2e8f0' }}>Acción</th>
+                <th style={{ padding: '1.25rem 1.5rem', textAlign: 'left', color: '#64748b', fontWeight: '700', textTransform: 'uppercase', fontSize: '11px', borderBottom: '1px solid #e2e8f0' }}>Módulo</th>
+                <th style={{ padding: '1.25rem 1.5rem', textAlign: 'left', color: '#64748b', fontWeight: '700', textTransform: 'uppercase', fontSize: '11px', borderBottom: '1px solid #e2e8f0' }}>Detalles</th>
+                <th style={{ padding: '1.25rem 1.5rem', textAlign: 'center', color: '#64748b', fontWeight: '700', textTransform: 'uppercase', fontSize: '11px', borderBottom: '1px solid #e2e8f0' }}>IP</th>
+              </tr>
+            </thead>
           <tbody>
             {isLoading ? (
               <tr><td colSpan={6} style={{ padding: '2rem', textAlign: 'center' }}>Inspeccionando registros de la bitácora...</td></tr>
@@ -136,43 +245,43 @@ export function Bitacora() {
               <tr><td colSpan={6} style={{ padding: '2rem', textAlign: 'center' }}>No hay registros en la bitácora transversal.</td></tr>
             ) : (
               logs?.map((log: RegistroBitacora) => (
-                <tr key={log.id} style={{ borderBottom: '1px solid #edf2f7' }}>
-                  <td style={{ padding: '1rem', color: '#718096' }}>
-                    <div style={{ display: 'flex', alignItems: 'center' }}>
-                      <Calendar size={14} style={{ marginRight: '0.5rem' }} />
+                <tr key={log.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
+                  <td style={{ padding: '1.25rem 1.5rem', color: '#64748b' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', fontWeight: '500' }}>
+                      <Calendar size={14} style={{ marginRight: '0.5rem', color: '#dc2626' }} />
                       {new Date(log.createdAt).toLocaleString('es-MX')}
                     </div>
                   </td>
-                  <td style={{ padding: '1rem', fontWeight: 'bold', color: '#2b6cb0' }}>
-                    {log.usuario.nombre} {log.usuario.apellidos}
-                    <span style={{ display: 'block', fontSize: '11px', color: '#a0aec0', fontWeight: 'normal' }}>{log.usuario.rol}</span>
+                  <td style={{ padding: '1.25rem 1.5rem' }}>
+                    <div style={{ fontWeight: '700', color: '#0f172a' }}>{log.usuario.nombre} {log.usuario.apellidos}</div>
+                    <div style={{ fontSize: '11px', color: '#dc2626', fontWeight: '600', textTransform: 'uppercase' }}>{log.usuario.rol}</div>
                   </td>
-                  <td style={{ padding: '1rem', fontWeight: 'bold', color: log.accion.includes('DELETE') || log.accion.includes('RECHAZADO') ? '#e53e3e' : '#2d3748' }}>
+                  <td style={{ padding: '1.25rem 1.5rem', fontWeight: '800', color: log.accion.includes('DELETE') || log.accion.includes('RECHAZADO') ? '#ef4444' : '#1e293b', fontSize: '13px' }}>
                     {log.accion}
                   </td>
-                  <td style={{ padding: '1rem' }}>
-                    <span style={{ backgroundColor: '#edf2f7', padding: '0.25rem 0.5rem', borderRadius: '4px', fontSize: '12px' }}>
+                  <td style={{ padding: '1.25rem 1.5rem' }}>
+                    <span style={{ backgroundColor: '#f1f5f9', color: '#475569', padding: '0.35rem 0.75rem', borderRadius: '8px', fontSize: '12px', fontWeight: '700', border: '1px solid #e2e8f0' }}>
                       {log.modulo}
                     </span>
                   </td>
-                  <td style={{ padding: '1rem' }}>
+                  <td style={{ padding: '1.25rem 1.5rem' }}>
                     <button 
                       onClick={() => setSelectedLog(log)}
                       style={{ 
                         display: 'flex', alignItems: 'center', gap: '0.5rem', 
-                        padding: '0.5rem 0.75rem', backgroundColor: '#ebf8ff', 
-                        border: '1px solid #bee3f8', borderRadius: '6px', cursor: 'pointer',
-                        color: '#2b6cb0', fontWeight: '600', fontSize: '12px',
+                        padding: '0.5rem 0.75rem', backgroundColor: '#fef2f2', 
+                        border: '1px solid #fee2e2', borderRadius: '10px', cursor: 'pointer',
+                        color: '#dc2626', fontWeight: '700', fontSize: '12px',
                         transition: 'all 0.2s ease-in-out'
                       }}
-                      onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = '#bee3f8'; e.currentTarget.style.transform = 'translateY(-1px)'; }}
-                      onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = '#ebf8ff'; e.currentTarget.style.transform = 'translateY(0)'; }}
+                      onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = '#fee2e2'; }}
+                      onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = '#fef2f2'; }}
                     >
                       <Eye size={16} /> Ver Detalles
                     </button>
                   </td>
-                  <td style={{ padding: '1rem', textAlign: 'center', color: '#718096', fontFamily: 'monospace' }}>
-                    <Server size={14} style={{ display: 'inline', marginRight: '0.25rem', verticalAlign: 'middle' }} />
+                  <td style={{ padding: '1.25rem 1.5rem', textAlign: 'center', color: '#64748b', fontFamily: 'monospace', fontWeight: '600' }}>
+                    <Server size={14} style={{ display: 'inline', marginRight: '0.5rem', verticalAlign: 'middle', color: '#94a3b8' }} />
                     {log.ip}
                   </td>
                 </tr>
@@ -180,6 +289,7 @@ export function Bitacora() {
             )}
           </tbody>
         </table>
+      </div>
       </div>
 
       {/* Modal Gráfico de Detalles */}
