@@ -92,6 +92,9 @@ export type EstadoStock = 'NORMAL' | 'BAJO' | 'CRITICO';
 export const EstadoCompra = {
   REQUISICION_CREADA: 'REQUISICION_CREADA',
 
+  EN_COMPRAS: 'EN_COMPRAS',
+  DEVUELTA_A_COMPRAS: 'DEVUELTA_A_COMPRAS',
+
   EN_REVISION_RECURSOS: 'EN_REVISION_RECURSOS',
   EN_REVISION_COMPRAS: 'EN_REVISION_COMPRAS',
   EN_REVISION_ADMINISTRACION: 'EN_REVISION_ADMINISTRACION',
@@ -105,6 +108,8 @@ export const EstadoCompra = {
 
   ORDEN_GENERADA: 'ORDEN_GENERADA',
   FACTURAS_RECIBIDAS: 'FACTURAS_RECIBIDAS',
+  EXPEDIENTE_GENERADO: 'EXPEDIENTE_GENERADO',
+  ENVIADA_A_FINANZAS: 'ENVIADA_A_FINANZAS',
   ORDEN_PAGO_GENERADA: 'ORDEN_PAGO_GENERADA',
   PAGO_GENERADO: 'PAGO_GENERADO',
 
@@ -121,6 +126,9 @@ export const EstadoCompraLabel: {
 
   REQUISICION_CREADA: 'Requisición creada',
 
+  EN_COMPRAS: 'En compras',
+  DEVUELTA_A_COMPRAS: 'Devuelta a compras',
+
   EN_REVISION_RECURSOS:
     'Revisión recursos materiales',
 
@@ -128,7 +136,7 @@ export const EstadoCompraLabel: {
     'Compras e inventario',
 
   EN_REVISION_ADMINISTRACION:
-    'Dirección administrativa',
+    'Revisión administrativa',
 
   EN_REVISION_DIRECCION:
     'Dirección general',
@@ -151,6 +159,12 @@ export const EstadoCompraLabel: {
   FACTURAS_RECIBIDAS:
     'Facturas recibidas',
 
+  EXPEDIENTE_GENERADO:
+    'Expediente generado',
+
+  ENVIADA_A_FINANZAS:
+    'Enviada a finanzas',
+
   ORDEN_PAGO_GENERADA:
     'Orden de pago generada',
 
@@ -170,6 +184,9 @@ export const EstadoCompraColor: {
 
   REQUISICION_CREADA: 'gray',
 
+  EN_COMPRAS: 'blue',
+  DEVUELTA_A_COMPRAS: 'orange',
+
   EN_REVISION_RECURSOS: 'blue',
 
   EN_REVISION_COMPRAS: 'orange',
@@ -178,7 +195,7 @@ export const EstadoCompraColor: {
 
   EN_REVISION_DIRECCION: 'pink',
 
-  COTIZACIONES_CARGADAS: 'orange',
+  COTIZACIONES_CARGADAS: 'teal',
 
   PROVEEDOR_SELECCIONADO: 'purple',
 
@@ -189,6 +206,10 @@ export const EstadoCompraColor: {
   ORDEN_GENERADA: 'teal',
 
   FACTURAS_RECIBIDAS: 'indigo',
+
+  EXPEDIENTE_GENERADO: 'green',
+
+  ENVIADA_A_FINANZAS: 'violet',
 
   ORDEN_PAGO_GENERADA: 'cyan',
 
@@ -374,6 +395,45 @@ export interface Movimiento {
 
 export type TipoCompra = 'ORDINARIA' | 'EXTRAORDINARIA';
 
+// ─── Requisición de Departamento (solicitud de artículos al almacén) ──────────
+
+export type EstadoRequisicion =
+  | 'CREADA'
+  | 'EN_REVISION_ALMACEN'
+  | 'SURTIDA'
+  | 'PARCIAL'
+  | 'SIN_EXISTENCIA'
+  | 'ENVIADA_A_COMPRAS'
+  | 'EN_REVISION_ADMINISTRATIVA'
+  | 'DEVUELTA_A_COMPRAS';
+
+export interface RequisicionDetalleItem {
+  id: number;
+  numero: number;
+  productoNombre: string | null;
+  unidadLibre: string | null;
+  cantidadSolicitada: number;
+  cantidadEntregada: number;
+  observaciones: string | null;
+}
+
+export interface RequisicionDept {
+  id: number;
+  folio: string;
+  areaSolicitante: string;
+  descripcion: string | null;
+  justificacion: string;
+  estado: EstadoRequisicion;
+  createdAt: string;
+  updatedAt: string;
+  usuarioSolicita?: {
+    id: number;
+    nombre: string;
+    apellidos: string;
+  };
+  detalles: RequisicionDetalleItem[];
+}
+
 export interface Requisicion {
   id: number;
   folio: string;
@@ -383,6 +443,7 @@ export interface Requisicion {
   justificacion: string;
 
   presupuestoEstimado?: number;
+  numeroCotizacionesRequeridas?: number;
 
   estado: EstadoCompra;
   tipo: TipoCompra;
@@ -408,17 +469,57 @@ export interface Requisicion {
     cantidad: number;
   }[];
 
+  requisicion?: {
+    id: number;
+    folio: string;
+    areaSolicitante: string;
+    justificacion: string;
+    descripcion: string | null;
+    usuarioSolicita?: { id: number; nombre: string; apellidos: string };
+    detalles: {
+      id: number;
+      numero: number;
+      productoNombre: string | null;
+      unidadLibre: string | null;
+      cantidadSolicitada: number;
+      observaciones: string | null;
+    }[];
+  };
+
+  historial?: {
+    id: number;
+    estado: string;
+    fecha: string;
+    observaciones?: string | null;
+    usuario?: { nombre: string; apellidos: string } | null;
+  }[];
+
+  expedienteGenerado?: boolean;
+  enviadoFinanzas?: boolean;
+  fechaEnvioFinanzas?: string | null;
+
   createdAt: string;
 }
 
 export interface Cotizacion {
   id: number;
-  proveedor: string;
+  proveedorId?: number;
+  requisicionDetalleId?: number;
+  precioUnitario?: number;
+  proveedor: string | { id: number; nombre: string };
   precio: number;
   tiempoEntrega?: string;
+  formaPago?: string;
   requisicionId?: number;
   esMejorOpcion?: boolean;
 }
+
+export const getCotizacionProveedorNombre = (c: Cotizacion): string => {
+  if (typeof c.proveedor === 'object' && c.proveedor !== null) {
+    return (c.proveedor as { id: number; nombre: string }).nombre;
+  }
+  return String(c.proveedor ?? '');
+};
 
 export interface OrdenCompra {
   id: number;
@@ -488,6 +589,100 @@ export interface IncidenciaNomina {
   createdAt: string;
   empleado?: Empleado;
 }
+
+// ─── PROVEEDORES ─────────────────────────────────────────────────────────────
+
+export type EstadoProveedor         = 'ACTIVO' | 'INACTIVO' | 'BLOQUEADO';
+export type GiroProveedor           = 'TECNOLOGIA' | 'PAPELERIA' | 'REFACCIONES' | 'SERVICIOS' | 'LIMPIEZA' | 'ALIMENTOS' | 'MEDICAMENTOS' | 'OTROS';
+export type TipoPersonaProveedor    = 'FISICA' | 'MORAL';
+export type CondicionesPagoProveedor = 'CONTADO' | 'CREDITO_15' | 'CREDITO_30';
+export type MonedaProveedor         = 'MXN' | 'USD' | 'EUR';
+
+export interface Proveedor {
+  id: number;
+  nombre: string;
+  razonSocial?: string;
+  rfc?: string;
+  curp?: string;
+  tipo?: string;
+  giro?: GiroProveedor;
+  tipoPersona?: TipoPersonaProveedor;
+  estadoProveedor: EstadoProveedor;
+  activo: boolean;
+
+  contactoPrincipal?: string;
+  cargoContacto?: string;
+  telefono?: string;
+  celular?: string;
+  correo?: string;
+  paginaWeb?: string;
+
+  pais?: string;
+  estadoRepublica?: string;
+  ciudad?: string;
+  colonia?: string;
+  calle?: string;
+  numExterior?: string;
+  numInterior?: string;
+  codigoPostal?: string;
+  referencias?: string;
+  direccion?: string;
+
+  banco?: string;
+  cuentaBancaria?: string;
+  clabe?: string;
+  metodoPago?: string;
+  condicionesPago?: CondicionesPagoProveedor;
+  moneda?: MonedaProveedor;
+  diasCredito?: number;
+
+  regimenFiscal?: string;
+  usoCFDI?: string;
+  metodoFacturacion?: string;
+  retencionesAplicables?: string;
+  constanciaFiscalUrl?: string;
+
+  productosServicios?: string;
+  marcas?: string;
+  tiempoEntregaPromedio?: string;
+  garantias?: string;
+  convenios?: string;
+
+  ineRepresentanteUrl?: string;
+  actaConstitutivaUrl?: string;
+  comprobanteDomicilioUrl?: string;
+  contratoUrl?: string;
+  catalogoProductosUrl?: string;
+
+  calificacion?: number;
+  observaciones?: string;
+  notas?: string;
+  ultimaCompra?: string;
+
+  _count?: { cotizaciones: number; ordenes: number; contraRecibos: number };
+
+  createdAt: string;
+  updatedAt: string;
+}
+
+export const GiroLabel: Record<GiroProveedor, string> = {
+  TECNOLOGIA:   'Tecnología',
+  PAPELERIA:    'Papelería',
+  REFACCIONES:  'Refacciones',
+  SERVICIOS:    'Servicios',
+  LIMPIEZA:     'Limpieza',
+  ALIMENTOS:    'Alimentos',
+  MEDICAMENTOS: 'Medicamentos',
+  OTROS:        'Otros',
+};
+
+export const CondicionesLabel: Record<CondicionesPagoProveedor, string> = {
+  CONTADO:     'Contado',
+  CREDITO_15:  'Crédito 15 días',
+  CREDITO_30:  'Crédito 30 días',
+};
+
+// ─── FIN PROVEEDORES ─────────────────────────────────────────────────────────
 
 export interface Nomina {
   id: number;

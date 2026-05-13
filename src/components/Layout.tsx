@@ -1,5 +1,5 @@
 import { Outlet, useNavigate, useLocation } from 'react-router-dom';
-import { LogOut, Search, Bell, HeartPulse, Stethoscope, PackageOpen, ShoppingCart, Banknote, ShieldAlert, FileOutput, ChevronRight, Users, Clock, ClipboardList, LayoutDashboard, Droplets, FlaskConical, UserCog, ClipboardCheck, Wallet, CalendarCheck } from 'lucide-react';
+import { LogOut, Search, Bell, HeartPulse, Stethoscope, PackageOpen, ShoppingCart, Banknote, ShieldAlert, FileOutput, ChevronRight, Users, Clock, ClipboardList, LayoutDashboard, Droplets, FlaskConical, UserCog, ClipboardCheck, Wallet, CalendarCheck, Building2, ShieldCheck } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { useAuthStore } from '../stores/authStore';
 import { notificacionService, type Notificacion } from '../services/notificacion.service';
@@ -263,6 +263,13 @@ export function Layout() {
               >
                 <Wallet size={20} style={{ marginRight: '1rem' }}/> Pagos de Pacientes
               </div>
+
+              <div style={navItemStyle('proveedores')} onClick={() => navigate('/proveedores')}
+                  onMouseEnter={(e) => { if (!location.pathname.includes('proveedores')) { e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.05)'; e.currentTarget.style.color = '#e2e8f0'; } }}
+                  onMouseLeave={(e) => { if (!location.pathname.includes('proveedores')) { e.currentTarget.style.backgroundColor = 'transparent'; e.currentTarget.style.color = '#94a3b8'; } }}
+              >
+                <Building2 size={20} style={{ marginRight: '1rem' }}/> Catálogo de Proveedores
+              </div>
             </>
           )}
 
@@ -282,6 +289,12 @@ export function Layout() {
               >
                 <Banknote size={20} style={{ marginRight: '1rem' }}/> Histórico de Nóminas
               </div>
+              <div style={navItemStyle('revision-compras')} onClick={() => navigate('/revision-compras')}
+                  onMouseEnter={(e) => { if (!location.pathname.includes('revision-compras')) { e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.05)'; e.currentTarget.style.color = '#e2e8f0'; } }}
+                  onMouseLeave={(e) => { if (!location.pathname.includes('revision-compras')) { e.currentTarget.style.backgroundColor = 'transparent'; e.currentTarget.style.color = '#94a3b8'; } }}
+              >
+                <ShoppingCart size={20} style={{ marginRight: '1rem' }}/> Revisión Adm. de Compras
+              </div>
             </>
           )}
 
@@ -294,6 +307,12 @@ export function Layout() {
                    onMouseLeave={(e) => { if (!location.pathname.includes('directora')) { e.currentTarget.style.backgroundColor = 'transparent'; e.currentTarget.style.color = '#94a3b8'; } }}
               >
                 <LayoutDashboard size={20} style={{ marginRight: '1rem' }}/> Panel Ejecutivo
+              </div>
+              <div style={navItemStyle('autorizacion-compras')} onClick={() => navigate('/autorizacion-compras')}
+                   onMouseEnter={(e) => { if (!location.pathname.includes('autorizacion-compras')) { e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.05)'; e.currentTarget.style.color = '#e2e8f0'; } }}
+                   onMouseLeave={(e) => { if (!location.pathname.includes('autorizacion-compras')) { e.currentTarget.style.backgroundColor = 'transparent'; e.currentTarget.style.color = '#94a3b8'; } }}
+              >
+                <ShieldCheck size={20} style={{ marginRight: '1rem' }}/> Autorización de Compras
               </div>
               <div style={navItemStyle('auditoria')} onClick={() => navigate('/auditoria')}
                    onMouseEnter={(e) => { if (!location.pathname.includes('auditoria')) { e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.05)'; e.currentTarget.style.color = '#e2e8f0'; } }}

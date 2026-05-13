@@ -4,9 +4,16 @@ import {
     createRequisicion,
     updateEstado,
     addCotizacion,
+    eliminarCotizacion,
     generarOrden,
     generarOrdenPago,
-    subirFactura
+    subirFactura,
+    registrarCotizacionCatalogo,
+    registrarCotizacionesBulk,
+    enviarARevisionAdministrativa,
+    generarExpedienteCompra,
+    enviarAFinanzasCompra,
+    finalizarCompraService,
     } from '../services/compras.service';
     import type { EstadoCompra } from '../types';
 
@@ -77,21 +84,9 @@ import {
     });
 
     const createOrden = useMutation({
-        mutationFn: ({
-            id,
-            data
-        }: {
-            id: number;
-            data: {
-                proveedor: string;
-                total: number;
-            };
-        }) => generarOrden(id, data),
-
+        mutationFn: (id: number) => generarOrden(id),
         onSuccess: () => {
-            queryClient.invalidateQueries({
-                queryKey: ['compras']
-            });
+            queryClient.invalidateQueries({ queryKey: ['compras'] });
         }
     });
 
@@ -123,6 +118,83 @@ import {
         }
     });
 
+    const createCotCatalogo = useMutation({
+        mutationFn: ({
+            id,
+            data,
+        }: {
+            id: number;
+            data: {
+                proveedorId: number;
+                precio: number;
+                tiempoEntrega?: string;
+                formaPago?: string;
+            };
+        }) => registrarCotizacionCatalogo(id, data),
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ['compras'] });
+        },
+    });
+
+    const deleteCot = useMutation({
+        mutationFn: ({ compraId, cotizacionId }: { compraId: number; cotizacionId: number }) =>
+            eliminarCotizacion(compraId, cotizacionId),
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ['compras'] });
+        },
+    });
+
+    const enviarAdministracion = useMutation({
+        mutationFn: ({ id, observaciones }: { id: number; observaciones?: string }) =>
+            enviarARevisionAdministrativa(id, observaciones),
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ['compras'] });
+        },
+    });
+
+    const genExpediente = useMutation({
+        mutationFn: ({ id, observaciones }: { id: number; observaciones?: string }) =>
+            generarExpedienteCompra(id, observaciones),
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ['compras'] });
+        },
+    });
+
+    const enviarFinanzas = useMutation({
+        mutationFn: ({ id, observaciones }: { id: number; observaciones?: string }) =>
+            enviarAFinanzasCompra(id, observaciones),
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ['compras'] });
+        },
+    });
+
+    const finalizar = useMutation({
+        mutationFn: ({ id, observaciones }: { id: number; observaciones?: string }) =>
+            finalizarCompraService(id, observaciones),
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ['compras'] });
+        },
+    });
+
+    const createCotBulk = useMutation({
+        mutationFn: ({
+            id,
+            items,
+        }: {
+            id: number;
+            items: {
+                requisicionDetalleId: number;
+                proveedorId: number;
+                precioUnitario: number;
+                tiempoEntrega?: string;
+                formaPago?: string;
+            }[];
+        }) => registrarCotizacionesBulk(id, items),
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ['compras'] });
+        },
+    });
+
     return {
         requisiciones:
             requisicionesQuery.data || [],
@@ -131,8 +203,15 @@ import {
         createReq,
         changeEstado,
         createCot,
+        deleteCot,
+        createCotCatalogo,
+        createCotBulk,
+        enviarAdministracion,
         createOrden,
         createOrdenPago,
-        uploadFactura
+        uploadFactura,
+        genExpediente,
+        enviarFinanzas,
+        finalizar,
     };
 };

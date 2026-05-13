@@ -1,17 +1,21 @@
 import { useState, useRef } from 'react';
+import React from 'react';
 import {
   ShoppingCart, Plus, FileText, Upload,
   CheckCircle, XCircle, Clock, ChevronRight, Package,
   TrendingUp, DollarSign, Eye, X,
-  Building2, Receipt, CreditCard, Send,
-  Star, ArrowRight, Bell, Filter, Search, Download
+  Building2, Receipt, CreditCard, Send, Save,
+  Star, ArrowRight, Bell, Filter, Search, Download,
+  AlertCircle, Loader2
 } from 'lucide-react';
 import { useCompras } from '../../hooks/useCompras';
 import { useAuthStore } from '../../stores/authStore';
-import { useQueryClient } from '@tanstack/react-query';
-import type { EstadoCompra, Cotizacion, Requisicion } from '../../types';
-import { getEstadoCompraUI } from '../../types';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import type { EstadoCompra, Cotizacion, Requisicion, Proveedor } from '../../types';
+import { getEstadoCompraUI, getCotizacionProveedorNombre } from '../../types';
 import { subirFactura } from '../../services/compras.service';
+import apiClient from '../../services/api';
+import { proveedoresService } from '../../services/proveedores.service';
 import { createPortal } from 'react-dom';
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
@@ -24,7 +28,7 @@ const PERMISOS = {
     'crear', 'revisar', 'cotizar', 'negociar', 'admin',
     'autorizar', 'ordenar', 'facturas', 'orden_pago', 'pago'
   ],
-  ALMACEN:       ['crear', 'cotizar'],
+  ALMACEN:       ['crear', 'cotizar', 'ordenar'],
   RRHH_FINANZAS: ['admin', 'autorizar', 'facturas', 'pago'],
   AREA_MEDICA:   ['crear'],
   ENFERMERIA:    ['crear'],
@@ -46,16 +50,20 @@ const puedeHacer = (rol: string | undefined, accion: string): boolean => {
 // ─────────────────────────────────────────────
 const ESTADO_STYLES: Record<string, { bg: string; text: string; dot: string; border: string }> = {
   REQUISICION_CREADA:        { bg: '#F8FAFC', text: '#64748B', dot: '#94A3B8',  border: '#E2E8F0' },
+  EN_COMPRAS:                { bg: '#EFF6FF', text: '#2563EB', dot: '#3B82F6',  border: '#BFDBFE' },
+  DEVUELTA_A_COMPRAS:        { bg: '#FFF7ED', text: '#EA580C', dot: '#F97316',  border: '#FED7AA' },
   EN_REVISION_RECURSOS:      { bg: '#EFF6FF', text: '#2563EB', dot: '#3B82F6',  border: '#BFDBFE' },
   EN_REVISION_COMPRAS:       { bg: '#FFF7ED', text: '#EA580C', dot: '#F97316',  border: '#FED7AA' },
   EN_REVISION_ADMINISTRACION:{ bg: '#FEFCE8', text: '#CA8A04', dot: '#EAB308',  border: '#FEF08A' },
   EN_REVISION_DIRECCION:     { bg: '#FDF2F8', text: '#BE185D', dot: '#EC4899',  border: '#FBCFE8' },
-  COTIZACIONES_CARGADAS:     { bg: '#FFF7ED', text: '#EA580C', dot: '#F97316',  border: '#FED7AA' },
+  COTIZACIONES_CARGADAS:     { bg: '#ECFEFF', text: '#0891B2', dot: '#06B6D4',  border: '#A5F3FC' },
   PROVEEDOR_SELECCIONADO:    { bg: '#F5F3FF', text: '#7C3AED', dot: '#8B5CF6',  border: '#DDD6FE' },
   NEGOCIACION_COMPLETADA:    { bg: '#ECFEFF', text: '#0891B2', dot: '#06B6D4',  border: '#A5F3FC' },
   AUTORIZADA:                { bg: '#F0FDF4', text: '#15803D', dot: '#22C55E',  border: '#BBF7D0' },
   ORDEN_GENERADA:            { bg: '#EFF6FF', text: '#1D4ED8', dot: '#3B82F6',  border: '#BFDBFE' },
   FACTURAS_RECIBIDAS:        { bg: '#EEF2FF', text: '#4338CA', dot: '#6366F1',  border: '#C7D2FE' },
+  EXPEDIENTE_GENERADO:       { bg: '#F0FDF4', text: '#15803D', dot: '#22C55E',  border: '#BBF7D0' },
+  ENVIADA_A_FINANZAS:        { bg: '#F5F3FF', text: '#6D28D9', dot: '#8B5CF6',  border: '#DDD6FE' },
   ORDEN_PAGO_GENERADA:       { bg: '#ECFEFF', text: '#0E7490', dot: '#06B6D4',  border: '#A5F3FC' },
   PAGO_GENERADO:             { bg: '#FDF2F8', text: '#BE185D', dot: '#EC4899',  border: '#FBCFE8' },
   FINALIZADO:                { bg: '#F0FDF4', text: '#15803D', dot: '#16A34A',  border: '#BBF7D0' },
@@ -158,7 +166,7 @@ const TablaCotizaciones = ({
             <td style={{ padding: '10px 14px', borderBottom: '1px solid #F3F4F6' }}>
               <input type="radio" checked={seleccionada?.id === c.id} onChange={() => onSelect(c)} />
             </td>
-            <td style={{ padding: '10px 14px', fontWeight: 600, color: '#111827', borderBottom: '1px solid #F3F4F6' }}>{c.proveedor}</td>
+            <td style={{ padding: '10px 14px', fontWeight: 600, color: '#111827', borderBottom: '1px solid #F3F4F6' }}>{getCotizacionProveedorNombre(c)}</td>
             <td style={{ padding: '10px 14px', color: '#16A34A', fontWeight: 700, borderBottom: '1px solid #F3F4F6' }}>
               ${Number(c.precio).toLocaleString('es-MX', { minimumFractionDigits: 2 })}
             </td>
@@ -305,7 +313,7 @@ export function Compras() {
   const rol = usuario?.rol ?? '';
   const queryClient = useQueryClient();
 
-  const { requisiciones = [], isLoading, createReq, changeEstado, createCot, createOrden, createOrdenPago } = useCompras();
+  const { requisiciones = [], isLoading, createReq, changeEstado, createCot, deleteCot, createCotCatalogo, createCotBulk, enviarAdministracion, createOrden, createOrdenPago, genExpediente, enviarFinanzas, finalizar } = useCompras();
 
   const [proceso, setProceso]               = useState<Requisicion | null>(null);
   const [detalle, setDetalle]               = useState<Requisicion | null>(null);
@@ -323,13 +331,59 @@ export function Compras() {
 
   // FIX: todos los campos de formCot inicializados como string vacío, nunca undefined
   const [formCot, setFormCot] = useState({ proveedor: '', precio: '', tiempoEntrega: '' });
+
+  // Nuevo flujo EN_COMPRAS: cotizaciones con catálogo de proveedores
+  const [busquedaProveedor, setBusquedaProveedor] = useState('');
+  const [proveedorSeleccionadoCot, setProveedorSeleccionadoCot] = useState<Proveedor | null>(null);
+  const [formCotCatalogo, setFormCotCatalogo] = useState({ precio: '', tiempoEntrega: '', formaPago: '' });
+  const [mostrarDropdownProv, setMostrarDropdownProv] = useState(false);
+  const [preciosPorProducto, setPreciosPorProducto] = useState<Record<number, number>>({});
+
+  // Nuevo flujo: cotización por producto (proveedor individual por artículo)
+  const [cotPorProducto, setCotPorProducto] = useState<Record<number, {
+    proveedorId: number | null;
+    precioUnitario: number;
+    tiempoEntrega: string;
+    formaPago: string;
+  }>>({});
+
+  // Pre-llenar cotPorProducto cuando se abre el modal con cotizaciones ya guardadas
+  React.useEffect(() => {
+    if (!proceso) { setCotPorProducto({}); return; }
+    const cots = proceso.cotizaciones ?? [];
+    const conDetalle = cots.filter(c => c.requisicionDetalleId != null);
+    if (conDetalle.length === 0) return;
+    const initial: typeof cotPorProducto = {};
+    for (const c of conDetalle) {
+      const provId = c.proveedorId ?? (typeof c.proveedor === 'object' && c.proveedor !== null ? (c.proveedor as { id: number }).id : null);
+      initial[c.requisicionDetalleId!] = {
+        proveedorId:    provId ?? null,
+        precioUnitario: Number(c.precioUnitario ?? 0),
+        tiempoEntrega:  c.tiempoEntrega ?? '',
+        formaPago:      c.formaPago ?? '',
+      };
+    }
+    setCotPorProducto(initial);
+  }, [proceso?.id]);
+
+  const { data: proveedoresData } = useQuery({
+    queryKey: ['proveedores-activos'],
+    queryFn: () => proveedoresService.getAll({ estado: 'ACTIVO', limit: 200 }),
+  });
   const [cotSeleccionada, setCotSeleccionada] = useState<Cotizacion | null>(null);
   const [formCreate, setFormCreate]     = useState({
     areaSolicitante: '', descripcion: '', justificacion: '',
     presupuestoEstimado: '', tipo: 'ORDINARIA' as 'ORDINARIA'|'EXTRAORDINARIA'
   });
   const [detalles, setDetalles] = useState([{ producto: '', unidad: '', cantidad: 1 }]);
+  const [facturaFile, setFacturaFile]     = useState<File | null>(null);
+  const [facturaNumero, setFacturaNumero] = useState('');
+  const [facturaMonto, setFacturaMonto]   = useState('');
+  const [tabVista, setTabVista]           = useState<'activas' | 'finalizados'>('activas');
+  const [expedienteDetalle, setExpedienteDetalle] = useState<Requisicion | null>(null);
+  const [tabExpediente, setTabExpediente] = useState<'datos' | 'documentos' | 'historial'>('datos');
   const fileRef      = useRef<HTMLInputElement>(null);
+  const staticBase   = (apiClient.defaults.baseURL || '').replace(/\/api\/v1\/?$/, '');
   // Congela el estado del modal al abrirlo para que el cache refresh no cambie de bloque
   const estadoModalRef = useRef<string | null>(null);
   const ordenPdfRef = useRef<HTMLDivElement>(null);
@@ -356,10 +410,15 @@ export function Compras() {
   };
 
   const reqFiltradas = requisiciones.filter(r => {
+    if (r.estado === 'FINALIZADO') return false;
     const coincideBusq   = r.folio.toLowerCase().includes(busqueda.toLowerCase()) || r.descripcion.toLowerCase().includes(busqueda.toLowerCase());
     const coincideEstado = filtroEstado ? r.estado === filtroEstado : true;
     return coincideBusq && coincideEstado;
   });
+
+  const reqFinalizadas = requisiciones.filter(r =>
+    r.estado === 'ENVIADA_A_FINANZAS' || r.estado === 'FINALIZADO'
+  );
 
   // ─── MODALES DE PROCESO ─────────────────────────────────────────────────────
   const renderProceso = () => {
@@ -378,7 +437,7 @@ export function Compras() {
             <div><strong>Folio:</strong> {req.folio}</div>
             <div><strong>Área:</strong> {req.areaSolicitante}</div>
             <div><strong>Descripción:</strong> {req.descripcion}</div>
-            <div><strong>Justificación:</strong> {req.justificacion}</div>
+            <div><strong>Justificación:</strong> {req.requisicion?.justificacion ?? req.justificacion}</div>
             <div><strong>Presupuesto:</strong> ${(req.presupuestoEstimado ?? 0).toLocaleString('es-MX')}</div>
           </div>
           <Btn
@@ -477,8 +536,9 @@ export function Compras() {
                 <thead>
                   <tr style={{ background: '#F3F4F6' }}>
                     <th style={{ padding: '10px 16px', textAlign: 'left', fontWeight: 700, color: '#374151', fontSize: 12, width: '40%' }}>Proveedor</th>
-                    <th style={{ padding: '10px 16px', textAlign: 'right', fontWeight: 700, color: '#374151', fontSize: 12, width: '30%' }}>Precio</th>
-                    <th style={{ padding: '10px 16px', textAlign: 'left', fontWeight: 700, color: '#374151', fontSize: 12, width: '30%' }}>Entrega</th>
+                    <th style={{ padding: '10px 16px', textAlign: 'right', fontWeight: 700, color: '#374151', fontSize: 12, width: '25%' }}>Precio</th>
+                    <th style={{ padding: '10px 16px', textAlign: 'left', fontWeight: 700, color: '#374151', fontSize: 12, width: '25%' }}>Entrega</th>
+                    <th style={{ padding: '10px 16px', width: 40 }} />
                   </tr>
                 </thead>
                 <tbody>
@@ -490,12 +550,25 @@ export function Compras() {
                             Mejor precio
                           </span>
                         )}
-                        {c.proveedor}
+                        {getCotizacionProveedorNombre(c)}
                       </td>
                       <td style={{ padding: '11px 16px', textAlign: 'right', color: c.esMejorOpcion ? '#16A34A' : '#374151', fontWeight: 700 }}>
                         ${Number(c.precio).toLocaleString('es-MX', { minimumFractionDigits: 2 })}
                       </td>
                       <td style={{ padding: '11px 16px', color: '#6B7280' }}>{c.tiempoEntrega ?? '—'}</td>
+                      <td style={{ padding: '8px 10px' }}>
+                        <button
+                          title="Eliminar cotización"
+                          disabled={deleteCot.isPending}
+                          onClick={() => deleteCot.mutate(
+                            { compraId: req.id, cotizacionId: c.id },
+                            { onSuccess: () => notify('Cotización eliminada'), onError: (err: any) => notify(`❌ ${err?.response?.data?.message ?? err?.message}`) }
+                          )}
+                          style={{ background: 'none', border: '1px solid #FECACA', borderRadius: 6, cursor: 'pointer', color: '#DC2626', display: 'flex', alignItems: 'center', padding: '4px 6px' }}
+                        >
+                          <X size={13} />
+                        </button>
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -552,54 +625,260 @@ export function Compras() {
       );
     }
 
+    // ── En espera de revisión (solo lectura para quien ya actuó) ─────────────
+    if (estadoModal === 'EN_REVISION_ADMINISTRACION' || estadoModal === 'EN_REVISION_DIRECCION') {
+      const enDireccion = estadoModal === 'EN_REVISION_DIRECCION';
+      return (
+        <Modal
+          title={enDireccion ? 'En revisión — Dirección General' : 'En revisión — Administración'}
+          onClose={() => { estadoModalRef.current = null; setProceso(null); }}
+          width={520}
+        >
+          <div style={{
+            background: enDireccion ? '#FDF2F8' : '#FEFCE8',
+            border: `1px solid ${enDireccion ? '#FBCFE8' : '#FEF08A'}`,
+            borderRadius: 12, padding: '20px 22px',
+            display: 'flex', flexDirection: 'column', gap: 10,
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <Clock size={20} color={enDireccion ? '#BE185D' : '#CA8A04'} />
+              <span style={{ fontSize: 15, fontWeight: 700, color: enDireccion ? '#9D174D' : '#92400E' }}>
+                {enDireccion
+                  ? 'Esperando autorización de Dirección General'
+                  : 'Esperando revisión de Administración'}
+              </span>
+            </div>
+            <p style={{ margin: 0, fontSize: 13, color: enDireccion ? '#9D174D' : '#92400E', lineHeight: 1.5 }}>
+              {enDireccion
+                ? 'El expediente de cotizaciones está en revisión por Dirección General. No se requiere ninguna acción de tu parte en este momento.'
+                : 'Las cotizaciones fueron enviadas a Administración para su revisión. No se requiere ninguna acción de tu parte en este momento.'}
+            </p>
+          </div>
+          <div style={{ background: '#F9FAFB', borderRadius: 10, padding: 14, fontSize: 13, color: '#374151', display: 'flex', flexDirection: 'column', gap: 4 }}>
+            <div><strong>Folio:</strong> {req.folio} &nbsp;·&nbsp; <strong>Área:</strong> {req.areaSolicitante}</div>
+            {req.descripcion && <div><strong>Descripción:</strong> {req.descripcion}</div>}
+            <div>
+              <strong>Artículos cotizados:</strong>{' '}
+              {req.requisicion?.detalles?.length ?? req.cotizaciones?.length ?? 0}
+              {' — '}
+              <strong>Proveedores:</strong>{' '}
+              {[...new Set((req.cotizaciones ?? []).map(c => getCotizacionProveedorNombre(c)).filter(Boolean))].length || (req.cotizaciones?.length ?? 0)}
+            </div>
+          </div>
+          <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+            <Btn variant="ghost" onClick={() => { estadoModalRef.current = null; setProceso(null); }}>Cerrar</Btn>
+          </div>
+        </Modal>
+      );
+    }
+
     // ── 4. EN_REVISION_ADMINISTRACION → EN_REVISION_DIRECCION ────────────────
     if (estadoModal === 'EN_REVISION_ADMINISTRACION' && puedeHacer(rol, 'admin')) {
-      const cotizaciones = req.cotizaciones ?? [];
-      const mejorCot = cotizaciones.find(c => c.esMejorOpcion) ?? cotizaciones[0];
+      const cotizaciones  = req.cotizaciones ?? [];
+      const detallesReq   = req.requisicion?.detalles ?? [];
+
+      // Construir filas por producto: cada cotización está ligada a un detalle vía requisicionDetalleId
+      const filasPorProducto = detallesReq.map(d => {
+        const cot = cotizaciones.find(c => c.requisicionDetalleId === d.id);
+        const precioUnit = cot ? Number(cot.precioUnitario ?? cot.precio ?? 0) : 0;
+        const total      = precioUnit * d.cantidadSolicitada;
+        return { detalle: d, cot, precioUnit, total };
+      });
+
+      // Filas legacy (cotizaciones sin requisicionDetalleId) — flujo antiguo
+      const cotsLegacy = cotizaciones.filter(c => !c.requisicionDetalleId);
+
+      const usaFlujoPorProducto = filasPorProducto.some(f => f.cot);
+
+      // Totales
+      const subtotal    = filasPorProducto.reduce((s, f) => s + f.total, 0)
+                        + cotsLegacy.reduce((s, c) => s + Number(c.precio ?? 0), 0);
+      const iva         = subtotal * 0.16;
+      const totalConIva = subtotal + iva;
+
+      // Resumen por proveedor
+      const resumenProv: Record<string, { nombre: string; cantidad: number; subtotal: number }> = {};
+      for (const f of filasPorProducto) {
+        if (!f.cot) continue;
+        const nombre = getCotizacionProveedorNombre(f.cot);
+        if (!resumenProv[nombre]) resumenProv[nombre] = { nombre, cantidad: 0, subtotal: 0 };
+        resumenProv[nombre].cantidad  += 1;
+        resumenProv[nombre].subtotal  += f.total;
+      }
+      const gruposProv = Object.values(resumenProv);
+
       return (
-        <Modal title="Revisión de Administración" onClose={() => { setProceso(null); setFormObs(''); }} width={640}>
-          <div style={{ background: '#FEFCE8', border: '1px solid #FEF08A', borderRadius: 10, padding: 12, fontSize: 13, color: '#854D0E' }}>
-            Revisa el expediente de cotizaciones y envía a Dirección General para autorización.
+        <Modal title="Revisión de Administración" onClose={() => { setProceso(null); setFormObs(''); }} width={780}>
+          {/* Banner instrucción */}
+          <div style={{ background: '#FEFCE8', border: '1px solid #FEF08A', borderRadius: 10, padding: '10px 14px', fontSize: 13, color: '#854D0E', display: 'flex', alignItems: 'center', gap: 8 }}>
+            <AlertCircle size={15} style={{ flexShrink: 0 }} />
+            Revisa el expediente de cotizaciones por artículo y envía a Dirección General para autorización.
           </div>
-          {/* Resumen de la requisición */}
-          <div style={{ background: '#F9FAFB', borderRadius: 10, padding: 16, fontSize: 13, color: '#374151', display: 'flex', flexDirection: 'column', gap: 4 }}>
-            <div><strong>Folio:</strong> {req.folio} · <strong>Área:</strong> {req.areaSolicitante}</div>
-            <div><strong>Descripción:</strong> {req.descripcion}</div>
-            <div><strong>Justificación:</strong> {req.justificacion}</div>
-            <div><strong>Presupuesto estimado:</strong> ${(req.presupuestoEstimado ?? 0).toLocaleString('es-MX')}</div>
-            {mejorCot && <div><strong>Proveedor propuesto:</strong> {mejorCot.proveedor} — ${Number(mejorCot.precio).toLocaleString('es-MX', { minimumFractionDigits: 2 })}</div>}
+
+          {/* Encabezado */}
+          <div style={{ background: 'linear-gradient(135deg, #78350F 0%, #D97706 100%)', borderRadius: 12, padding: '14px 20px', color: 'white' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap' as const, gap: 10 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 24, flexWrap: 'wrap' as const }}>
+                <div>
+                  <div style={{ fontSize: 10, opacity: 0.65, textTransform: 'uppercase' as const, letterSpacing: '0.08em', marginBottom: 2 }}>Folio</div>
+                  <div style={{ fontSize: 15, fontWeight: 800 }}>{req.folio}</div>
+                </div>
+                <div style={{ width: 1, height: 34, background: 'rgba(255,255,255,0.25)' }} />
+                <div>
+                  <div style={{ fontSize: 10, opacity: 0.65, textTransform: 'uppercase' as const, letterSpacing: '0.08em', marginBottom: 2 }}>Área</div>
+                  <div style={{ fontSize: 13, fontWeight: 600 }}>{req.areaSolicitante}</div>
+                </div>
+                <div style={{ width: 1, height: 34, background: 'rgba(255,255,255,0.25)' }} />
+                <div>
+                  <div style={{ fontSize: 10, opacity: 0.65, textTransform: 'uppercase' as const, letterSpacing: '0.08em', marginBottom: 2 }}>Presupuesto estimado</div>
+                  <div style={{ fontSize: 13, fontWeight: 600 }}>${(req.presupuestoEstimado ?? 0).toLocaleString('es-MX')}</div>
+                </div>
+              </div>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <div style={{ background: 'rgba(255,255,255,0.15)', borderRadius: 16, padding: '5px 12px', fontSize: 11, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 5 }}>
+                  <Package size={12} /> {detallesReq.length} artículos
+                </div>
+                <div style={{ background: 'rgba(255,255,255,0.15)', borderRadius: 16, padding: '5px 12px', fontSize: 11, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 5 }}>
+                  <Building2 size={12} /> {gruposProv.length} {gruposProv.length === 1 ? 'proveedor' : 'proveedores'}
+                </div>
+              </div>
+            </div>
+            {req.descripcion && <div style={{ marginTop: 8, fontSize: 12, opacity: 0.85 }}>{req.descripcion}</div>}
           </div>
-          {/* Cotizaciones */}
-          {cotizaciones.length > 0 && (
+
+          {/* Tabla por producto */}
+          {usaFlujoPorProducto && (
+            <div style={{ border: '1px solid #E2E8F0', borderRadius: 12, overflow: 'hidden', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
+              <div style={{ padding: '9px 16px', background: '#F8FAFC', borderBottom: '1px solid #E2E8F0', display: 'flex', alignItems: 'center', gap: 8 }}>
+                <Package size={13} style={{ color: '#D97706' }} />
+                <span style={{ fontWeight: 700, fontSize: 11, color: '#1E293B', textTransform: 'uppercase' as const, letterSpacing: '0.07em' }}>
+                  Mejor opción por artículo
+                </span>
+              </div>
+              <div style={{ overflowX: 'auto' as const }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+                  <thead>
+                    <tr style={{ background: '#1E293B' }}>
+                      <th style={{ padding: '8px 12px', textAlign: 'left' as const, fontWeight: 600, color: '#94A3B8', fontSize: 10, textTransform: 'uppercase' as const, letterSpacing: '0.06em' }}>#</th>
+                      <th style={{ padding: '8px 12px', textAlign: 'left' as const, fontWeight: 600, color: '#94A3B8', fontSize: 10, textTransform: 'uppercase' as const, letterSpacing: '0.06em' }}>Artículo</th>
+                      <th style={{ padding: '8px 12px', textAlign: 'center' as const, fontWeight: 600, color: '#94A3B8', fontSize: 10, textTransform: 'uppercase' as const, letterSpacing: '0.06em' }}>Cant.</th>
+                      <th style={{ padding: '8px 12px', textAlign: 'left' as const, fontWeight: 600, color: '#94A3B8', fontSize: 10, textTransform: 'uppercase' as const, letterSpacing: '0.06em' }}>Proveedor seleccionado</th>
+                      <th style={{ padding: '8px 12px', textAlign: 'right' as const, fontWeight: 600, color: '#94A3B8', fontSize: 10, textTransform: 'uppercase' as const, letterSpacing: '0.06em' }}>P. Unit.</th>
+                      <th style={{ padding: '8px 12px', textAlign: 'right' as const, fontWeight: 600, color: '#94A3B8', fontSize: 10, textTransform: 'uppercase' as const, letterSpacing: '0.06em' }}>Total</th>
+                      <th style={{ padding: '8px 12px', textAlign: 'left' as const, fontWeight: 600, color: '#94A3B8', fontSize: 10, textTransform: 'uppercase' as const, letterSpacing: '0.06em' }}>Entrega</th>
+                      <th style={{ padding: '8px 12px', textAlign: 'left' as const, fontWeight: 600, color: '#94A3B8', fontSize: 10, textTransform: 'uppercase' as const, letterSpacing: '0.06em' }}>Forma pago</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filasPorProducto.map((f, idx) => (
+                      <tr key={f.detalle.id} style={{ borderTop: idx === 0 ? 'none' : '1px solid #F1F5F9', background: f.cot ? 'white' : '#FFF8F0', borderLeft: f.cot ? '3px solid transparent' : '3px solid #FED7AA' }}>
+                        <td style={{ padding: '9px 12px', color: '#94A3B8', fontWeight: 500 }}>{f.detalle.numero}</td>
+                        <td style={{ padding: '9px 12px', fontWeight: 600, color: '#0F172A' }}>{f.detalle.productoNombre ?? '—'}</td>
+                        <td style={{ padding: '9px 12px', textAlign: 'center' as const, fontWeight: 700, color: '#1E293B' }}>{f.detalle.cantidadSolicitada}</td>
+                        <td style={{ padding: '9px 12px' }}>
+                          {f.cot
+                            ? <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, background: '#F0FDF4', border: '1px solid #BBF7D0', borderRadius: 6, padding: '2px 8px', fontSize: 11, fontWeight: 700, color: '#15803D' }}>
+                                <CheckCircle size={11} /> {getCotizacionProveedorNombre(f.cot)}
+                              </span>
+                            : <span style={{ fontSize: 11, color: '#F97316' }}>Sin cotización</span>}
+                        </td>
+                        <td style={{ padding: '9px 12px', textAlign: 'right' as const, color: '#374151', fontWeight: 600 }}>
+                          {f.precioUnit > 0 ? `$${f.precioUnit.toLocaleString('es-MX', { minimumFractionDigits: 2 })}` : '—'}
+                        </td>
+                        <td style={{ padding: '9px 12px', textAlign: 'right' as const, fontWeight: 700, color: f.total > 0 ? '#0F172A' : '#CBD5E1' }}>
+                          {f.total > 0 ? `$${f.total.toLocaleString('es-MX', { minimumFractionDigits: 2 })}` : '—'}
+                        </td>
+                        <td style={{ padding: '9px 12px', color: '#64748B', fontSize: 11 }}>{f.cot?.tiempoEntrega ?? '—'}</td>
+                        <td style={{ padding: '9px 12px', color: '#64748B', fontSize: 11 }}>{f.cot?.formaPago ?? '—'}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              {/* Totales */}
+              <div style={{ borderTop: '2px solid #E2E8F0', background: '#F8FAFC', padding: '10px 20px', display: 'flex', justifyContent: 'flex-end' as const }}>
+                <div style={{ display: 'flex', flexDirection: 'column' as const, gap: 4, minWidth: 240 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between' as const, fontSize: 12, color: '#64748B' }}>
+                    <span>Subtotal</span>
+                    <span style={{ fontWeight: 600, color: '#334155' }}>${subtotal.toLocaleString('es-MX', { minimumFractionDigits: 2 })}</span>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between' as const, fontSize: 12, color: '#64748B' }}>
+                    <span>IVA (16%)</span>
+                    <span style={{ fontWeight: 600, color: '#334155' }}>${iva.toLocaleString('es-MX', { minimumFractionDigits: 2 })}</span>
+                  </div>
+                  <div style={{ height: 1, background: '#E2E8F0', margin: '3px 0' }} />
+                  <div style={{ display: 'flex', justifyContent: 'space-between' as const, alignItems: 'center' }}>
+                    <span style={{ fontSize: 13, fontWeight: 700, color: '#1E293B' }}>Total con IVA</span>
+                    <span style={{ fontSize: 15, fontWeight: 800, color: '#16A34A' }}>${totalConIva.toLocaleString('es-MX', { minimumFractionDigits: 2 })}</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Cotizaciones legacy (flujo antiguo sin requisicionDetalleId) */}
+          {cotsLegacy.length > 0 && (
             <div style={{ border: '1px solid #E8ECF0', borderRadius: 10, overflow: 'hidden' }}>
-              <div style={{ padding: '10px 16px', background: '#F9FAFB', fontWeight: 600, fontSize: 12, color: '#374151', borderBottom: '1px solid #E8ECF0' }}>
-                Cotizaciones recibidas ({cotizaciones.length})
+              <div style={{ padding: '9px 16px', background: '#F9FAFB', fontWeight: 700, fontSize: 11, color: '#374151', borderBottom: '1px solid #E8ECF0', textTransform: 'uppercase' as const, letterSpacing: '0.06em' }}>
+                Cotizaciones ({cotsLegacy.length})
               </div>
               <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
                 <thead>
                   <tr style={{ background: '#F3F4F6' }}>
-                    <th style={{ padding: '9px 14px', textAlign: 'left', fontWeight: 600, fontSize: 11, color: '#6B7280' }}>Proveedor</th>
-                    <th style={{ padding: '9px 14px', textAlign: 'right', fontWeight: 600, fontSize: 11, color: '#6B7280' }}>Precio</th>
-                    <th style={{ padding: '9px 14px', textAlign: 'left', fontWeight: 600, fontSize: 11, color: '#6B7280' }}>Entrega</th>
+                    <th style={{ padding: '8px 14px', textAlign: 'left' as const, fontWeight: 600, fontSize: 11, color: '#6B7280' }}>Proveedor</th>
+                    <th style={{ padding: '8px 14px', textAlign: 'right' as const, fontWeight: 600, fontSize: 11, color: '#6B7280' }}>Precio</th>
+                    <th style={{ padding: '8px 14px', textAlign: 'left' as const, fontWeight: 600, fontSize: 11, color: '#6B7280' }}>Entrega</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {cotizaciones.map((c: Cotizacion) => (
-                    <tr key={c.id} style={{ borderTop: '1px solid #E8ECF0', background: c.esMejorOpcion ? '#F0FDF4' : 'white' }}>
-                      <td style={{ padding: '10px 14px', fontWeight: 500, color: '#111827' }}>
-                        {c.esMejorOpcion && <span style={{ fontSize: 10, background: '#DCFCE7', color: '#16A34A', border: '1px solid #BBF7D0', borderRadius: 4, padding: '1px 6px', fontWeight: 700, marginRight: 6 }}>Mejor</span>}
-                        {c.proveedor}
-                      </td>
-                      <td style={{ padding: '10px 14px', textAlign: 'right', color: c.esMejorOpcion ? '#16A34A' : '#374151', fontWeight: 700 }}>
-                        ${Number(c.precio).toLocaleString('es-MX', { minimumFractionDigits: 2 })}
-                      </td>
-                      <td style={{ padding: '10px 14px', color: '#6B7280' }}>{c.tiempoEntrega ?? '—'}</td>
+                  {cotsLegacy.map((c: Cotizacion) => (
+                    <tr key={c.id} style={{ borderTop: '1px solid #E8ECF0' }}>
+                      <td style={{ padding: '9px 14px', fontWeight: 500, color: '#111827' }}>{getCotizacionProveedorNombre(c)}</td>
+                      <td style={{ padding: '9px 14px', textAlign: 'right' as const, fontWeight: 700, color: '#374151' }}>${Number(c.precio).toLocaleString('es-MX', { minimumFractionDigits: 2 })}</td>
+                      <td style={{ padding: '9px 14px', color: '#6B7280' }}>{c.tiempoEntrega ?? '—'}</td>
                     </tr>
                   ))}
                 </tbody>
               </table>
             </div>
           )}
+
+          {/* Resumen por proveedor */}
+          {gruposProv.length > 0 && (
+            <div style={{ border: '1px solid #BFDBFE', borderRadius: 12, overflow: 'hidden', background: 'white' }}>
+              <div style={{ padding: '9px 16px', background: '#EFF6FF', borderBottom: '1px solid #BFDBFE', display: 'flex', alignItems: 'center', gap: 8 }}>
+                <Building2 size={13} style={{ color: '#2563EB' }} />
+                <span style={{ fontWeight: 700, fontSize: 11, color: '#1D4ED8', textTransform: 'uppercase' as const, letterSpacing: '0.07em' }}>
+                  Órdenes de compra que se generarán
+                </span>
+                <span style={{ marginLeft: 'auto', background: '#DBEAFE', color: '#1D4ED8', fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 10 }}>
+                  {gruposProv.length} {gruposProv.length === 1 ? 'proveedor' : 'proveedores'}
+                </span>
+              </div>
+              <div style={{ padding: '12px 16px', display: 'flex', flexWrap: 'wrap' as const, gap: 10 }}>
+                {gruposProv.map((g, i) => (
+                  <div key={i} style={{ flex: '1 1 200px', border: '1px solid #BFDBFE', borderLeft: '4px solid #2563EB', borderRadius: 8, padding: '10px 14px', background: '#F8FBFF' }}>
+                    <div style={{ fontWeight: 700, fontSize: 13, color: '#1E293B', marginBottom: 6 }}>{g.nombre}</div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between' as const, alignItems: 'center' }}>
+                      <span style={{ background: '#DBEAFE', color: '#1D4ED8', fontSize: 10, fontWeight: 700, padding: '2px 7px', borderRadius: 10 }}>
+                        {g.cantidad} {g.cantidad === 1 ? 'artículo' : 'artículos'}
+                      </span>
+                      <span style={{ fontSize: 13, fontWeight: 800, color: '#1E293B' }}>
+                        ${g.subtotal.toLocaleString('es-MX', { minimumFractionDigits: 2 })}
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {(req.requisicion?.justificacion ?? req.justificacion) && (
+            <div style={{ background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: 10, padding: '10px 14px', fontSize: 12, color: '#475569' }}>
+              <strong style={{ color: '#1E293B' }}>Justificación:</strong> {req.requisicion?.justificacion ?? req.justificacion}
+            </div>
+          )}
+
           <Textarea label="Observaciones de Administración (opcionales)" placeholder="Notas para Dirección General..." value={formObs ?? ''} onChange={e => setFormObs(e.target.value)} />
           <div style={{ display: 'flex', gap: 8 }}>
             <Btn variant="success" icon={<Send size={15}/>} disabled={changeEstado.isPending}
@@ -636,54 +915,206 @@ export function Compras() {
 
     // ── 4b. EN_REVISION_DIRECCION → AUTORIZADA / RECHAZADO ───────────────────
     if (estadoModal === 'EN_REVISION_DIRECCION' && puedeHacer(rol, 'autorizar')) {
-      const cotizaciones = req.cotizaciones ?? [];
-      const mejorCot = cotizaciones.find(c => c.esMejorOpcion) ?? cotizaciones[0];
+      const cotizaciones  = req.cotizaciones ?? [];
+      const detallesReq   = req.requisicion?.detalles ?? [];
+
+      const filasPorProducto = detallesReq.map(d => {
+        const cot = cotizaciones.find(c => c.requisicionDetalleId === d.id);
+        const precioUnit = cot ? Number(cot.precioUnitario ?? cot.precio ?? 0) : 0;
+        const total      = precioUnit * d.cantidadSolicitada;
+        return { detalle: d, cot, precioUnit, total };
+      });
+
+      const cotsLegacy = cotizaciones.filter(c => !c.requisicionDetalleId);
+      const usaFlujoPorProducto = filasPorProducto.some(f => f.cot);
+
+      const subtotal    = filasPorProducto.reduce((s, f) => s + f.total, 0)
+                        + cotsLegacy.reduce((s, c) => s + Number(c.precio ?? 0), 0);
+      const iva         = subtotal * 0.16;
+      const totalConIva = subtotal + iva;
+
+      const resumenProv: Record<string, { nombre: string; cantidad: number; subtotal: number }> = {};
+      for (const f of filasPorProducto) {
+        if (!f.cot) continue;
+        const nombre = getCotizacionProveedorNombre(f.cot);
+        if (!resumenProv[nombre]) resumenProv[nombre] = { nombre, cantidad: 0, subtotal: 0 };
+        resumenProv[nombre].cantidad  += 1;
+        resumenProv[nombre].subtotal  += f.total;
+      }
+      const gruposProv = Object.values(resumenProv);
+
       return (
-        <Modal title="Autorización — Dirección General" onClose={() => { setProceso(null); setFormObs(''); }} width={640}>
-          <div style={{ background: '#FDF2F8', border: '1px solid #FBCFE8', borderRadius: 10, padding: 12, fontSize: 13, color: '#9D174D' }}>
+        <Modal title="Autorización — Dirección General" onClose={() => { setProceso(null); setFormObs(''); }} width={780}>
+          {/* Banner instrucción */}
+          <div style={{ background: '#FDF2F8', border: '1px solid #FBCFE8', borderRadius: 10, padding: '10px 14px', fontSize: 13, color: '#9D174D', display: 'flex', alignItems: 'center', gap: 8 }}>
+            <AlertCircle size={15} style={{ flexShrink: 0 }} />
             Revisa el expediente completo y emite la autorización o rechazo definitivo.
           </div>
-          {/* Resumen ejecutivo */}
-          <div style={{ background: '#F9FAFB', borderRadius: 10, padding: 16, fontSize: 13, color: '#374151', display: 'flex', flexDirection: 'column', gap: 4 }}>
-            <div><strong>Folio:</strong> {req.folio} · <strong>Área:</strong> {req.areaSolicitante}</div>
-            <div><strong>Descripción:</strong> {req.descripcion}</div>
-            <div><strong>Justificación:</strong> {req.justificacion}</div>
-            <div><strong>Presupuesto estimado:</strong> ${(req.presupuestoEstimado ?? 0).toLocaleString('es-MX')}</div>
-            {mejorCot && (
-              <div><strong>Proveedor recomendado:</strong> {mejorCot.proveedor} — <span style={{ color: '#16A34A', fontWeight: 700 }}>${Number(mejorCot.precio).toLocaleString('es-MX', { minimumFractionDigits: 2 })}</span></div>
-            )}
+
+          {/* Encabezado */}
+          <div style={{ background: 'linear-gradient(135deg, #831843 0%, #BE185D 100%)', borderRadius: 12, padding: '14px 20px', color: 'white' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap' as const, gap: 10 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 24, flexWrap: 'wrap' as const }}>
+                <div>
+                  <div style={{ fontSize: 10, opacity: 0.65, textTransform: 'uppercase' as const, letterSpacing: '0.08em', marginBottom: 2 }}>Folio</div>
+                  <div style={{ fontSize: 15, fontWeight: 800 }}>{req.folio}</div>
+                </div>
+                <div style={{ width: 1, height: 34, background: 'rgba(255,255,255,0.25)' }} />
+                <div>
+                  <div style={{ fontSize: 10, opacity: 0.65, textTransform: 'uppercase' as const, letterSpacing: '0.08em', marginBottom: 2 }}>Área</div>
+                  <div style={{ fontSize: 13, fontWeight: 600 }}>{req.areaSolicitante}</div>
+                </div>
+                <div style={{ width: 1, height: 34, background: 'rgba(255,255,255,0.25)' }} />
+                <div>
+                  <div style={{ fontSize: 10, opacity: 0.65, textTransform: 'uppercase' as const, letterSpacing: '0.08em', marginBottom: 2 }}>Total aprobado</div>
+                  <div style={{ fontSize: 14, fontWeight: 800 }}>${totalConIva.toLocaleString('es-MX', { minimumFractionDigits: 2 })}</div>
+                </div>
+              </div>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <div style={{ background: 'rgba(255,255,255,0.15)', borderRadius: 16, padding: '5px 12px', fontSize: 11, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 5 }}>
+                  <Package size={12} /> {detallesReq.length} artículos
+                </div>
+                <div style={{ background: 'rgba(255,255,255,0.15)', borderRadius: 16, padding: '5px 12px', fontSize: 11, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 5 }}>
+                  <Building2 size={12} /> {gruposProv.length} {gruposProv.length === 1 ? 'proveedor' : 'proveedores'}
+                </div>
+              </div>
+            </div>
+            {req.descripcion && <div style={{ marginTop: 8, fontSize: 12, opacity: 0.85 }}>{req.descripcion}</div>}
           </div>
-          {/* Cotizaciones */}
-          {cotizaciones.length > 0 && (
+
+          {/* Tabla por producto */}
+          {usaFlujoPorProducto && (
+            <div style={{ border: '1px solid #E2E8F0', borderRadius: 12, overflow: 'hidden', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
+              <div style={{ padding: '9px 16px', background: '#F8FAFC', borderBottom: '1px solid #E2E8F0', display: 'flex', alignItems: 'center', gap: 8 }}>
+                <Package size={13} style={{ color: '#BE185D' }} />
+                <span style={{ fontWeight: 700, fontSize: 11, color: '#1E293B', textTransform: 'uppercase' as const, letterSpacing: '0.07em' }}>
+                  Mejor opción por artículo
+                </span>
+              </div>
+              <div style={{ overflowX: 'auto' as const }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+                  <thead>
+                    <tr style={{ background: '#1E293B' }}>
+                      <th style={{ padding: '8px 12px', textAlign: 'left' as const, fontWeight: 600, color: '#94A3B8', fontSize: 10, textTransform: 'uppercase' as const, letterSpacing: '0.06em' }}>#</th>
+                      <th style={{ padding: '8px 12px', textAlign: 'left' as const, fontWeight: 600, color: '#94A3B8', fontSize: 10, textTransform: 'uppercase' as const, letterSpacing: '0.06em' }}>Artículo</th>
+                      <th style={{ padding: '8px 12px', textAlign: 'center' as const, fontWeight: 600, color: '#94A3B8', fontSize: 10, textTransform: 'uppercase' as const, letterSpacing: '0.06em' }}>Cant.</th>
+                      <th style={{ padding: '8px 12px', textAlign: 'left' as const, fontWeight: 600, color: '#94A3B8', fontSize: 10, textTransform: 'uppercase' as const, letterSpacing: '0.06em' }}>Proveedor seleccionado</th>
+                      <th style={{ padding: '8px 12px', textAlign: 'right' as const, fontWeight: 600, color: '#94A3B8', fontSize: 10, textTransform: 'uppercase' as const, letterSpacing: '0.06em' }}>P. Unit.</th>
+                      <th style={{ padding: '8px 12px', textAlign: 'right' as const, fontWeight: 600, color: '#94A3B8', fontSize: 10, textTransform: 'uppercase' as const, letterSpacing: '0.06em' }}>Total</th>
+                      <th style={{ padding: '8px 12px', textAlign: 'left' as const, fontWeight: 600, color: '#94A3B8', fontSize: 10, textTransform: 'uppercase' as const, letterSpacing: '0.06em' }}>Entrega</th>
+                      <th style={{ padding: '8px 12px', textAlign: 'left' as const, fontWeight: 600, color: '#94A3B8', fontSize: 10, textTransform: 'uppercase' as const, letterSpacing: '0.06em' }}>Forma pago</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filasPorProducto.map((f, idx) => (
+                      <tr key={f.detalle.id} style={{ borderTop: idx === 0 ? 'none' : '1px solid #F1F5F9', background: f.cot ? 'white' : '#FFF8F0', borderLeft: f.cot ? '3px solid transparent' : '3px solid #FED7AA' }}>
+                        <td style={{ padding: '9px 12px', color: '#94A3B8', fontWeight: 500 }}>{f.detalle.numero}</td>
+                        <td style={{ padding: '9px 12px', fontWeight: 600, color: '#0F172A' }}>{f.detalle.productoNombre ?? '—'}</td>
+                        <td style={{ padding: '9px 12px', textAlign: 'center' as const, fontWeight: 700, color: '#1E293B' }}>{f.detalle.cantidadSolicitada}</td>
+                        <td style={{ padding: '9px 12px' }}>
+                          {f.cot
+                            ? <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, background: '#F0FDF4', border: '1px solid #BBF7D0', borderRadius: 6, padding: '2px 8px', fontSize: 11, fontWeight: 700, color: '#15803D' }}>
+                                <CheckCircle size={11} /> {getCotizacionProveedorNombre(f.cot)}
+                              </span>
+                            : <span style={{ fontSize: 11, color: '#F97316' }}>Sin cotización</span>}
+                        </td>
+                        <td style={{ padding: '9px 12px', textAlign: 'right' as const, color: '#374151', fontWeight: 600 }}>
+                          {f.precioUnit > 0 ? `$${f.precioUnit.toLocaleString('es-MX', { minimumFractionDigits: 2 })}` : '—'}
+                        </td>
+                        <td style={{ padding: '9px 12px', textAlign: 'right' as const, fontWeight: 700, color: f.total > 0 ? '#0F172A' : '#CBD5E1' }}>
+                          {f.total > 0 ? `$${f.total.toLocaleString('es-MX', { minimumFractionDigits: 2 })}` : '—'}
+                        </td>
+                        <td style={{ padding: '9px 12px', color: '#64748B', fontSize: 11 }}>{f.cot?.tiempoEntrega ?? '—'}</td>
+                        <td style={{ padding: '9px 12px', color: '#64748B', fontSize: 11 }}>{f.cot?.formaPago ?? '—'}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              {/* Totales */}
+              <div style={{ borderTop: '2px solid #E2E8F0', background: '#F8FAFC', padding: '10px 20px', display: 'flex', justifyContent: 'flex-end' as const }}>
+                <div style={{ display: 'flex', flexDirection: 'column' as const, gap: 4, minWidth: 240 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between' as const, fontSize: 12, color: '#64748B' }}>
+                    <span>Subtotal</span>
+                    <span style={{ fontWeight: 600, color: '#334155' }}>${subtotal.toLocaleString('es-MX', { minimumFractionDigits: 2 })}</span>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between' as const, fontSize: 12, color: '#64748B' }}>
+                    <span>IVA (16%)</span>
+                    <span style={{ fontWeight: 600, color: '#334155' }}>${iva.toLocaleString('es-MX', { minimumFractionDigits: 2 })}</span>
+                  </div>
+                  <div style={{ height: 1, background: '#E2E8F0', margin: '3px 0' }} />
+                  <div style={{ display: 'flex', justifyContent: 'space-between' as const, alignItems: 'center' }}>
+                    <span style={{ fontSize: 13, fontWeight: 700, color: '#1E293B' }}>Total con IVA</span>
+                    <span style={{ fontSize: 15, fontWeight: 800, color: '#16A34A' }}>${totalConIva.toLocaleString('es-MX', { minimumFractionDigits: 2 })}</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Cotizaciones legacy */}
+          {cotsLegacy.length > 0 && (
             <div style={{ border: '1px solid #E8ECF0', borderRadius: 10, overflow: 'hidden' }}>
-              <div style={{ padding: '10px 16px', background: '#F9FAFB', fontWeight: 600, fontSize: 12, color: '#374151', borderBottom: '1px solid #E8ECF0' }}>
-                Cotizaciones del expediente ({cotizaciones.length})
+              <div style={{ padding: '9px 16px', background: '#F9FAFB', fontWeight: 700, fontSize: 11, color: '#374151', borderBottom: '1px solid #E8ECF0', textTransform: 'uppercase' as const, letterSpacing: '0.06em' }}>
+                Cotizaciones ({cotsLegacy.length})
               </div>
               <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
                 <thead>
                   <tr style={{ background: '#F3F4F6' }}>
-                    <th style={{ padding: '9px 14px', textAlign: 'left', fontWeight: 600, fontSize: 11, color: '#6B7280' }}>Proveedor</th>
-                    <th style={{ padding: '9px 14px', textAlign: 'right', fontWeight: 600, fontSize: 11, color: '#6B7280' }}>Precio</th>
-                    <th style={{ padding: '9px 14px', textAlign: 'left', fontWeight: 600, fontSize: 11, color: '#6B7280' }}>Entrega</th>
+                    <th style={{ padding: '8px 14px', textAlign: 'left' as const, fontWeight: 600, fontSize: 11, color: '#6B7280' }}>Proveedor</th>
+                    <th style={{ padding: '8px 14px', textAlign: 'right' as const, fontWeight: 600, fontSize: 11, color: '#6B7280' }}>Precio</th>
+                    <th style={{ padding: '8px 14px', textAlign: 'left' as const, fontWeight: 600, fontSize: 11, color: '#6B7280' }}>Entrega</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {cotizaciones.map((c: Cotizacion) => (
-                    <tr key={c.id} style={{ borderTop: '1px solid #E8ECF0', background: c.esMejorOpcion ? '#F0FDF4' : 'white' }}>
-                      <td style={{ padding: '10px 14px', fontWeight: 500, color: '#111827' }}>
-                        {c.esMejorOpcion && <span style={{ fontSize: 10, background: '#DCFCE7', color: '#16A34A', border: '1px solid #BBF7D0', borderRadius: 4, padding: '1px 6px', fontWeight: 700, marginRight: 6 }}>Mejor</span>}
-                        {c.proveedor}
-                      </td>
-                      <td style={{ padding: '10px 14px', textAlign: 'right', color: c.esMejorOpcion ? '#16A34A' : '#374151', fontWeight: 700 }}>
-                        ${Number(c.precio).toLocaleString('es-MX', { minimumFractionDigits: 2 })}
-                      </td>
-                      <td style={{ padding: '10px 14px', color: '#6B7280' }}>{c.tiempoEntrega ?? '—'}</td>
+                  {cotsLegacy.map((c: Cotizacion) => (
+                    <tr key={c.id} style={{ borderTop: '1px solid #E8ECF0' }}>
+                      <td style={{ padding: '9px 14px', fontWeight: 500, color: '#111827' }}>{getCotizacionProveedorNombre(c)}</td>
+                      <td style={{ padding: '9px 14px', textAlign: 'right' as const, fontWeight: 700, color: '#374151' }}>${Number(c.precio).toLocaleString('es-MX', { minimumFractionDigits: 2 })}</td>
+                      <td style={{ padding: '9px 14px', color: '#6B7280' }}>{c.tiempoEntrega ?? '—'}</td>
                     </tr>
                   ))}
                 </tbody>
               </table>
             </div>
           )}
+
+          {/* Resumen por proveedor */}
+          {gruposProv.length > 0 && (
+            <div style={{ border: '1px solid #BFDBFE', borderRadius: 12, overflow: 'hidden', background: 'white' }}>
+              <div style={{ padding: '9px 16px', background: '#EFF6FF', borderBottom: '1px solid #BFDBFE', display: 'flex', alignItems: 'center', gap: 8 }}>
+                <Building2 size={13} style={{ color: '#2563EB' }} />
+                <span style={{ fontWeight: 700, fontSize: 11, color: '#1D4ED8', textTransform: 'uppercase' as const, letterSpacing: '0.07em' }}>
+                  Órdenes de compra autorizadas
+                </span>
+                <span style={{ marginLeft: 'auto', background: '#DBEAFE', color: '#1D4ED8', fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 10 }}>
+                  {gruposProv.length} {gruposProv.length === 1 ? 'proveedor' : 'proveedores'}
+                </span>
+              </div>
+              <div style={{ padding: '12px 16px', display: 'flex', flexWrap: 'wrap' as const, gap: 10 }}>
+                {gruposProv.map((g, i) => (
+                  <div key={i} style={{ flex: '1 1 200px', border: '1px solid #BFDBFE', borderLeft: '4px solid #2563EB', borderRadius: 8, padding: '10px 14px', background: '#F8FBFF' }}>
+                    <div style={{ fontWeight: 700, fontSize: 13, color: '#1E293B', marginBottom: 6 }}>{g.nombre}</div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between' as const, alignItems: 'center' }}>
+                      <span style={{ background: '#DBEAFE', color: '#1D4ED8', fontSize: 10, fontWeight: 700, padding: '2px 7px', borderRadius: 10 }}>
+                        {g.cantidad} {g.cantidad === 1 ? 'artículo' : 'artículos'}
+                      </span>
+                      <span style={{ fontSize: 13, fontWeight: 800, color: '#1E293B' }}>
+                        ${g.subtotal.toLocaleString('es-MX', { minimumFractionDigits: 2 })}
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {(req.requisicion?.justificacion ?? req.justificacion) && (
+            <div style={{ background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: 10, padding: '10px 14px', fontSize: 12, color: '#475569' }}>
+              <strong style={{ color: '#1E293B' }}>Justificación:</strong> {req.requisicion?.justificacion ?? req.justificacion}
+            </div>
+          )}
+
           <Textarea label="Observaciones de Dirección (requeridas para rechazar)" placeholder="Fundamento de la decisión..." value={formObs ?? ''} onChange={e => setFormObs(e.target.value)} />
           <div style={{ display: 'flex', gap: 8 }}>
             <Btn variant="success" icon={<CheckCircle size={15}/>} disabled={changeEstado.isPending}
@@ -714,6 +1145,458 @@ export function Compras() {
             </Btn>
           </div>
           {!formObs.trim() && <p style={{ margin: 0, fontSize: 12, color: '#9CA3AF' }}>* Para rechazar se requieren observaciones.</p>}
+        </Modal>
+      );
+    }
+
+    // ── NUEVO FLUJO: EN_COMPRAS / DEVUELTA_A_COMPRAS → cotizaciones por producto ──
+    if ((estadoModal === 'EN_COMPRAS' || estadoModal === 'DEVUELTA_A_COMPRAS' || estadoModal === 'COTIZACIONES_CARGADAS') && puedeHacer(rol, 'cotizar')) {
+      // Usar datos frescos para que "Enviar" aparezca tras guardar
+      const req = requisiciones.find(r => r.id === proceso.id) ?? proceso;
+      const detallesReq    = req.requisicion?.detalles ?? [];
+      const proveedoresCat = proveedoresData?.data ?? [];
+
+      const getCot = (detalleId: number) => cotPorProducto[detalleId] ?? {
+        proveedorId: null as number | null, precioUnitario: 0, tiempoEntrega: '', formaPago: '',
+      };
+
+      const subtotal    = detallesReq.reduce((sum, d) => sum + getCot(d.id).precioUnitario * d.cantidadSolicitada, 0);
+      const iva         = subtotal * 0.16;
+      const totalConIva = subtotal + iva;
+
+      const todoCompleto = detallesReq.length > 0 && detallesReq.every(d => {
+        const c = getCot(d.id);
+        return c.proveedorId !== null && c.precioUnitario > 0;
+      });
+
+      const gruposProv: { nombre: string; subtotal: number; cantidad: number }[] = [];
+      for (const d of detallesReq) {
+        const c = getCot(d.id);
+        if (!c.proveedorId) continue;
+        const prov   = proveedoresCat.find((p: Proveedor) => p.id === c.proveedorId);
+        const nombre = prov?.nombre ?? `Proveedor #${c.proveedorId}`;
+        const monto  = c.precioUnitario * d.cantidadSolicitada;
+        const ex     = gruposProv.find(g => g.nombre === nombre);
+        if (ex) { ex.subtotal += monto; ex.cantidad += 1; }
+        else      gruposProv.push({ nombre, subtotal: monto, cantidad: 1 });
+      }
+
+      const cerrarCatalogo = () => {
+        estadoModalRef.current = null;
+        setProceso(null);
+        setBusquedaProveedor('');
+        setProveedorSeleccionadoCot(null);
+        setFormCotCatalogo({ precio: '', tiempoEntrega: '', formaPago: '' });
+        setMostrarDropdownProv(false);
+        setPreciosPorProducto({});
+        setCotPorProducto({});
+      };
+
+      const updateCot = (detalleId: number, fields: Partial<ReturnType<typeof getCot>>) => {
+        setCotPorProducto(prev => ({ ...prev, [detalleId]: { ...getCot(detalleId), ...fields } }));
+      };
+
+      const guardarBulk = () => {
+        const items = detallesReq.map(d => ({
+          requisicionDetalleId: d.id,
+          proveedorId:          getCot(d.id).proveedorId!,
+          precioUnitario:       getCot(d.id).precioUnitario,
+          tiempoEntrega:        getCot(d.id).tiempoEntrega || undefined,
+          formaPago:            getCot(d.id).formaPago     || undefined,
+        }));
+        createCotBulk.mutate(
+          { id: req.id, items },
+          {
+            onSuccess: () => notify('Cotizaciones guardadas correctamente'),
+            onError:   (err: unknown) => {
+              const e = err as { response?: { data?: { message?: string } }; message?: string };
+              notify(`Error: ${e?.response?.data?.message ?? e?.message}`);
+            },
+          }
+        );
+      };
+
+      const puedeContinuar = req.estado === 'COTIZACIONES_CARGADAS';
+
+      const cotizadosCount = detallesReq.filter(d => { const c = getCot(d.id); return c.proveedorId !== null && c.precioUnitario > 0; }).length;
+      const inputBase: React.CSSProperties = { height: 32, padding: '0 8px', border: '1px solid #D1D5DB', borderRadius: 6, fontSize: 12, fontFamily: 'inherit', outline: 'none', background: 'white', boxSizing: 'border-box' };
+      const inputWarn: React.CSSProperties = { ...inputBase, border: '1px solid #FBBF24', background: '#FFFBEB' };
+
+      return (
+        <Modal
+          title={estadoModal === 'DEVUELTA_A_COMPRAS' ? 'Cotizaciones — Compra devuelta' : 'Cotizaciones de compra'}
+          onClose={cerrarCatalogo}
+          width={1060}
+        >
+          {/* Banner devuelta */}
+          {estadoModal === 'DEVUELTA_A_COMPRAS' && (
+            <div style={{ background: '#FFF7ED', border: '1px solid #FED7AA', borderRadius: 10, padding: '10px 14px', fontSize: 13, color: '#92400E', display: 'flex', alignItems: 'center', gap: 10 }}>
+              <AlertCircle size={16} style={{ flexShrink: 0 }} />
+              <span><strong>Compra devuelta por administración.</strong> Actualiza las cotizaciones y reenvía para continuar el proceso.</span>
+            </div>
+          )}
+
+          {/* Encabezado con gradiente */}
+          <div style={{ background: 'linear-gradient(135deg, #1E3A8A 0%, #2563EB 100%)', borderRadius: 12, padding: '14px 20px', color: 'white' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap' as const, gap: 12 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 28, flexWrap: 'wrap' as const }}>
+                <div>
+                  <div style={{ fontSize: 10, opacity: 0.65, textTransform: 'uppercase' as const, letterSpacing: '0.08em', marginBottom: 2 }}>Folio</div>
+                  <div style={{ fontSize: 16, fontWeight: 800, letterSpacing: '0.02em' }}>{req.folio}</div>
+                </div>
+                <div style={{ width: 1, height: 36, background: 'rgba(255,255,255,0.2)' }} />
+                <div>
+                  <div style={{ fontSize: 10, opacity: 0.65, textTransform: 'uppercase' as const, letterSpacing: '0.08em', marginBottom: 2 }}>Área solicitante</div>
+                  <div style={{ fontSize: 13, fontWeight: 600 }}>{req.areaSolicitante}</div>
+                </div>
+                {req.requisicion && (
+                  <>
+                    <div style={{ width: 1, height: 36, background: 'rgba(255,255,255,0.2)' }} />
+                    <div>
+                      <div style={{ fontSize: 10, opacity: 0.65, textTransform: 'uppercase' as const, letterSpacing: '0.08em', marginBottom: 2 }}>Requisición</div>
+                      <div style={{ fontSize: 13, fontWeight: 600 }}>{req.requisicion.folio}</div>
+                    </div>
+                  </>
+                )}
+              </div>
+              {detallesReq.length > 0 && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <div style={{ background: 'rgba(255,255,255,0.15)', borderRadius: 20, padding: '6px 14px', fontSize: 12, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <Package size={13} />
+                    {cotizadosCount} / {detallesReq.length} cotizados
+                  </div>
+                  {todoCompleto && (
+                    <div style={{ background: '#16A34A', borderRadius: 20, padding: '6px 12px', fontSize: 11, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 5 }}>
+                      <CheckCircle size={12} /> Completo
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+            {/* Barra de progreso */}
+            {detallesReq.length > 0 && (
+              <div style={{ marginTop: 12 }}>
+                <div style={{ background: 'rgba(255,255,255,0.2)', borderRadius: 4, height: 4, overflow: 'hidden' }}>
+                  <div style={{ background: cotizadosCount === detallesReq.length ? '#4ADE80' : '#60A5FA', height: '100%', width: `${(cotizadosCount / detallesReq.length) * 100}%`, borderRadius: 4, transition: 'width 0.3s ease' }} />
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Sin artículos */}
+          {detallesReq.length === 0 && (
+            <div style={{ padding: '32px 24px', textAlign: 'center' as const, color: '#9CA3AF', fontSize: 13, background: '#F9FAFB', borderRadius: 10, border: '1px dashed #E5E7EB' }}>
+              <Package size={28} style={{ marginBottom: 8, opacity: 0.35 }} />
+              <div>Esta compra no tiene artículos de requisición.</div>
+              <div style={{ fontSize: 12, marginTop: 4 }}>No se puede registrar cotización por producto.</div>
+            </div>
+          )}
+
+          {/* TABLA PRINCIPAL */}
+          {detallesReq.length > 0 && (
+            <div style={{ border: '1px solid #E2E8F0', borderRadius: 12, overflow: 'hidden', boxShadow: '0 1px 3px rgba(0,0,0,0.06)' }}>
+              {/* Cabecera de sección */}
+              <div style={{ padding: '10px 16px', background: '#F8FAFC', borderBottom: '1px solid #E2E8F0', display: 'flex', alignItems: 'center', gap: 8 }}>
+                <Package size={14} style={{ color: '#2563EB' }} />
+                <span style={{ fontWeight: 700, fontSize: 11, color: '#1E293B', textTransform: 'uppercase' as const, letterSpacing: '0.07em' }}>
+                  Artículos a cotizar
+                </span>
+                <span style={{ fontSize: 11, color: '#94A3B8', marginLeft: 4 }}>— asigna proveedor y precio por artículo</span>
+              </div>
+
+              <div style={{ overflowX: 'auto' as const }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+                  <thead>
+                    <tr style={{ background: '#1E293B' }}>
+                      <th style={{ padding: '9px 10px', textAlign: 'left' as const, fontWeight: 600, color: '#94A3B8', fontSize: 10, textTransform: 'uppercase' as const, letterSpacing: '0.06em', minWidth: 30 }}>#</th>
+                      <th style={{ padding: '9px 10px', textAlign: 'left' as const, fontWeight: 600, color: '#94A3B8', fontSize: 10, textTransform: 'uppercase' as const, letterSpacing: '0.06em', minWidth: 140 }}>Artículo</th>
+                      <th style={{ padding: '9px 10px', textAlign: 'center' as const, fontWeight: 600, color: '#94A3B8', fontSize: 10, textTransform: 'uppercase' as const, letterSpacing: '0.06em', minWidth: 60 }}>Unidad</th>
+                      <th style={{ padding: '9px 10px', textAlign: 'center' as const, fontWeight: 600, color: '#94A3B8', fontSize: 10, textTransform: 'uppercase' as const, letterSpacing: '0.06em', minWidth: 50 }}>Cant.</th>
+                      <th style={{ padding: '9px 10px', textAlign: 'left' as const, fontWeight: 600, color: '#94A3B8', fontSize: 10, textTransform: 'uppercase' as const, letterSpacing: '0.06em', minWidth: 180 }}>Proveedor</th>
+                      <th style={{ padding: '9px 10px', textAlign: 'right' as const, fontWeight: 600, color: '#94A3B8', fontSize: 10, textTransform: 'uppercase' as const, letterSpacing: '0.06em', minWidth: 112 }}>Precio unit.</th>
+                      <th style={{ padding: '9px 10px', textAlign: 'left' as const, fontWeight: 600, color: '#94A3B8', fontSize: 10, textTransform: 'uppercase' as const, letterSpacing: '0.06em', minWidth: 116 }}>T. Entrega</th>
+                      <th style={{ padding: '9px 10px', textAlign: 'left' as const, fontWeight: 600, color: '#94A3B8', fontSize: 10, textTransform: 'uppercase' as const, letterSpacing: '0.06em', minWidth: 150 }}>Forma pago</th>
+                      <th style={{ padding: '9px 10px', textAlign: 'right' as const, fontWeight: 600, color: '#94A3B8', fontSize: 10, textTransform: 'uppercase' as const, letterSpacing: '0.06em', minWidth: 100 }}>Total</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {detallesReq.map((d, idx) => {
+                      const cot        = getCot(d.id);
+                      const totalFila  = cot.precioUnitario * d.cantidadSolicitada;
+                      const incompleto = !cot.proveedorId || cot.precioUnitario <= 0;
+                      return (
+                        <tr
+                          key={d.id}
+                          style={{
+                            borderTop: idx === 0 ? 'none' : '1px solid #F1F5F9',
+                            background: incompleto ? '#FEFCE8' : 'white',
+                            borderLeft: incompleto ? '3px solid #FBBF24' : '3px solid transparent',
+                          }}
+                        >
+                          <td style={{ padding: '7px 10px', color: '#94A3B8', fontWeight: 500 }}>{d.numero}</td>
+                          <td style={{ padding: '7px 10px', fontWeight: 600, color: '#0F172A' }}>{d.productoNombre ?? '—'}</td>
+                          <td style={{ padding: '7px 10px', textAlign: 'center' as const, color: '#64748B' }}>
+                            <span style={{ background: '#F1F5F9', borderRadius: 4, padding: '2px 6px', fontSize: 11 }}>{d.unidadLibre ?? '—'}</span>
+                          </td>
+                          <td style={{ padding: '7px 10px', textAlign: 'center' as const, fontWeight: 700, color: '#1E293B' }}>{d.cantidadSolicitada}</td>
+                          {/* Proveedor */}
+                          <td style={{ padding: '5px 7px' }}>
+                            <select
+                              value={cot.proveedorId ?? ''}
+                              onChange={e => {
+                                const pid  = Number(e.target.value) || null;
+                                const prov = proveedoresCat.find((p: Proveedor) => p.id === pid);
+                                updateCot(d.id, {
+                                  proveedorId:   pid,
+                                  tiempoEntrega: prov?.tiempoEntregaPromedio ?? cot.tiempoEntrega,
+                                  formaPago:     prov?.metodoPago            ?? cot.formaPago,
+                                });
+                              }}
+                              style={{ ...(!cot.proveedorId ? inputWarn : inputBase), width: '100%', minWidth: 166 }}
+                            >
+                              <option value="">Seleccionar proveedor…</option>
+                              {proveedoresCat.map((p: Proveedor) => (
+                                <option key={p.id} value={p.id}>{p.nombre}</option>
+                              ))}
+                            </select>
+                          </td>
+                          {/* Precio unitario */}
+                          <td style={{ padding: '5px 7px' }}>
+                            <input
+                              type="number"
+                              min={0}
+                              step={0.01}
+                              placeholder="0.00"
+                              value={cot.precioUnitario || ''}
+                              onChange={e => updateCot(d.id, { precioUnitario: Number(e.target.value) })}
+                              style={{ ...(cot.precioUnitario <= 0 ? inputWarn : inputBase), width: 100, textAlign: 'right' as const }}
+                            />
+                          </td>
+                          {/* Tiempo entrega */}
+                          <td style={{ padding: '5px 7px' }}>
+                            <input
+                              type="text"
+                              placeholder="Ej. 5 días"
+                              value={cot.tiempoEntrega}
+                              onChange={e => updateCot(d.id, { tiempoEntrega: e.target.value })}
+                              style={{ ...inputBase, width: 103 }}
+                            />
+                          </td>
+                          {/* Forma pago */}
+                          <td style={{ padding: '5px 7px' }}>
+                            <select
+                              value={cot.formaPago}
+                              onChange={e => updateCot(d.id, { formaPago: e.target.value })}
+                              style={{ ...inputBase, width: '100%', minWidth: 138 }}
+                            >
+                              <option value="">—</option>
+                              <option value="Contado">Contado</option>
+                              <option value="Crédito 15 días">Crédito 15 días</option>
+                              <option value="Crédito 30 días">Crédito 30 días</option>
+                              <option value="Crédito 60 días">Crédito 60 días</option>
+                              <option value="Transferencia bancaria">Transferencia bancaria</option>
+                              <option value="Cheque nominativo">Cheque nominativo</option>
+                            </select>
+                          </td>
+                          {/* Total fila */}
+                          <td style={{ padding: '7px 10px', textAlign: 'right' as const, fontWeight: 700, color: totalFila > 0 ? '#0F172A' : '#CBD5E1', fontSize: 12 }}>
+                            {totalFila > 0 ? `$${totalFila.toLocaleString('es-MX', { minimumFractionDigits: 2 })}` : '—'}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* Totales */}
+              <div style={{ borderTop: '2px solid #E2E8F0', background: '#F8FAFC', padding: '12px 20px', display: 'flex', justifyContent: 'flex-end' as const, alignItems: 'center', gap: 40 }}>
+                <div style={{ display: 'flex', flexDirection: 'column' as const, gap: 5, minWidth: 260 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between' as const, fontSize: 12, color: '#64748B' }}>
+                    <span>Subtotal</span>
+                    <span style={{ fontWeight: 600, color: '#334155' }}>${subtotal.toLocaleString('es-MX', { minimumFractionDigits: 2 })}</span>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between' as const, fontSize: 12, color: '#64748B' }}>
+                    <span>IVA (16%)</span>
+                    <span style={{ fontWeight: 600, color: '#334155' }}>${iva.toLocaleString('es-MX', { minimumFractionDigits: 2 })}</span>
+                  </div>
+                  <div style={{ height: 1, background: '#E2E8F0', margin: '3px 0' }} />
+                  <div style={{ display: 'flex', justifyContent: 'space-between' as const, alignItems: 'center' }}>
+                    <span style={{ fontSize: 13, fontWeight: 700, color: '#1E293B' }}>Total con IVA</span>
+                    <span style={{ fontSize: 16, fontWeight: 800, color: '#16A34A', letterSpacing: '-0.01em' }}>
+                      ${totalConIva.toLocaleString('es-MX', { minimumFractionDigits: 2 })}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Agrupación por proveedor */}
+          {gruposProv.length > 0 && (
+            <div style={{ border: '1px solid #BFDBFE', borderRadius: 12, overflow: 'hidden', background: 'white', boxShadow: '0 1px 3px rgba(37,99,235,0.07)' }}>
+              <div style={{ padding: '10px 16px', background: '#EFF6FF', borderBottom: '1px solid #BFDBFE', display: 'flex', alignItems: 'center', gap: 8 }}>
+                <Building2 size={14} style={{ color: '#2563EB' }} />
+                <span style={{ fontWeight: 700, fontSize: 11, color: '#1D4ED8', textTransform: 'uppercase' as const, letterSpacing: '0.07em' }}>
+                  Órdenes de compra que se generarán
+                </span>
+                <span style={{ marginLeft: 'auto', background: '#DBEAFE', color: '#1D4ED8', fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 10 }}>
+                  {gruposProv.length} {gruposProv.length === 1 ? 'proveedor' : 'proveedores'}
+                </span>
+              </div>
+              <div style={{ padding: '12px 16px', display: 'flex', flexWrap: 'wrap' as const, gap: 10 }}>
+                {gruposProv.map((g, i) => (
+                  <div key={i} style={{ flex: '1 1 220px', border: '1px solid #BFDBFE', borderLeft: '4px solid #2563EB', borderRadius: 8, padding: '10px 14px', background: '#F8FBFF' }}>
+                    <div style={{ fontWeight: 700, fontSize: 13, color: '#1E293B', marginBottom: 6, whiteSpace: 'nowrap' as const, overflow: 'hidden', textOverflow: 'ellipsis' }}>{g.nombre}</div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between' as const, alignItems: 'center' }}>
+                      <span style={{ background: '#DBEAFE', color: '#1D4ED8', fontSize: 10, fontWeight: 700, padding: '2px 7px', borderRadius: 10 }}>
+                        {g.cantidad} {g.cantidad === 1 ? 'artículo' : 'artículos'}
+                      </span>
+                      <span style={{ fontSize: 13, fontWeight: 800, color: '#1E293B' }}>
+                        ${g.subtotal.toLocaleString('es-MX', { minimumFractionDigits: 2 })}
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Barra de acciones */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, borderTop: '1px solid #E2E8F0', paddingTop: 16, flexWrap: 'wrap' as const }}>
+            {detallesReq.length > 0 && (
+              <button
+                disabled={!todoCompleto || createCotBulk.isPending}
+                onClick={guardarBulk}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 7, padding: '8px 18px',
+                  background: (!todoCompleto || createCotBulk.isPending) ? '#E2E8F0' : '#2563EB',
+                  color: (!todoCompleto || createCotBulk.isPending) ? '#94A3B8' : 'white',
+                  border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 600,
+                  cursor: (!todoCompleto || createCotBulk.isPending) ? 'not-allowed' : 'pointer',
+                  fontFamily: 'inherit', transition: 'background 0.15s',
+                }}
+              >
+                {createCotBulk.isPending
+                  ? <><Loader2 size={14} style={{ animation: 'spin 1s linear infinite' }} /> Guardando…</>
+                  : <><Save size={14} /> Guardar cotizaciones</>}
+              </button>
+            )}
+            {puedeContinuar && (
+              <button
+                disabled={enviarAdministracion.isPending}
+                onClick={() => {
+                  enviarAdministracion.mutate(
+                    { id: req.id },
+                    {
+                      onSuccess: () => { cerrarCatalogo(); notify('Compra enviada a revisión administrativa'); },
+                      onError:   (err: unknown) => {
+                        const e = err as { response?: { data?: { message?: string } }; message?: string };
+                        notify(`Error: ${e?.response?.data?.message ?? e?.message}`);
+                      },
+                    }
+                  );
+                }}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 7, padding: '8px 18px',
+                  background: enviarAdministracion.isPending ? '#BBF7D0' : '#16A34A',
+                  color: 'white', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 600,
+                  cursor: enviarAdministracion.isPending ? 'not-allowed' : 'pointer',
+                  fontFamily: 'inherit', boxShadow: '0 1px 4px rgba(22,163,74,0.25)',
+                }}
+              >
+                {enviarAdministracion.isPending
+                  ? <><Loader2 size={14} /> Enviando…</>
+                  : <><Send size={14} /> Enviar a Revisión Administrativa</>}
+              </button>
+            )}
+            <div style={{ flex: 1 }} />
+            {!todoCompleto && detallesReq.length > 0 && (
+              <span style={{ fontSize: 11, color: '#F59E0B', display: 'flex', alignItems: 'center', gap: 4 }}>
+                <AlertCircle size={12} />
+                Completa proveedor y precio en todos los artículos para guardar
+              </span>
+            )}
+            <button
+              onClick={cerrarCatalogo}
+              style={{ padding: '8px 16px', background: 'white', color: '#64748B', border: '1px solid #E2E8F0', borderRadius: 8, fontSize: 13, fontWeight: 500, cursor: 'pointer', fontFamily: 'inherit' }}
+            >
+              Cancelar
+            </button>
+          </div>
+        </Modal>
+      );
+    }
+
+    // ── COTIZACIONES_CARGADAS → Enviar a Revisión Administrativa ─────────────
+    if (estadoModal === 'COTIZACIONES_CARGADAS' && puedeHacer(rol, 'cotizar') && !puedeHacer(rol, 'negociar')) {
+      const cotizacionesActuales = req.cotizaciones ?? [];
+      const mejorCot = cotizacionesActuales.find(c => c.esMejorOpcion) ?? cotizacionesActuales[0];
+      return (
+        <Modal title="Cotizaciones listas — Enviar a Administración" onClose={() => { estadoModalRef.current = null; setProceso(null); }} width={620}>
+          <div style={{ background: '#ECFEFF', border: '1px solid #A5F3FC', borderRadius: 10, padding: 12, fontSize: 13, color: '#0E7490', display: 'flex', alignItems: 'center', gap: 8 }}>
+            <CheckCircle size={16} />
+            Se registraron {cotizacionesActuales.length} cotizacione{cotizacionesActuales.length !== 1 ? 's' : ''}. Puedes enviar a revisión administrativa.
+          </div>
+          {cotizacionesActuales.length > 0 && (
+            <div style={{ border: '1px solid #E8ECF0', borderRadius: 10, overflow: 'hidden' }}>
+              <div style={{ padding: '8px 14px', background: '#F9FAFB', fontWeight: 600, fontSize: 11, color: '#374151', borderBottom: '1px solid #E8ECF0', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+                Comparativa de cotizaciones
+              </div>
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+                <thead>
+                  <tr style={{ background: '#F3F4F6' }}>
+                    <th style={{ padding: '9px 14px', textAlign: 'left', fontWeight: 600, color: '#6B7280', fontSize: 12 }}>Proveedor</th>
+                    <th style={{ padding: '9px 14px', textAlign: 'right', fontWeight: 600, color: '#6B7280', fontSize: 12 }}>Precio</th>
+                    <th style={{ padding: '9px 14px', textAlign: 'left', fontWeight: 600, color: '#6B7280', fontSize: 12 }}>Entrega</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {cotizacionesActuales.map((c: Cotizacion) => (
+                    <tr key={c.id} style={{ borderTop: '1px solid #E8ECF0', background: c.esMejorOpcion ? '#F0FDF4' : 'white' }}>
+                      <td style={{ padding: '9px 14px', fontWeight: 500, color: '#111827' }}>
+                        {c.esMejorOpcion && <span style={{ fontSize: 10, background: '#DCFCE7', color: '#16A34A', border: '1px solid #BBF7D0', borderRadius: 4, padding: '1px 6px', fontWeight: 700, marginRight: 6 }}>Mejor</span>}
+                        {getCotizacionProveedorNombre(c)}
+                      </td>
+                      <td style={{ padding: '9px 14px', textAlign: 'right', color: c.esMejorOpcion ? '#16A34A' : '#374151', fontWeight: 700 }}>
+                        ${Number(c.precio).toLocaleString('es-MX', { minimumFractionDigits: 2 })}
+                      </td>
+                      <td style={{ padding: '9px 14px', color: '#6B7280' }}>{c.tiempoEntrega ?? '—'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+          {mejorCot && (
+            <div style={{ background: '#F0FDF4', border: '1px solid #BBF7D0', borderRadius: 10, padding: 12, fontSize: 13, color: '#166534' }}>
+              <strong>Proveedor recomendado:</strong> {getCotizacionProveedorNombre(mejorCot)} — ${Number(mejorCot.precio).toLocaleString('es-MX', { minimumFractionDigits: 2 })}
+            </div>
+          )}
+          <div style={{ display: 'flex', gap: 10 }}>
+            <Btn
+              variant="success"
+              icon={enviarAdministracion.isPending ? <Loader2 size={15} /> : <Send size={15} />}
+              disabled={enviarAdministracion.isPending}
+              onClick={() => {
+                enviarAdministracion.mutate(
+                  { id: req.id },
+                  {
+                    onSuccess: () => {
+                      estadoModalRef.current = null;
+                      setProceso(null);
+                      queryClient.invalidateQueries({ queryKey: ['compras'] });
+                      notify('Compra enviada a revisión administrativa');
+                    },
+                    onError: (err: any) => notify(`Error: ${err?.response?.data?.message ?? err?.message}`),
+                  }
+                );
+              }}
+            >
+              {enviarAdministracion.isPending ? 'Enviando…' : 'Enviar a Revisión Administrativa'}
+            </Btn>
+            <Btn variant="ghost" onClick={() => { estadoModalRef.current = null; setProceso(null); }}>Cancelar</Btn>
+          </div>
         </Modal>
       );
     }
@@ -835,40 +1718,121 @@ export function Compras() {
       );
     }
 
+    // ── 7b. AUTORIZADA — informativo para quienes no generan orden ───────────
+    if (estadoModal === 'AUTORIZADA' && !puedeHacer(rol, 'ordenar')) {
+      const cot = req.cotizaciones?.find(c => c.esMejorOpcion) ?? req.cotizaciones?.[0];
+      return (
+        <Modal title="Requisición autorizada" onClose={() => { estadoModalRef.current = null; setProceso(null); }} width={520}>
+          <div style={{ background: '#F0FDF4', border: '1px solid #BBF7D0', borderRadius: 12, padding: '20px 22px', display: 'flex', flexDirection: 'column', gap: 10 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <CheckCircle size={22} color="#16A34A" />
+              <span style={{ fontSize: 15, fontWeight: 700, color: '#166534' }}>Autorizada por Dirección General</span>
+            </div>
+            <p style={{ margin: 0, fontSize: 13, color: '#166534', lineHeight: 1.5 }}>
+              La requisición fue revisada y autorizada. Está lista para continuar el proceso de compra.
+            </p>
+          </div>
+          <div style={{ background: '#F9FAFB', borderRadius: 10, padding: 14, fontSize: 13, color: '#374151', display: 'flex', flexDirection: 'column', gap: 4 }}>
+            <div><strong>Folio:</strong> {req.folio} &nbsp;·&nbsp; <strong>Área:</strong> {req.areaSolicitante}</div>
+            <div><strong>Descripción:</strong> {req.descripcion}</div>
+            {cot && (
+              <div><strong>Proveedor seleccionado:</strong> {getCotizacionProveedorNombre(cot)} — ${Number(cot.precio).toLocaleString('es-MX', { minimumFractionDigits: 2 })}</div>
+            )}
+          </div>
+          <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+            <Btn variant="ghost" onClick={() => { estadoModalRef.current = null; setProceso(null); }}>Cerrar</Btn>
+          </div>
+        </Modal>
+      );
+    }
+
     // ── 8. AUTORIZADA → ORDEN_GENERADA ───────────────────────────────────────
     if (estadoModal === 'AUTORIZADA' && puedeHacer(rol, 'ordenar')) {
       const cot = req.cotizaciones?.find(c => c.esMejorOpcion) ?? req.cotizaciones?.[0];
+      const montoOrden = cot ? Number(cot.precio) : (req.presupuestoEstimado ?? 0);
+      const nombreProv = cot ? getCotizacionProveedorNombre(cot) : '—';
       return (
-        <Modal title="Generar orden de compra" onClose={() => setProceso(null)}>
+        <Modal title="Generar orden de compra" onClose={() => { estadoModalRef.current = null; setProceso(null); }} width={600}>
+          <div style={{ background: '#F0FDF4', border: '1px solid #BBF7D0', borderRadius: 10, padding: '14px 18px', display: 'flex', alignItems: 'center', gap: 10 }}>
+            <CheckCircle size={18} color="#16A34A" />
+            <span style={{ fontSize: 14, fontWeight: 600, color: '#166534' }}>Requisición autorizada por Dirección General</span>
+          </div>
           {cot ? (
-            <div style={{ background: '#F0FDF4', border: '1px solid #BBF7D0', borderRadius: 10, padding: 16, fontSize: 13 }}>
-              <div style={{ fontWeight: 700, color: '#166534' }}>{cot.proveedor}</div>
-              <div style={{ color: '#16A34A', fontSize: 22, fontWeight: 800, marginTop: 4 }}>
-                ${Number(cot.precio).toLocaleString('es-MX', { minimumFractionDigits: 2 })}
+            <div style={{ background: '#EFF6FF', border: '1px solid #BFDBFE', borderRadius: 10, padding: '14px 18px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div>
+                <div style={{ fontSize: 11, color: '#6B7280', fontWeight: 600, marginBottom: 3, textTransform: 'uppercase' as const, letterSpacing: '0.06em' }}>Proveedor (mejor cotización)</div>
+                <div style={{ fontSize: 15, fontWeight: 700, color: '#1E3A5F' }}>{nombreProv}</div>
+                {cot.tiempoEntrega && <div style={{ fontSize: 12, color: '#6B7280', marginTop: 2 }}>Entrega: {cot.tiempoEntrega}</div>}
               </div>
-              {cot.tiempoEntrega && <div style={{ color: '#6B7280', marginTop: 2 }}>Entrega: {cot.tiempoEntrega}</div>}
+              <div style={{ textAlign: 'right' as const }}>
+                <div style={{ fontSize: 11, color: '#6B7280', fontWeight: 600, marginBottom: 3, textTransform: 'uppercase' as const, letterSpacing: '0.06em' }}>Monto total</div>
+                <div style={{ fontSize: 22, fontWeight: 800, color: '#2563EB' }}>${montoOrden.toLocaleString('es-MX', { minimumFractionDigits: 2 })}</div>
+              </div>
             </div>
           ) : (
-            <div style={{ background: '#FEF2F2', border: '1px solid #FECACA', borderRadius: 10, padding: 16, fontSize: 13, color: '#DC2626' }}>
-              No hay cotización registrada. Verifica el proceso.
+            <div style={{ background: '#FEF2F2', border: '1px solid #FECACA', borderRadius: 10, padding: 14, fontSize: 13, color: '#DC2626' }}>
+              Sin cotizaciones registradas. Verifica el proceso antes de continuar.
             </div>
           )}
-          <Btn
-            icon={<Package size={15}/>}
-            disabled={!cot || createOrden.isPending}
-            onClick={() => {
-              if (!cot) return;
-              createOrden.mutate(
-                { id: req.id, data: { proveedor: cot.proveedor, total: Number(cot.precio) } },
-                {
-                  onSuccess: () => { estadoModalRef.current = null; setProceso(null); notify('✅ Orden de compra generada'); },
-                  onError:   (err: any) => notify(`❌ Error: ${err?.response?.data?.message ?? err?.message}`),
-                }
-              );
-            }}
-          >
-            {createOrden.isPending ? 'Generando…' : 'Confirmar y generar orden'}
-          </Btn>
+          {(() => {
+            const compraRows = (req.detalles ?? []).map((d: any) => ({
+              id: d.id,
+              nombre: typeof d.producto === 'object' && d.producto !== null ? (d.producto as any).nombre : String(d.producto ?? '—'),
+              unidad: d.unidad,
+              cantidad: d.cantidad,
+            }));
+            const reqRows = compraRows.length === 0
+              ? ((req.requisicion?.detalles ?? []) as any[]).map((d: any, i: number) => ({
+                  id: i,
+                  nombre: d.productoNombre ?? '—',
+                  unidad: d.unidadLibre ?? '—',
+                  cantidad: d.cantidadSolicitada,
+                }))
+              : [];
+            const rows = compraRows.length > 0 ? compraRows : reqRows;
+            if (rows.length === 0) return null;
+            return (
+              <div style={{ border: '1px solid #E8ECF0', borderRadius: 10, overflow: 'hidden' }}>
+                <div style={{ padding: '8px 14px', background: '#F9FAFB', fontWeight: 600, fontSize: 11, color: '#374151', borderBottom: '1px solid #E8ECF0', textTransform: 'uppercase' as const, letterSpacing: '0.06em' }}>
+                  Artículos de la orden
+                </div>
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+                  <thead>
+                    <tr style={{ background: '#F3F4F6' }}>
+                      <th style={{ padding: '8px 12px', textAlign: 'left' as const, fontWeight: 600, color: '#6B7280', fontSize: 12 }}>Producto</th>
+                      <th style={{ padding: '8px 12px', textAlign: 'center' as const, fontWeight: 600, color: '#6B7280', fontSize: 12 }}>Unidad</th>
+                      <th style={{ padding: '8px 12px', textAlign: 'center' as const, fontWeight: 600, color: '#6B7280', fontSize: 12 }}>Cant.</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {rows.map(row => (
+                      <tr key={row.id} style={{ borderTop: '1px solid #E8ECF0' }}>
+                        <td style={{ padding: '8px 12px', color: '#111827', fontWeight: 500 }}>{row.nombre}</td>
+                        <td style={{ padding: '8px 12px', textAlign: 'center' as const, color: '#6B7280' }}>{row.unidad}</td>
+                        <td style={{ padding: '8px 12px', textAlign: 'center' as const, fontWeight: 600 }}>{row.cantidad}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            );
+          })()}
+          <div style={{ display: 'flex', gap: 10 }}>
+            <Btn
+              icon={<Package size={15}/>}
+              disabled={!cot || createOrden.isPending}
+              onClick={() => {
+                if (!cot) return;
+                createOrden.mutate(req.id, {
+                  onSuccess: () => { estadoModalRef.current = null; setProceso(null); notify('Orden de compra generada'); },
+                  onError:   (err: any) => notify(`Error: ${err?.response?.data?.message ?? err?.message}`),
+                });
+              }}
+            >
+              {createOrden.isPending ? 'Generando…' : 'Generar orden de compra'}
+            </Btn>
+            <Btn variant="ghost" onClick={() => { estadoModalRef.current = null; setProceso(null); }}>Cancelar</Btn>
+          </div>
         </Modal>
       );
     }
@@ -876,73 +1840,265 @@ export function Compras() {
     // ── 9. ORDEN_GENERADA → FACTURAS_RECIBIDAS ───────────────────────────────
     if (estadoModal === 'ORDEN_GENERADA' && puedeHacer(rol, 'facturas')) {
       return (
-        <Modal title="Subir facturas" onClose={() => setProceso(null)}>
+        <Modal title="Orden de compra activa" onClose={() => { estadoModalRef.current = null; setProceso(null); }} width={560}>
+          {req.ordenCompra && (
+            <div style={{ background: '#F0FDF4', border: '1px solid #BBF7D0', borderRadius: 10, padding: '14px 18px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div>
+                <div style={{ fontSize: 11, color: '#6B7280', fontWeight: 600, marginBottom: 2, textTransform: 'uppercase' as const, letterSpacing: '0.06em' }}>Folio OC</div>
+                <div style={{ fontSize: 14, fontWeight: 700, color: '#166534' }}>{req.ordenCompra.folio}</div>
+              </div>
+              <div style={{ textAlign: 'center' as const }}>
+                <div style={{ fontSize: 11, color: '#6B7280', fontWeight: 600, marginBottom: 2, textTransform: 'uppercase' as const, letterSpacing: '0.06em' }}>Proveedor</div>
+                <div style={{ fontSize: 14, fontWeight: 600, color: '#111827' }}>{typeof req.ordenCompra.proveedor === 'object' && req.ordenCompra.proveedor !== null ? (req.ordenCompra.proveedor as any).nombre : String(req.ordenCompra.proveedor ?? '—')}</div>
+              </div>
+              <div style={{ textAlign: 'right' as const }}>
+                <div style={{ fontSize: 11, color: '#6B7280', fontWeight: 600, marginBottom: 2, textTransform: 'uppercase' as const, letterSpacing: '0.06em' }}>Total</div>
+                <div style={{ fontSize: 16, fontWeight: 800, color: '#2563EB' }}>${Number(req.ordenCompra.total).toLocaleString('es-MX', { minimumFractionDigits: 2 })}</div>
+              </div>
+            </div>
+          )}
+          <div style={{ background: '#FFFBEB', border: '1px solid #FDE68A', borderRadius: 10, padding: '12px 16px', fontSize: 13, color: '#92400E' }}>
+            <div style={{ fontWeight: 600, marginBottom: 6 }}>Pasos a completar:</div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+              <div>1. Realizar el pedido al proveedor con la orden de compra</div>
+              <div>2. Notificar a Almacén para la recepción de materiales</div>
+              <div>3. Subir las facturas al sistema una vez recibidas</div>
+            </div>
+          </div>
           {(req as any).facturas?.length > 0 && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-              <p style={{ margin: 0, fontSize: 12, fontWeight: 600, color: '#374151' }}>Facturas subidas</p>
+              <p style={{ margin: 0, fontSize: 12, fontWeight: 600, color: '#374151' }}>Facturas registradas</p>
               {(req as any).facturas.map((f: any) => (
-                <a key={f.id} href={`${import.meta.env.VITE_API_URL}${f.documentoUrl}`} target="_blank" rel="noreferrer"
+                <a key={f.id} href={`${staticBase}${f.documentoUrl}`} target="_blank" rel="noreferrer"
                   style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '9px 13px', borderRadius: 8, border: '1px solid #E8ECF0', background: '#F9FAFB', color: '#2563EB', fontSize: 13, fontWeight: 500, textDecoration: 'none' }}>
-                  <Receipt size={14} /> {f.numero}
+                  <Receipt size={14} /> {f.numero} — ${Number(f.monto).toLocaleString('es-MX', { minimumFractionDigits: 2 })}
                 </a>
               ))}
             </div>
           )}
           <div style={{ background: '#EFF6FF', border: '1px solid #BFDBFE', borderRadius: 10, padding: 12, fontSize: 13, color: '#1D4ED8' }}>
-            Al subir la primera factura el proceso avanzará automáticamente.
+            Al subir la primera factura el proceso avanzará automáticamente a la siguiente etapa.
           </div>
-          <div
-            style={{ border: '1.5px dashed #D1D5DB', borderRadius: 12, padding: 32, textAlign: 'center', cursor: 'pointer', background: '#F9FAFB' }}
-            onClick={() => fileRef.current?.click()}
-          >
-            <Upload size={26} color="#9CA3AF" style={{ margin: '0 auto 8px' }} />
-            <p style={{ margin: 0, color: '#6B7280', fontSize: 14 }}>Haz clic para subir XML / PDF</p>
-            <p style={{ margin: '4px 0 0', color: '#9CA3AF', fontSize: 12 }}>Máx. 10 MB</p>
-          </div>
-          <input ref={fileRef} type="file" accept=".pdf,.xml" style={{ display: 'none' }} onChange={async (e) => {
+          {facturaFile ? (
+            <div style={{ border: '1px solid #BFDBFE', borderRadius: 12, padding: 16, background: '#EFF6FF', display: 'flex', flexDirection: 'column', gap: 12 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, fontWeight: 600, color: '#1D4ED8' }}>
+                <Receipt size={15} /> {facturaFile.name}
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                <div>
+                  <label style={{ fontSize: 11, fontWeight: 600, color: '#374151', display: 'block', marginBottom: 4, textTransform: 'uppercase' as const, letterSpacing: '0.05em' }}>N° Factura *</label>
+                  <input
+                    type="text"
+                    value={facturaNumero}
+                    onChange={e => setFacturaNumero(e.target.value)}
+                    placeholder="Ej. F-001"
+                    style={{ width: '100%', height: 34, padding: '0 10px', border: '1px solid #D1D5DB', borderRadius: 8, fontSize: 13, boxSizing: 'border-box' as const, outline: 'none' }}
+                  />
+                </div>
+                <div>
+                  <label style={{ fontSize: 11, fontWeight: 600, color: '#374151', display: 'block', marginBottom: 4, textTransform: 'uppercase' as const, letterSpacing: '0.05em' }}>Monto (MXN) *</label>
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={facturaMonto}
+                    onChange={e => setFacturaMonto(e.target.value)}
+                    placeholder="0.00"
+                    style={{ width: '100%', height: 34, padding: '0 10px', border: '1px solid #D1D5DB', borderRadius: 8, fontSize: 13, boxSizing: 'border-box' as const, outline: 'none' }}
+                  />
+                </div>
+              </div>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button
+                  onClick={() => { setFacturaFile(null); setFacturaNumero(''); setFacturaMonto(''); }}
+                  style={{ flex: 1, height: 34, borderRadius: 8, border: '1px solid #E5E7EB', background: 'white', cursor: 'pointer', fontSize: 13, color: '#6B7280' }}
+                >Cancelar</button>
+                <button
+                  disabled={!facturaNumero.trim() || !facturaMonto || Number(facturaMonto) <= 0}
+                  onClick={async () => {
+                    try {
+                      await subirFactura(req.id, facturaFile, Number(facturaMonto), facturaNumero.trim());
+                      setFacturaFile(null); setFacturaNumero(''); setFacturaMonto('');
+                      estadoModalRef.current = null;
+                      setProceso(null);
+                      notify('Factura subida — proceso avanzado');
+                    } catch (err: any) {
+                      notify(`Error al subir factura: ${err?.response?.data?.message ?? err?.message}`);
+                    }
+                  }}
+                  style={{ flex: 2, height: 34, borderRadius: 8, border: 'none', background: !facturaNumero.trim() || !facturaMonto || Number(facturaMonto) <= 0 ? '#9CA3AF' : '#2563EB', color: 'white', cursor: !facturaNumero.trim() || !facturaMonto || Number(facturaMonto) <= 0 ? 'not-allowed' : 'pointer', fontSize: 13, fontWeight: 600 }}
+                >Subir factura</button>
+              </div>
+            </div>
+          ) : (
+            <div
+              style={{ border: '1.5px dashed #D1D5DB', borderRadius: 12, padding: 32, textAlign: 'center', cursor: 'pointer', background: '#F9FAFB' }}
+              onClick={() => fileRef.current?.click()}
+            >
+              <Upload size={26} color="#9CA3AF" style={{ margin: '0 auto 8px' }} />
+              <p style={{ margin: 0, color: '#6B7280', fontSize: 14 }}>Haz clic para subir factura (XML / PDF)</p>
+              <p style={{ margin: '4px 0 0', color: '#9CA3AF', fontSize: 12 }}>Máx. 10 MB</p>
+            </div>
+          )}
+          <input ref={fileRef} type="file" accept=".pdf,.xml" style={{ display: 'none' }} onChange={(e) => {
             const file = e.target.files?.[0];
             if (!file) return;
-            try {
-              await subirFactura(req.id, file);
-              notify('✅ Factura subida — proceso avanzado automáticamente');
-              estadoModalRef.current = null;
-              setProceso(null);
-            } catch (err: any) {
-              notify(`❌ Error al subir factura: ${err?.response?.data?.message ?? err?.message}`);
-            }
+            setFacturaFile(file);
+            setFacturaNumero(file.name.replace(/\.[^/.]+$/, ''));
+            setFacturaMonto('');
+            e.target.value = '';
           }} />
         </Modal>
       );
     }
 
-    // ── 10. FACTURAS_RECIBIDAS → ORDEN_PAGO_GENERADA ─────────────────────────
-    if (estadoModal === 'FACTURAS_RECIBIDAS' && puedeHacer(rol, 'orden_pago')) {
+    // ── 10. FACTURAS_RECIBIDAS → EXPEDIENTE_GENERADO ─────────────────────────
+    if (estadoModal === 'FACTURAS_RECIBIDAS' && puedeHacer(rol, 'pago')) {
+      const facturas = (req as any).facturas ?? [];
+      const totalFacturas = facturas.reduce((s: number, f: any) => s + Number(f.monto), 0);
       return (
-        <Modal title="Generar orden de pago" onClose={() => setProceso(null)}>
-          <div style={{
-            background: '#EEF2FF', border: '1px solid #C7D2FE', borderRadius: 10, padding: 16, fontSize: 13, color: '#3730A3'
-          }}>
-            <strong>Facturas recibidas correctamente.</strong>
-            <p style={{ marginBottom: 0, marginTop: 4 }}>
-              Se generará la orden de pago vinculada a esta requisición.
-            </p>
+        <Modal title="Generar expediente de compra" onClose={() => { estadoModalRef.current = null; setProceso(null); }} width={540}>
+          <div style={{ background: '#EEF2FF', border: '1px solid #C7D2FE', borderRadius: 10, padding: '14px 18px', fontSize: 13, color: '#3730A3' }}>
+            <strong>Facturas recibidas.</strong> Genera el expediente para consolidar toda la documentación de esta compra.
           </div>
-          <div style={{ background: '#F9FAFB', borderRadius: 10, padding: 14, fontSize: 13, color: '#374151', display: 'flex', flexDirection: 'column', gap: 4 }}>
-            <div><strong>Requisición:</strong> {req.folio}</div>
-            <div><strong>Monto:</strong> ${(req.presupuestoEstimado ?? 0).toLocaleString('es-MX')}</div>
-          </div>
+          {facturas.length > 0 && (
+            <div style={{ border: '1px solid #E8ECF0', borderRadius: 10, overflow: 'hidden' }}>
+              <div style={{ padding: '8px 14px', background: '#F9FAFB', fontWeight: 600, fontSize: 11, color: '#374151', borderBottom: '1px solid #E8ECF0', textTransform: 'uppercase' as const, letterSpacing: '0.06em' }}>
+                Facturas recibidas ({facturas.length})
+              </div>
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+                <thead>
+                  <tr style={{ background: '#F3F4F6' }}>
+                    <th style={{ padding: '8px 12px', textAlign: 'left' as const, fontWeight: 600, color: '#6B7280', fontSize: 12 }}>N° Factura</th>
+                    <th style={{ padding: '8px 12px', textAlign: 'right' as const, fontWeight: 600, color: '#6B7280', fontSize: 12 }}>Monto</th>
+                    <th style={{ padding: '8px 12px', textAlign: 'center' as const, fontWeight: 600, color: '#6B7280', fontSize: 12 }}>Documento</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {facturas.map((f: any) => (
+                    <tr key={f.id} style={{ borderTop: '1px solid #E8ECF0' }}>
+                      <td style={{ padding: '8px 12px', fontWeight: 500 }}>{f.numero}</td>
+                      <td style={{ padding: '8px 12px', textAlign: 'right' as const, fontWeight: 600, color: '#374151' }}>${Number(f.monto).toLocaleString('es-MX', { minimumFractionDigits: 2 })}</td>
+                      <td style={{ padding: '8px 12px', textAlign: 'center' as const }}>
+                        {f.documentoUrl ? (
+                          <a href={`${staticBase}${f.documentoUrl}`} target="_blank" rel="noreferrer" style={{ color: '#2563EB', fontSize: 12 }}>Ver</a>
+                        ) : '—'}
+                      </td>
+                    </tr>
+                  ))}
+                  <tr style={{ borderTop: '2px solid #E8ECF0', background: '#F9FAFB' }}>
+                    <td style={{ padding: '8px 12px', fontWeight: 700 }}>Total</td>
+                    <td style={{ padding: '8px 12px', textAlign: 'right' as const, fontWeight: 800, color: '#111827' }}>${totalFacturas.toLocaleString('es-MX', { minimumFractionDigits: 2 })}</td>
+                    <td />
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          )}
           <Btn
             icon={<FileText size={15}/>}
-            disabled={createOrdenPago.isPending}
+            disabled={genExpediente.isPending || facturas.length === 0}
             onClick={() => {
-              createOrdenPago.mutate(req.id, {
-                onSuccess: () => { estadoModalRef.current = null; setProceso(null); notify('✅ Orden de pago generada correctamente'); },
-                onError:   (err: any) => notify(`❌ Error: ${err?.response?.data?.message ?? err?.message}`),
+              genExpediente.mutate({ id: req.id }, {
+                onSuccess: () => { estadoModalRef.current = null; setProceso(null); notify('Expediente generado correctamente'); },
+                onError:   (err: any) => notify(`Error: ${err?.response?.data?.message ?? err?.message}`),
               });
             }}
           >
-            {createOrdenPago.isPending ? 'Generando…' : 'Generar orden de pago'}
+            {genExpediente.isPending ? 'Generando…' : 'Generar expediente de compra'}
           </Btn>
+        </Modal>
+      );
+    }
+
+    // ── 10b. EXPEDIENTE_GENERADO — ruta por monto ────────────────────────────
+    if (estadoModal === 'EXPEDIENTE_GENERADO' && puedeHacer(rol, 'pago')) {
+      const montoRef = req.presupuestoEstimado ?? 0;
+      const esMayorCuantia = montoRef > 50000;
+      return (
+        <Modal title="Expediente generado" onClose={() => { estadoModalRef.current = null; setProceso(null); }} width={500}>
+          <div style={{ background: '#F0FDF4', border: '1px solid #BBF7D0', borderRadius: 10, padding: '14px 18px', display: 'flex', alignItems: 'center', gap: 12 }}>
+            <CheckCircle size={22} color="#16A34A" />
+            <div>
+              <div style={{ fontSize: 14, fontWeight: 700, color: '#166534' }}>Expediente generado correctamente</div>
+              <div style={{ fontSize: 13, color: '#16A34A', marginTop: 2 }}>Documentación de compra consolidada.</div>
+            </div>
+          </div>
+          <div style={{ background: '#F9FAFB', borderRadius: 10, padding: '14px 18px', fontSize: 13, color: '#374151', display: 'flex', flexDirection: 'column', gap: 4 }}>
+            <div><strong>Requisición:</strong> {req.folio}</div>
+            <div><strong>Área:</strong> {req.areaSolicitante}</div>
+            <div><strong>Monto referencia:</strong> ${montoRef.toLocaleString('es-MX', { minimumFractionDigits: 2 })}</div>
+            <div style={{ marginTop: 4, padding: '6px 10px', borderRadius: 6, background: esMayorCuantia ? '#FEF2F2' : '#F0FDF4', border: `1px solid ${esMayorCuantia ? '#FECACA' : '#BBF7D0'}`, color: esMayorCuantia ? '#DC2626' : '#166534', fontWeight: 600, fontSize: 12 }}>
+              {esMayorCuantia ? 'Mayor cuantía (>$50,000) — requiere envío a Recursos Financieros' : 'Menor cuantía (≤$50,000) — puede finalizarse directamente'}
+            </div>
+          </div>
+          {esMayorCuantia ? (
+            <Btn
+              icon={enviarFinanzas.isPending ? <Loader2 size={15} /> : <Send size={15}/>}
+              disabled={enviarFinanzas.isPending}
+              onClick={() => {
+                enviarFinanzas.mutate({ id: req.id }, {
+                  onSuccess: () => { estadoModalRef.current = null; setProceso(null); notify('Compra enviada a Recursos Financieros'); },
+                  onError:   (err: any) => notify(`Error: ${err?.response?.data?.message ?? err?.message}`),
+                });
+              }}
+            >
+              {enviarFinanzas.isPending ? 'Enviando…' : 'Enviar a Recursos Financieros'}
+            </Btn>
+          ) : (
+            <Btn
+              variant="success"
+              icon={finalizar.isPending ? <Loader2 size={15} /> : <CheckCircle size={15}/>}
+              disabled={finalizar.isPending}
+              onClick={() => {
+                finalizar.mutate({ id: req.id }, {
+                  onSuccess: () => { estadoModalRef.current = null; setProceso(null); notify('Compra finalizada exitosamente'); },
+                  onError:   (err: any) => notify(`Error: ${err?.response?.data?.message ?? err?.message}`),
+                });
+              }}
+            >
+              {finalizar.isPending ? 'Finalizando…' : 'Finalizar compra'}
+            </Btn>
+          )}
+        </Modal>
+      );
+    }
+
+    // ── 10c. ENVIADA_A_FINANZAS — pendiente de pago ──────────────────────────
+    if (estadoModal === 'ENVIADA_A_FINANZAS' && puedeHacer(rol, 'pago')) {
+      return (
+        <Modal title="Compra en Recursos Financieros" onClose={() => { estadoModalRef.current = null; setProceso(null); }} width={500}>
+          <div style={{ background: '#FFFBEB', border: '1px solid #FDE68A', borderRadius: 10, padding: '16px 20px', display: 'flex', alignItems: 'flex-start', gap: 12 }}>
+            <Clock size={20} color="#D97706" style={{ flexShrink: 0, marginTop: 2 }} />
+            <div>
+              <div style={{ fontSize: 14, fontWeight: 700, color: '#92400E' }}>Pendiente con Recursos Financieros</div>
+              <div style={{ fontSize: 13, color: '#B45309', marginTop: 4, lineHeight: 1.5 }}>
+                La compra fue enviada a Recursos Financieros para procesamiento de pago. Una vez completado, finaliza el proceso.
+              </div>
+            </div>
+          </div>
+          <div style={{ background: '#F9FAFB', borderRadius: 10, padding: '14px 18px', fontSize: 13, color: '#374151', display: 'flex', flexDirection: 'column', gap: 4 }}>
+            <div><strong>Requisición:</strong> {req.folio}</div>
+            <div><strong>Área:</strong> {req.areaSolicitante}</div>
+            <div><strong>Descripción:</strong> {req.descripcion}</div>
+            <div><strong>Presupuesto:</strong> ${(req.presupuestoEstimado ?? 0).toLocaleString('es-MX', { minimumFractionDigits: 2 })}</div>
+          </div>
+          <div style={{ display: 'flex', gap: 10 }}>
+            <Btn
+              variant="success"
+              icon={finalizar.isPending ? <Loader2 size={15} /> : <CheckCircle size={15}/>}
+              disabled={finalizar.isPending}
+              onClick={() => {
+                finalizar.mutate({ id: req.id }, {
+                  onSuccess: () => { estadoModalRef.current = null; setProceso(null); notify('Compra finalizada exitosamente'); },
+                  onError:   (err: any) => notify(`Error: ${err?.response?.data?.message ?? err?.message}`),
+                });
+              }}
+            >
+              {finalizar.isPending ? 'Finalizando…' : 'Finalizar compra'}
+            </Btn>
+            <Btn variant="ghost" onClick={() => { estadoModalRef.current = null; setProceso(null); }}>Cerrar</Btn>
+          </div>
         </Modal>
       );
     }
@@ -1064,7 +2220,7 @@ export function Compras() {
         </div>
         <div style={{ background: '#F9FAFB', borderRadius: 10, padding: 16 }}>
           <p style={{ marginTop: 0, fontWeight: 600, color: '#111827', fontSize: 13 }}>Justificación</p>
-          <p style={{ marginBottom: 0, color: '#374151', lineHeight: 1.6, fontSize: 13 }}>{req.justificacion}</p>
+          <p style={{ marginBottom: 0, color: '#374151', lineHeight: 1.6, fontSize: 13 }}>{req.requisicion?.justificacion ?? req.justificacion}</p>
         </div>
         <div style={{ background: '#F9FAFB', borderRadius: 10, padding: 16 }}>
           <p style={{ marginTop: 0, fontWeight: 600, color: '#111827', fontSize: 13 }}>Artículos solicitados</p>
@@ -1081,7 +2237,7 @@ export function Compras() {
                 {req.detalles?.map((d) => (
                   <tr key={d.id} style={{ borderTop: '1px solid #E8ECF0' }}>
                     <td style={{ padding: '9px 13px', textAlign: 'center', color: '#6B7280' }}>{d.numero}</td>
-                    <td style={{ padding: '9px 13px', textAlign: 'center' }}>{d.producto}</td>
+                    <td style={{ padding: '9px 13px', textAlign: 'center' }}>{typeof (d as any).producto === 'object' && (d as any).producto !== null ? (d as any).producto.nombre : String(d.producto ?? '—')}</td>
                     <td style={{ padding: '9px 13px', textAlign: 'center', color: '#6B7280' }}>{d.unidad}</td>
                     <td style={{ padding: '9px 13px', textAlign: 'center', fontWeight: 600 }}>{d.cantidad}</td>
                   </tr>
@@ -1140,32 +2296,53 @@ export function Compras() {
               </div>
             </div>
             <div style={{ background: '#F9FAFB', borderRadius: 10, padding: 16, marginBottom: 16, fontSize: 13, color: '#374151', display: 'flex', flexDirection: 'column', gap: 4 }}>
-              <div><strong>Proveedor o razón social:</strong> {orden.proveedor}</div>
-              <div><strong>Total:</strong> ${orden.total.toLocaleString('es-MX')}</div>
+              <div><strong>Proveedor o razón social:</strong> {typeof orden.proveedor === 'object' && orden.proveedor !== null ? (orden.proveedor as any).nombre : String(orden.proveedor ?? '—')}</div>
+              <div><strong>Total:</strong> ${Number(orden.total).toLocaleString('es-MX', { minimumFractionDigits: 2 })}</div>
             </div>
             <div style={{ background: '#F9FAFB', borderRadius: 10, padding: 16, marginBottom: 16 }}>
               <p style={{ marginTop: 0, fontWeight: 600, color: '#111827', fontSize: 13 }}>Justificación</p>
-              <p style={{ marginBottom: 0, color: '#374151', lineHeight: 1.6, fontSize: 13 }}>{req.justificacion}</p>
+              <p style={{ marginBottom: 0, color: '#374151', lineHeight: 1.6, fontSize: 13 }}>{req.requisicion?.justificacion ?? req.justificacion}</p>
             </div>
-            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
-              <thead>
-                <tr style={{ background: '#F3F4F6' }}>
-                  {['#', 'Producto', 'Unidad', 'Cantidad'].map((h, i) => (
-                    <th key={i} style={{ padding: '9px 13px', textAlign: 'center', fontWeight: 600, color: '#374151', fontSize: 12 }}>{h}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {req.detalles?.map((d: any, index: number) => (
-                  <tr key={index} style={{ borderTop: '1px solid #E8ECF0' }}>
-                    <td style={{ padding: '9px 13px', textAlign: 'center', color: '#6B7280' }}>{index + 1}</td>
-                    <td style={{ padding: '9px 13px', textAlign: 'center' }}>{d.producto}</td>
-                    <td style={{ padding: '9px 13px', textAlign: 'center', color: '#6B7280' }}>{d.unidad}</td>
-                    <td style={{ padding: '9px 13px', textAlign: 'center', fontWeight: 600 }}>{d.cantidad}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+            {(() => {
+              const compraRows = (req.detalles ?? []).map((d: any) => ({
+                nombre: typeof d.producto === 'object' && d.producto !== null ? (d.producto as any).nombre : String(d.producto ?? '—'),
+                unidad: d.unidad,
+                cantidad: d.cantidad,
+              }));
+              const rows = compraRows.length > 0
+                ? compraRows
+                : ((req.requisicion?.detalles ?? []) as any[]).map((d: any) => ({
+                    nombre: d.productoNombre ?? '—',
+                    unidad: d.unidadLibre ?? '—',
+                    cantidad: d.cantidadSolicitada,
+                  }));
+              return (
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+                  <thead>
+                    <tr style={{ background: '#F3F4F6' }}>
+                      {['#', 'Producto', 'Unidad', 'Cantidad'].map((h, i) => (
+                        <th key={i} style={{ padding: '9px 13px', textAlign: 'center', fontWeight: 600, color: '#374151', fontSize: 12 }}>{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {rows.map((row, index) => (
+                      <tr key={index} style={{ borderTop: '1px solid #E8ECF0' }}>
+                        <td style={{ padding: '9px 13px', textAlign: 'center', color: '#6B7280' }}>{index + 1}</td>
+                        <td style={{ padding: '9px 13px', textAlign: 'center' }}>{row.nombre}</td>
+                        <td style={{ padding: '9px 13px', textAlign: 'center', color: '#6B7280' }}>{row.unidad}</td>
+                        <td style={{ padding: '9px 13px', textAlign: 'center', fontWeight: 600 }}>{row.cantidad}</td>
+                      </tr>
+                    ))}
+                    {rows.length === 0 && (
+                      <tr>
+                        <td colSpan={4} style={{ padding: '16px', textAlign: 'center', color: '#9CA3AF', fontSize: 13 }}>Sin artículos registrados</td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              );
+            })()}
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 20, marginTop: 60 }}>
               {[
                 { label: 'Elaboró',  persona: orden.elaboradoPor },
@@ -1287,7 +2464,7 @@ export function Compras() {
                           <td style={{ padding: '9px 10px', color: '#374151' }}>{d.fechaOrdenCompra ? new Date(d.fechaOrdenCompra).toLocaleDateString('es-MX') : '—'}</td>
                           <td style={{ padding: '9px 10px', color: '#374151', fontFamily: 'monospace', fontSize: 11 }}>{d.folioOrdenCompra || '—'}</td>
                           <td style={{ padding: '9px 10px', color: '#374151' }}>{d.numeroFactura || '—'}</td>
-                          <td style={{ padding: '9px 10px', color: '#374151', fontWeight: 600 }}>{d.proveedor || '—'}</td>
+                          <td style={{ padding: '9px 10px', color: '#374151', fontWeight: 600 }}>{typeof d.proveedor === 'object' && d.proveedor !== null ? (d.proveedor as any).nombre : (d.proveedor || '—')}</td>
                           <td style={{ padding: '9px 10px', textAlign: 'right', color: '#065F46', fontWeight: 700 }}>${Number(d.monto ?? 0).toLocaleString('es-MX', { minimumFractionDigits: 2 })}</td>
                         </tr>
                       ))
@@ -1355,6 +2532,333 @@ export function Compras() {
     );
   };
 
+
+  // ─── MODAL DETALLE EXPEDIENTE (read-only) ────────────────────────────────────
+  const renderExpedienteDetalle = () => {
+    if (!expedienteDetalle) return null;
+    const exp = expedienteDetalle;
+    const facturas = (exp as any).facturas ?? [];
+    const historial = exp.historial ?? [];
+    const totalFacturas = facturas.reduce((s: number, f: any) => s + Number(f.monto ?? 0), 0);
+    const proveedores = [...new Set(facturas.map((f: any) => f.proveedor?.nombre).filter(Boolean))];
+    const cotizaciones = exp.cotizaciones ?? [];
+
+    const tabBtn = (id: 'datos' | 'documentos' | 'historial', label: string) => (
+      <button
+        onClick={() => setTabExpediente(id)}
+        style={{
+          padding: '8px 18px', border: 'none', cursor: 'pointer', fontSize: 13, fontWeight: 600,
+          borderBottom: tabExpediente === id ? '2px solid #6D28D9' : '2px solid transparent',
+          color: tabExpediente === id ? '#6D28D9' : '#6B7280',
+          background: 'transparent', fontFamily: 'inherit',
+        }}
+      >{label}</button>
+    );
+
+    const estadoStyle = ESTADO_STYLES[exp.estado] ?? { bg: '#F8FAFC', text: '#64748B', dot: '#94A3B8', border: '#E2E8F0' };
+    const estadoLabel = getEstadoCompraUI(exp.estado as EstadoCompra).label;
+
+    return createPortal(
+      <div style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.55)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9000, padding: 20 }}>
+        <div style={{ background: 'white', borderRadius: 16, width: '100%', maxWidth: 820, maxHeight: '90vh', display: 'flex', flexDirection: 'column', boxShadow: '0 25px 60px rgba(0,0,0,0.22)' }}>
+          {/* Header */}
+          <div style={{ background: 'linear-gradient(135deg, #4C1D95 0%, #6D28D9 100%)', borderRadius: '16px 16px 0 0', padding: '20px 24px', color: 'white', flexShrink: 0 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+              <div>
+                <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.1em', opacity: 0.75, marginBottom: 4 }}>Expediente de compra</div>
+                <div style={{ fontSize: 20, fontWeight: 800, letterSpacing: '-0.3px' }}>{exp.folio}</div>
+                <div style={{ fontSize: 13, opacity: 0.85, marginTop: 4 }}>{exp.areaSolicitante}</div>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <span style={{ background: estadoStyle.bg, color: estadoStyle.text, border: `1px solid ${estadoStyle.border}`, padding: '4px 12px', borderRadius: 8, fontSize: 12, fontWeight: 700 }}>
+                  {estadoLabel}
+                </span>
+                <button onClick={() => { setExpedienteDetalle(null); setTabExpediente('datos'); }} style={{ background: 'rgba(255,255,255,0.15)', border: 'none', borderRadius: 8, padding: '6px', cursor: 'pointer', color: 'white', display: 'flex' }}>
+                  <X size={18} />
+                </button>
+              </div>
+            </div>
+          </div>
+          {/* Tabs */}
+          <div style={{ borderBottom: '1px solid #E8ECF0', padding: '0 20px', background: 'white', flexShrink: 0 }}>
+            {tabBtn('datos', 'Datos generales')}
+            {tabBtn('documentos', 'Documentos')}
+            {tabBtn('historial', `Historial (${historial.length})`)}
+          </div>
+          {/* Contenido */}
+          <div style={{ overflowY: 'auto', padding: 24, flex: 1, display: 'flex', flexDirection: 'column', gap: 14 }}>
+
+            {tabExpediente === 'datos' && (
+              <>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                  <div style={{ background: '#F9FAFB', borderRadius: 10, padding: 14, display: 'flex', flexDirection: 'column', gap: 6 }}>
+                    <div style={{ fontSize: 11, fontWeight: 700, color: '#6B7280', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 2 }}>Datos de la compra</div>
+                    <div style={{ fontSize: 13, color: '#374151' }}><strong>Folio:</strong> {exp.folio}</div>
+                    <div style={{ fontSize: 13, color: '#374151' }}><strong>Tipo:</strong> {exp.tipo}</div>
+                    <div style={{ fontSize: 13, color: '#374151' }}><strong>Área:</strong> {exp.areaSolicitante}</div>
+                    <div style={{ fontSize: 13, color: '#374151' }}><strong>Descripción:</strong> {exp.descripcion}</div>
+                    <div style={{ fontSize: 13, color: '#374151' }}><strong>Justificación:</strong> {exp.requisicion?.justificacion ?? exp.justificacion}</div>
+                  </div>
+                  <div style={{ background: '#F9FAFB', borderRadius: 10, padding: 14, display: 'flex', flexDirection: 'column', gap: 6 }}>
+                    <div style={{ fontSize: 11, fontWeight: 700, color: '#6B7280', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 2 }}>Finanzas</div>
+                    <div style={{ fontSize: 13, color: '#374151' }}><strong>Presupuesto estimado:</strong> ${(exp.presupuestoEstimado ?? 0).toLocaleString('es-MX', { minimumFractionDigits: 2 })}</div>
+                    <div style={{ fontSize: 22, fontWeight: 800, color: '#16A34A', marginTop: 4 }}>${totalFacturas.toLocaleString('es-MX', { minimumFractionDigits: 2 })}</div>
+                    <div style={{ fontSize: 11, color: '#6B7280' }}>Total de facturas recibidas</div>
+                    {exp.fechaEnvioFinanzas && (
+                      <div style={{ fontSize: 13, color: '#6D28D9', fontWeight: 600, marginTop: 4 }}>
+                        Enviado a finanzas: {new Date(exp.fechaEnvioFinanzas).toLocaleDateString('es-MX', { day: '2-digit', month: 'long', year: 'numeric' })}
+                      </div>
+                    )}
+                  </div>
+                </div>
+                {proveedores.length > 0 && (
+                  <div style={{ background: '#F5F3FF', border: '1px solid #DDD6FE', borderRadius: 10, padding: 14 }}>
+                    <div style={{ fontSize: 11, fontWeight: 700, color: '#6D28D9', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 8 }}>Proveedores</div>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                      {proveedores.map((p, i) => (
+                        <span key={i} style={{ background: 'white', border: '1px solid #DDD6FE', borderRadius: 8, padding: '5px 12px', fontSize: 13, fontWeight: 600, color: '#4C1D95' }}>
+                          {p as string}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                {(exp.requisicion?.detalles ?? []).length > 0 && (
+                  <div>
+                    <div style={{ fontSize: 11, fontWeight: 700, color: '#6B7280', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 8 }}>Artículos</div>
+                    <div style={{ border: '1px solid #E8ECF0', borderRadius: 10, overflow: 'hidden' }}>
+                      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+                        <thead>
+                          <tr style={{ background: '#F3F4F6' }}>
+                            {['Artículo', 'Unidad', 'Cantidad'].map(h => (
+                              <th key={h} style={{ padding: '8px 12px', textAlign: 'left', fontWeight: 600, color: '#6B7280', fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.05em' }}>{h}</th>
+                            ))}
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {(exp.requisicion?.detalles ?? []).map((d, i) => (
+                            <tr key={i} style={{ borderTop: '1px solid #E8ECF0' }}>
+                              <td style={{ padding: '8px 12px' }}>{d.productoNombre ?? '—'}</td>
+                              <td style={{ padding: '8px 12px', color: '#6B7280' }}>{d.unidadLibre ?? '—'}</td>
+                              <td style={{ padding: '8px 12px', fontWeight: 600 }}>{d.cantidadSolicitada}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
+              </>
+            )}
+
+            {tabExpediente === 'documentos' && (
+              <>
+                {facturas.length > 0 ? (
+                  <div>
+                    <div style={{ fontSize: 11, fontWeight: 700, color: '#6B7280', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 8 }}>Facturas</div>
+                    <div style={{ border: '1px solid #E8ECF0', borderRadius: 10, overflow: 'hidden' }}>
+                      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+                        <thead>
+                          <tr style={{ background: '#F3F4F6' }}>
+                            {['N° Factura', 'Proveedor', 'Monto', 'Documento'].map(h => (
+                              <th key={h} style={{ padding: '8px 12px', textAlign: 'left', fontWeight: 600, color: '#6B7280', fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.05em' }}>{h}</th>
+                            ))}
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {facturas.map((f: any, i: number) => (
+                            <tr key={i} style={{ borderTop: '1px solid #E8ECF0' }}>
+                              <td style={{ padding: '8px 12px', fontWeight: 600 }}>{f.numero}</td>
+                              <td style={{ padding: '8px 12px', color: '#374151' }}>{f.proveedor?.nombre ?? '—'}</td>
+                              <td style={{ padding: '8px 12px', fontWeight: 700, color: '#16A34A' }}>${Number(f.monto).toLocaleString('es-MX', { minimumFractionDigits: 2 })}</td>
+                              <td style={{ padding: '8px 12px' }}>
+                                {f.documentoUrl ? (
+                                  <a href={`${staticBase}${f.documentoUrl}`} target="_blank" rel="noreferrer"
+                                    style={{ display: 'inline-flex', alignItems: 'center', gap: 4, color: '#6D28D9', fontSize: 12, fontWeight: 600, textDecoration: 'none' }}>
+                                    <Eye size={13}/> Ver
+                                  </a>
+                                ) : '—'}
+                              </td>
+                            </tr>
+                          ))}
+                          <tr style={{ borderTop: '2px solid #E8ECF0', background: '#F9FAFB' }}>
+                            <td colSpan={2} style={{ padding: '8px 12px', fontWeight: 700 }}>Total</td>
+                            <td style={{ padding: '8px 12px', fontWeight: 800, color: '#111827' }}>${totalFacturas.toLocaleString('es-MX', { minimumFractionDigits: 2 })}</td>
+                            <td />
+                          </tr>
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                ) : (
+                  <div style={{ color: '#6B7280', fontSize: 13, textAlign: 'center', padding: 24 }}>Sin facturas registradas</div>
+                )}
+                {exp.ordenCompra && (
+                  <div style={{ background: '#F0FDF4', border: '1px solid #BBF7D0', borderRadius: 10, padding: 14, display: 'flex', flexDirection: 'column', gap: 4 }}>
+                    <div style={{ fontSize: 11, fontWeight: 700, color: '#166534', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 2 }}>Orden de Compra</div>
+                    <div style={{ fontSize: 13, color: '#374151' }}><strong>Folio OC:</strong> {exp.ordenCompra.folio}</div>
+                    <div style={{ fontSize: 13, color: '#374151' }}><strong>Proveedor:</strong> {typeof exp.ordenCompra.proveedor === 'object' && exp.ordenCompra.proveedor !== null ? (exp.ordenCompra.proveedor as any).nombre : String(exp.ordenCompra.proveedor ?? '—')}</div>
+                    <div style={{ fontSize: 13, color: '#374151' }}><strong>Total OC:</strong> ${Number(exp.ordenCompra.total).toLocaleString('es-MX', { minimumFractionDigits: 2 })}</div>
+                  </div>
+                )}
+                {cotizaciones.length > 0 && (
+                  <div>
+                    <div style={{ fontSize: 11, fontWeight: 700, color: '#6B7280', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 8 }}>Cotizaciones ({cotizaciones.length})</div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                      {cotizaciones.map((c, i) => {
+                        const prov = getCotizacionProveedorNombre(c);
+                        return (
+                          <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#F9FAFB', border: '1px solid #E8ECF0', borderRadius: 8, padding: '8px 12px', fontSize: 13 }}>
+                            <span style={{ fontWeight: 600, color: '#374151' }}>{prov || '—'}</span>
+                            <span style={{ fontWeight: 700, color: '#374151' }}>${Number(c.precioUnitario ?? c.precio ?? 0).toLocaleString('es-MX', { minimumFractionDigits: 2 })}</span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+              </>
+            )}
+
+            {tabExpediente === 'historial' && (
+              <>
+                {historial.length === 0 ? (
+                  <div style={{ color: '#6B7280', fontSize: 13, textAlign: 'center', padding: 24 }}>Sin historial registrado</div>
+                ) : (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
+                    {[...historial].reverse().map((h: any, i: number) => {
+                      const esUltimo = i === historial.length - 1;
+                      const hStyle = ESTADO_STYLES[h.estado] ?? { bg: '#F8FAFC', text: '#64748B', dot: '#94A3B8', border: '#E2E8F0' };
+                      return (
+                        <div key={h.id ?? i} style={{ display: 'flex', gap: 12 }}>
+                          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', flexShrink: 0, width: 28 }}>
+                            <div style={{ width: 14, height: 14, borderRadius: '50%', background: hStyle.dot, border: `2px solid ${hStyle.border}`, flexShrink: 0, marginTop: 4 }} />
+                            {!esUltimo && <div style={{ width: 2, flex: 1, background: '#E8ECF0', margin: '3px 0' }} />}
+                          </div>
+                          <div style={{ paddingBottom: esUltimo ? 0 : 18, flex: 1 }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                              <span style={{ background: hStyle.bg, color: hStyle.text, border: `1px solid ${hStyle.border}`, padding: '2px 10px', borderRadius: 6, fontSize: 11, fontWeight: 700 }}>
+                                {getEstadoCompraUI(h.estado as EstadoCompra).label || h.estado}
+                              </span>
+                              <span style={{ fontSize: 12, color: '#9CA3AF' }}>
+                                {new Date(h.fecha).toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                              </span>
+                            </div>
+                            {h.usuario && (
+                              <div style={{ fontSize: 12, color: '#6B7280', marginTop: 3 }}>
+                                {h.usuario.nombre} {h.usuario.apellidos}
+                              </div>
+                            )}
+                            {h.observaciones && (
+                              <div style={{ fontSize: 12, color: '#374151', marginTop: 4, background: '#F9FAFB', borderRadius: 6, padding: '5px 10px' }}>
+                                {h.observaciones}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+        </div>
+      </div>,
+      document.body
+    );
+  };
+
+  // ─── TABLA EXPEDIENTES FINALIZADOS ────────────────────────────────────────────
+  const renderExpedientesFinalizados = () => {
+    if (reqFinalizadas.length === 0) {
+      return (
+        <div style={{ padding: '5rem', textAlign: 'center', color: '#94a3b8' }}>
+          <FileText size={36} style={{ margin: '0 auto 12px', display: 'block', opacity: 0.4 }} />
+          <p style={{ margin: 0, fontWeight: 700, color: '#374151', fontSize: 15 }}>Sin expedientes finalizados</p>
+          <p style={{ margin: '6px 0 0', fontSize: 14 }}>Los expedientes enviados a Recursos Financieros aparecerán aquí.</p>
+        </div>
+      );
+    }
+    return (
+      <table style={{ width: '100%', borderCollapse: 'separate', borderSpacing: 0, minWidth: 860 }}>
+        <thead>
+          <tr style={{ backgroundColor: '#f8fafc' }}>
+            {['Folio', 'Área / Descripción', 'Proveedor(es)', 'Total facturas', 'Fecha envío', 'Estado', ''].map((h, i) => (
+              <th key={i} style={{
+                padding: '1.1rem 1.25rem', textAlign: i >= 5 ? 'right' : 'left',
+                fontSize: 12, fontWeight: 800, color: '#64748b',
+                textTransform: 'uppercase', letterSpacing: '0.05em',
+                whiteSpace: 'nowrap', borderBottom: '1px solid #e2e8f0',
+              }}>{h}</th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {reqFinalizadas.map((req, idx) => {
+            const facturas = (req as any).facturas ?? [];
+            const totalFact = facturas.reduce((s: number, f: any) => s + Number(f.monto ?? 0), 0);
+            const provs = [...new Set(facturas.map((f: any) => f.proveedor?.nombre).filter(Boolean))];
+            return (
+              <tr
+                key={req.id}
+                style={{ borderBottom: idx < reqFinalizadas.length - 1 ? '1px solid #f1f5f9' : 'none', transition: 'background 0.15s' }}
+                onMouseEnter={e => (e.currentTarget.style.background = '#fafafa')}
+                onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
+              >
+                <td style={{ padding: '1.1rem 1.25rem', verticalAlign: 'middle', whiteSpace: 'nowrap' }}>
+                  <div style={{ fontWeight: 700, fontSize: 14, color: '#111827' }}>{req.folio}</div>
+                  <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 2 }}>
+                    {new Date(req.createdAt).toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: 'numeric' })}
+                  </div>
+                </td>
+                <td style={{ padding: '1.1rem 1.25rem', verticalAlign: 'middle', maxWidth: 220 }}>
+                  <div style={{ fontSize: 13, color: '#374151', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{req.areaSolicitante}</div>
+                  <div style={{ fontSize: 12, color: '#6B7280', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginTop: 2 }}>{req.descripcion}</div>
+                </td>
+                <td style={{ padding: '1.1rem 1.25rem', verticalAlign: 'middle' }}>
+                  {provs.length > 0 ? (
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+                      {provs.map((p, i) => (
+                        <span key={i} style={{ background: '#F5F3FF', color: '#6D28D9', border: '1px solid #DDD6FE', borderRadius: 6, padding: '2px 9px', fontSize: 11, fontWeight: 600 }}>
+                          {p as string}
+                        </span>
+                      ))}
+                    </div>
+                  ) : (
+                    <span style={{ color: '#9CA3AF', fontSize: 13 }}>—</span>
+                  )}
+                </td>
+                <td style={{ padding: '1.1rem 1.25rem', verticalAlign: 'middle', whiteSpace: 'nowrap' }}>
+                  <div style={{ fontSize: 15, fontWeight: 800, color: '#16A34A' }}>
+                    ${totalFact.toLocaleString('es-MX', { minimumFractionDigits: 2 })}
+                  </div>
+                </td>
+                <td style={{ padding: '1.1rem 1.25rem', verticalAlign: 'middle', whiteSpace: 'nowrap' }}>
+                  {req.fechaEnvioFinanzas ? (
+                    <div style={{ fontSize: 13, color: '#374151' }}>
+                      {new Date(req.fechaEnvioFinanzas).toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: 'numeric' })}
+                    </div>
+                  ) : <span style={{ color: '#9CA3AF' }}>—</span>}
+                </td>
+                <td style={{ padding: '1.1rem 1.25rem', verticalAlign: 'middle', textAlign: 'right' }}>
+                  <EstadoBadge estado={req.estado as EstadoCompra} />
+                </td>
+                <td style={{ padding: '0.9rem 1rem', verticalAlign: 'middle', textAlign: 'right' }}>
+                  <button
+                    onClick={() => { setExpedienteDetalle(req); setTabExpediente('datos'); }}
+                    style={{ display: 'inline-flex', alignItems: 'center', gap: 4, background: '#F5F3FF', color: '#6D28D9', border: '1px solid #DDD6FE', borderRadius: 8, padding: '5px 11px', fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap' }}
+                  >
+                    <Eye size={13}/> Ver expediente
+                  </button>
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    );
+  };
 
   // ─── MODAL CREAR ─────────────────────────────────────────────────────────────
   const renderCreate = () => {
@@ -1454,103 +2958,128 @@ export function Compras() {
               </p>
             </div>
           </div>
-          {puedeHacer(rol, 'crear') && (
-            <button
-              onClick={() => setShowCreate(true)}
-              style={{
-                display: 'inline-flex', alignItems: 'center', gap: 8,
-                background: '#2563EB', color: 'white', border: 'none', borderRadius: 16,
-                padding: '0.8rem 1.8rem', fontSize: 14, fontWeight: 700,
-                cursor: 'pointer', fontFamily: 'inherit',
-                boxShadow: '0 10px 15px -3px rgba(37,99,235,0.3)', transition: 'background 0.2s ease',
-              }}
-              onMouseEnter={e => (e.currentTarget.style.background = '#1D4ED8')}
-              onMouseLeave={e => (e.currentTarget.style.background = '#2563EB')}
-            >
-              <Plus size={18} /> Nueva requisición
-            </button>
-          )}
         </div>
 
         {/* CARDS */}
         <DashboardCards requisiciones={requisiciones} />
+
+        {/* TAB SWITCHER */}
+        <div style={{
+          display: 'flex', gap: 12, marginBottom: 24, alignItems: 'center'
+        }}>
+          <button
+            onClick={() => { setTabVista('activas'); setFiltroEstado(''); setBusqueda(''); }}
+            style={{
+              padding: '8px 16px', borderRadius: 12, border: 'none', cursor: 'pointer',
+              fontSize: 13, fontWeight: 700, transition: 'all 0.2s',
+              background: tabVista === 'activas' ? '#2563EB' : '#F3F4F6',
+              color: tabVista === 'activas' ? 'white' : '#6B7280',
+              fontFamily: 'inherit', display: 'inline-flex', alignItems: 'center', gap: 7,
+            }}
+          >
+            <ShoppingCart size={15} /> Requisiciones Activas
+          </button>
+          <button
+            onClick={() => { setTabVista('finalizados'); setFiltroEstado(''); setBusqueda(''); }}
+            style={{
+              padding: '8px 16px', borderRadius: 12, border: 'none', cursor: 'pointer',
+              fontSize: 13, fontWeight: 700, transition: 'all 0.2s',
+              background: tabVista === 'finalizados' ? '#6D28D9' : '#F3F4F6',
+              color: tabVista === 'finalizados' ? 'white' : '#6B7280',
+              fontFamily: 'inherit', display: 'inline-flex', alignItems: 'center', gap: 7,
+            }}
+          >
+            <FileText size={15} /> Expedientes Finalizados
+          </button>
+          {tabVista === 'finalizados' && (
+            <span style={{ fontSize: 11, color: '#6B7280', fontWeight: 600, background: '#F9FAFB', padding: '4px 10px', borderRadius: 8 }}>
+              {reqFinalizadas.length} expediente{reqFinalizadas.length !== 1 ? 's' : ''}
+            </span>
+          )}
+        </div>
 
         {/* TABLA */}
         <div style={{
           backgroundColor: 'white', borderRadius: 16, border: '1px solid #e2e8f0',
           boxShadow: '0 1px 3px rgba(0,0,0,0.06)', overflow: 'hidden', minHeight: 500,
         }}>
-          {/* Filtros */}
-          <div style={{
-            padding: '1.25rem 2rem', borderBottom: '1px solid #e2e8f0',
-            display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#fcfcfc',
-          }}>
-            <div style={{ position: 'relative', width: 400 }}>
-              <Search size={16} color="#94a3b8" style={{ position: 'absolute', top: '50%', left: '1rem', transform: 'translateY(-50%)' }} />
-              <input
-                type="text" placeholder="Buscar por folio o descripción..."
-                value={busqueda} onChange={e => setBusqueda(e.target.value)}
-                style={{ width: '100%', padding: '0.7rem 1rem 0.7rem 2.75rem', borderRadius: 12, border: '1px solid #e2e8f0', outline: 'none', fontSize: 14, fontFamily: 'inherit', color: '#111827' }}
-              />
-            </div>
-            <div style={{ position: 'relative' }}>
-              <Filter size={14} color="#94a3b8" style={{ position: 'absolute', top: '50%', left: '0.8rem', transform: 'translateY(-50%)' }} />
-              <select
-                value={filtroEstado} onChange={e => setFiltroEstado(e.target.value)}
-                style={{ padding: '0.7rem 1rem 0.7rem 2.25rem', borderRadius: 12, border: '1px solid #e2e8f0', fontSize: 14, background: 'white', outline: 'none', cursor: 'pointer', fontFamily: 'inherit', color: '#374151' }}
-              >
-                <option value="">Todos los estados</option>
-                {Object.keys(ESTADO_STYLES).map(e => (
-                  <option key={e} value={e}>{getEstadoCompraUI(e as EstadoCompra).label}</option>
-                ))}
-              </select>
-            </div>
-          </div>
+          {tabVista === 'activas' && (
+            <>
+              {/* Filtros - solo en tab activas */}
+              <div style={{
+                padding: '1.25rem 2rem', borderBottom: '1px solid #e2e8f0',
+                display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#fcfcfc',
+              }}>
+                <div style={{ position: 'relative', width: 400 }}>
+                  <Search size={16} color="#94a3b8" style={{ position: 'absolute', top: '50%', left: '1rem', transform: 'translateY(-50%)' }} />
+                  <input
+                    type="text" placeholder="Buscar por folio o descripción..."
+                    value={busqueda} onChange={e => setBusqueda(e.target.value)}
+                    style={{ width: '100%', padding: '0.7rem 1rem 0.7rem 2.75rem', borderRadius: 12, border: '1px solid #e2e8f0', outline: 'none', fontSize: 14, fontFamily: 'inherit', color: '#111827' }}
+                  />
+                </div>
+                <div style={{ position: 'relative' }}>
+                  <Filter size={14} color="#94a3b8" style={{ position: 'absolute', top: '50%', left: '0.8rem', transform: 'translateY(-50%)' }} />
+                  <select
+                    value={filtroEstado} onChange={e => setFiltroEstado(e.target.value)}
+                    style={{ padding: '0.7rem 1rem 0.7rem 2.25rem', borderRadius: 12, border: '1px solid #e2e8f0', fontSize: 14, background: 'white', outline: 'none', cursor: 'pointer', fontFamily: 'inherit', color: '#374151' }}
+                  >
+                    <option value="">Todos los estados</option>
+                    {Object.keys(ESTADO_STYLES).map(e => (
+                      <option key={e} value={e}>{getEstadoCompraUI(e as EstadoCompra).label}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+            </>
+          )}
 
           {/* Tabla de datos */}
-          {isLoading ? (
-            <div style={{ padding: '5rem', textAlign: 'center', color: '#94a3b8' }}>
-              <Clock size={32} style={{ margin: '0 auto 12px', display: 'block' }} />
-              <span style={{ fontSize: 15 }}>Cargando requisiciones...</span>
-            </div>
-          ) : reqFiltradas.length === 0 ? (
-            <div style={{ padding: '5rem', textAlign: 'center', color: '#94a3b8' }}>
-              <ShoppingCart size={36} style={{ margin: '0 auto 12px', display: 'block' }} />
-              <p style={{ margin: 0, fontWeight: 700, color: '#374151', fontSize: 15 }}>Sin requisiciones</p>
-              <p style={{ margin: '6px 0 0', fontSize: 14 }}>Esperando requisiciones.</p>
-            </div>
-          ) : (
-            <table style={{ width: '100%', borderCollapse: 'separate', borderSpacing: 0, minWidth: 820 }}>
-              <thead>
-                <tr style={{ backgroundColor: '#f8fafc' }}>
-                  {['Fecha y Hora', 'Descripción', 'Estado', 'Área', 'Presupuesto', ''].map((h, i) => (
-                    <th key={i} style={{
-                      padding: '1.1rem 1.5rem', textAlign: i === 5 ? 'right' : 'left',
-                      fontSize: 12, fontWeight: 800, color: '#64748b',
-                      textTransform: 'uppercase', letterSpacing: '0.05em',
-                      whiteSpace: 'nowrap', borderBottom: '1px solid #e2e8f0',
-                    }}>{h}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {reqFiltradas.map((req, idx) => {
-                  const canContinue = req.estado !== 'FINALIZADO' && req.estado !== 'RECHAZADO';
-                  return (
-                    <tr
-                      key={req.id}
-                      style={{ borderBottom: idx < reqFiltradas.length - 1 ? '1px solid #f1f5f9' : 'none', transition: 'background 0.15s' }}
-                      onMouseEnter={e => (e.currentTarget.style.background = '#fafafa')}
-                      onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
-                    >
-                      <td style={{ padding: '1.25rem 1.5rem', verticalAlign: 'middle' }}>
-                        <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8 }}>
-                          <Clock size={14} color="#94a3b8" style={{ marginTop: 2, flexShrink: 0 }} />
-                          <div>
-                            <div style={{ fontSize: 14, color: '#374151', fontWeight: 600, whiteSpace: 'nowrap' }}>
-                              {new Date(req.createdAt).toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: 'numeric' })}
-                            </div>
-                            <div style={{ fontSize: 12, color: '#94a3b8', marginTop: 2 }}>
+          {tabVista === 'activas' ? (
+            <>
+              {isLoading ? (
+                <div style={{ padding: '5rem', textAlign: 'center', color: '#94a3b8' }}>
+                  <Clock size={32} style={{ margin: '0 auto 12px', display: 'block' }} />
+                  <span style={{ fontSize: 15 }}>Cargando requisiciones...</span>
+                </div>
+              ) : reqFiltradas.length === 0 ? (
+                <div style={{ padding: '5rem', textAlign: 'center', color: '#94a3b8' }}>
+                  <ShoppingCart size={36} style={{ margin: '0 auto 12px', display: 'block' }} />
+                  <p style={{ margin: 0, fontWeight: 700, color: '#374151', fontSize: 15 }}>Sin requisiciones</p>
+                  <p style={{ margin: '6px 0 0', fontSize: 14 }}>Esperando requisiciones.</p>
+                </div>
+              ) : (
+                <table style={{ width: '100%', borderCollapse: 'separate', borderSpacing: 0, minWidth: 820 }}>
+                  <thead>
+                    <tr style={{ backgroundColor: '#f8fafc' }}>
+                      {['Fecha y Hora', 'Descripción', 'Estado', 'Área', 'Presupuesto', ''].map((h, i) => (
+                        <th key={i} style={{
+                          padding: '1.1rem 1.5rem', textAlign: i === 5 ? 'right' : 'left',
+                          fontSize: 12, fontWeight: 800, color: '#64748b',
+                          textTransform: 'uppercase', letterSpacing: '0.05em',
+                          whiteSpace: 'nowrap', borderBottom: '1px solid #e2e8f0',
+                        }}>{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {reqFiltradas.map((req, idx) => {
+                      const canContinue = req.estado !== 'FINALIZADO' && req.estado !== 'RECHAZADO';
+                      return (
+                        <tr
+                          key={req.id}
+                          style={{ borderBottom: idx < reqFiltradas.length - 1 ? '1px solid #f1f5f9' : 'none', transition: 'background 0.15s' }}
+                          onMouseEnter={e => (e.currentTarget.style.background = '#fafafa')}
+                          onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
+                        >
+                          <td style={{ padding: '1.25rem 1.5rem', verticalAlign: 'middle' }}>
+                            <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8 }}>
+                              <Clock size={14} color="#94a3b8" style={{ marginTop: 2, flexShrink: 0 }} />
+                              <div>
+                                <div style={{ fontSize: 14, color: '#374151', fontWeight: 600, whiteSpace: 'nowrap' }}>
+                                  {new Date(req.createdAt).toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: 'numeric' })}
+                                </div>
+                                <div style={{ fontSize: 12, color: '#94a3b8', marginTop: 2 }}>
                               {new Date(req.createdAt).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' })}
                             </div>
                           </div>
@@ -1592,12 +3121,6 @@ export function Compras() {
                       </td>
                       <td style={{ padding: '1rem 1rem', verticalAlign: 'middle' }}>
                         <div style={{ display: 'flex', gap: 4, justifyContent: 'flex-end', flexWrap: 'wrap' }}>
-                          <button
-                            onClick={() => setDetalle(req)}
-                            style={{ display: 'flex', alignItems: 'center', gap: 4, background: 'white', color: '#374151', border: '1px solid #e2e8f0', borderRadius: 8, padding: '4px 9px', fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap' }}
-                          >
-                            <Eye size={12}/> Detalles
-                          </button>
                           {(req.ordenCompra || (req as any).ordenPago) && (
                             <button
                               onClick={() => { setTabOrdenes(req.ordenCompra ? 'compra' : 'pago'); setOrdenesDetalle(req); }}
@@ -1627,6 +3150,10 @@ export function Compras() {
                 })}
               </tbody>
             </table>
+          )}
+            </>
+          ) : (
+            renderExpedientesFinalizados()
           )}
         </div>
       </div>

@@ -4,10 +4,13 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   PackageSearch, ArrowDownRight, ArrowUpRight, Plus, Box, Search, Filter,
   MoreVertical, X, Bell, Eye, Clock, CheckCircle, XCircle,
-  ShoppingCart, FileText, AlertTriangle
+  ShoppingCart, FileText, AlertTriangle, ClipboardList
 } from 'lucide-react';
+import { NuevaRequisicionModal } from '../../components/common/NuevaRequisicionModal';
+import { RequisicionAlmacenModal } from '../../components/almacen/RequisicionAlmacenModal';
 import apiClient from '../../services/api';
-import type { Producto, Movimiento, Requisicion, EstadoCompra, Cotizacion } from '../../types';
+import type { Producto, Movimiento, Requisicion, RequisicionDept, EstadoCompra, Cotizacion } from '../../types';
+import { getRequisiciones as fetchRequisicionesDept } from '../../services/requisiciones.service';
 import { getEstadoCompraUI } from '../../types';
 import { useCompras } from '../../hooks/useCompras';
 import { useAuthStore } from '../../stores/authStore';
@@ -184,20 +187,30 @@ const puedeHacer = (rol: string, accion: string) =>
   (PERMISOS_ALMACEN[rol] ?? []).includes(accion);
 
 const ESTADO_REQ_STYLES: Record<string, { bg: string; text: string; dot: string }> = {
-  REQUISICION_CREADA:        { bg: '#F8FAFC', text: '#64748B', dot: '#94A3B8' },
-  EN_REVISION_RECURSOS:      { bg: '#EFF6FF', text: '#2563EB', dot: '#3B82F6' },
-  EN_REVISION_COMPRAS:       { bg: '#FFF7ED', text: '#EA580C', dot: '#F97316' },
-  EN_REVISION_ADMINISTRACION:{ bg: '#FEFCE8', text: '#CA8A04', dot: '#EAB308' },
-  EN_REVISION_DIRECCION:     { bg: '#FDF2F8', text: '#BE185D', dot: '#EC4899' },
-  COTIZACIONES_CARGADAS:     { bg: '#FFF7ED', text: '#EA580C', dot: '#F97316' },
-  PROVEEDOR_SELECCIONADO:    { bg: '#F5F3FF', text: '#7C3AED', dot: '#8B5CF6' },
-  NEGOCIACION_COMPLETADA:    { bg: '#ECFEFF', text: '#0891B2', dot: '#06B6D4' },
-  AUTORIZADA:                { bg: '#F0FDF4', text: '#15803D', dot: '#22C55E' },
-  ORDEN_GENERADA:            { bg: '#EFF6FF', text: '#1D4ED8', dot: '#3B82F6' },
-  FACTURAS_RECIBIDAS:        { bg: '#EEF2FF', text: '#4338CA', dot: '#6366F1' },
-  ORDEN_PAGO_GENERADA:       { bg: '#ECFEFF', text: '#0E7490', dot: '#06B6D4' },
-  FINALIZADO:                { bg: '#F0FDF4', text: '#15803D', dot: '#16A34A' },
-  RECHAZADO:                 { bg: '#FEF2F2', text: '#DC2626', dot: '#EF4444' },
+  // EstadoRequisicion (nuevas requisiciones de departamento)
+  CREADA:                      { bg: '#F8FAFC', text: '#64748B', dot: '#94A3B8' },
+  EN_REVISION_ALMACEN:         { bg: '#EFF6FF', text: '#2563EB', dot: '#3B82F6' },
+  SURTIDA:                     { bg: '#F0FDF4', text: '#15803D', dot: '#22C55E' },
+  PARCIAL:                     { bg: '#FFFBEB', text: '#B45309', dot: '#F59E0B' },
+  SIN_EXISTENCIA:              { bg: '#FEF2F2', text: '#B91C1C', dot: '#EF4444' },
+  ENVIADA_A_COMPRAS:           { bg: '#EEF2FF', text: '#4338CA', dot: '#6366F1' },
+  EN_REVISION_ADMINISTRATIVA:  { bg: '#FEFCE8', text: '#CA8A04', dot: '#EAB308' },
+  DEVUELTA_A_COMPRAS:          { bg: '#FFF7ED', text: '#EA580C', dot: '#F97316' },
+  // EstadoCompra (CompraRequisicion — legacy en otros contextos)
+  REQUISICION_CREADA:          { bg: '#F8FAFC', text: '#64748B', dot: '#94A3B8' },
+  EN_REVISION_RECURSOS:        { bg: '#EFF6FF', text: '#2563EB', dot: '#3B82F6' },
+  EN_REVISION_COMPRAS:         { bg: '#FFF7ED', text: '#EA580C', dot: '#F97316' },
+  EN_REVISION_ADMINISTRACION:  { bg: '#FEFCE8', text: '#CA8A04', dot: '#EAB308' },
+  EN_REVISION_DIRECCION:       { bg: '#FDF2F8', text: '#BE185D', dot: '#EC4899' },
+  COTIZACIONES_CARGADAS:       { bg: '#FFF7ED', text: '#EA580C', dot: '#F97316' },
+  PROVEEDOR_SELECCIONADO:      { bg: '#F5F3FF', text: '#7C3AED', dot: '#8B5CF6' },
+  NEGOCIACION_COMPLETADA:      { bg: '#ECFEFF', text: '#0891B2', dot: '#06B6D4' },
+  AUTORIZADA:                  { bg: '#F0FDF4', text: '#15803D', dot: '#22C55E' },
+  ORDEN_GENERADA:              { bg: '#EFF6FF', text: '#1D4ED8', dot: '#3B82F6' },
+  FACTURAS_RECIBIDAS:          { bg: '#EEF2FF', text: '#4338CA', dot: '#6366F1' },
+  ORDEN_PAGO_GENERADA:         { bg: '#ECFEFF', text: '#0E7490', dot: '#06B6D4' },
+  FINALIZADO:                  { bg: '#F0FDF4', text: '#15803D', dot: '#16A34A' },
+  RECHAZADO:                   { bg: '#FEF2F2', text: '#DC2626', dot: '#EF4444' },
 };
 
 // ─── BADGES OPERATIVOS ────────────────────────────────────────────────────────
@@ -239,10 +252,12 @@ export function Almacen() {
   const [activeTab, setActiveTab] = useState<'INVENTARIO' | 'KARDEX' | 'REQUISICIONES' | 'CONTRA_RECIBOS'>('INVENTARIO');
   const [showModal, setShowModal] = useState<string | null>(null);
   const [showCreate, setShowCreate] = useState(false);
+  const [showNuevaRequisicion, setShowNuevaRequisicion] = useState(false);
   const [formCreate, setFormCreate] = useState({ areaSolicitante: '', descripcion: '', justificacion: '', presupuestoEstimado: '', tipo: 'ORDINARIA' as 'ORDINARIA' | 'EXTRAORDINARIA' });
   const [detalles, setDetalles] = useState<{ producto: string; unidad: string; cantidad: number }[]>([{ producto: '', unidad: '', cantidad: 1 }]);
   const [notif, setNotif] = useState<string | null>(null);
   const [reqSeleccionada, setReqSeleccionada] = useState<Requisicion | null>(null);
+  const [reqAlmacenDetalle, setReqAlmacenDetalle] = useState<RequisicionDept | null>(null);
   const [busquedaReq, setBusquedaReq] = useState('');
 
   // States para nuevos registros
@@ -295,7 +310,13 @@ export function Almacen() {
     enabled: activeTab === 'CONTRA_RECIBOS'
   });
 
-  const { createReq, requisiciones, isLoading: isLoadingReqs } = useCompras();
+  const { data: requisicionesDept = [], isLoading: isLoadingReqs } = useQuery<RequisicionDept[]>({
+    queryKey: ['requisiciones'],
+    queryFn: () => fetchRequisicionesDept(),
+    enabled: activeTab === 'REQUISICIONES',
+  });
+
+  const { createReq, requisiciones } = useCompras();
   const { usuario } = useAuthStore();
   const rol = usuario?.rol ?? '';
   const puedeOperar = puedeHacer(rol, 'operar');
@@ -678,12 +699,12 @@ export function Almacen() {
         </div>
         <div style={{ display: 'flex', gap: '1rem' }}>
           <button
-            onClick={() => setShowCreate(true)}
+            onClick={() => setShowNuevaRequisicion(true)}
             style={{ display: 'flex', alignItems: 'center', padding: '0.8rem 1.5rem', backgroundColor: 'white', color: 'var(--text-h)', border: '1px solid #e2e8f0', borderRadius: '16px', cursor: 'pointer', fontWeight: '700', fontSize: '14px', transition: 'all 0.2s ease', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)' }}
             onMouseEnter={e => e.currentTarget.style.backgroundColor = '#f8fafc'}
             onMouseLeave={e => e.currentTarget.style.backgroundColor = 'white'}
           >
-            <Plus size={18} style={{ marginRight: '0.6rem' }} /> Nueva Requisición
+            <ClipboardList size={18} style={{ marginRight: '0.6rem' }} /> Nueva requisición
           </button>
           <button
             onClick={() => setShowModal('NUEVO_PRODUCTO')}
@@ -749,9 +770,11 @@ export function Almacen() {
 
         {/* ── REQUISICIONES ── */}
         {activeTab === 'REQUISICIONES' ? (() => {
-          const reqFiltradas = requisiciones.filter(r =>
-            r.folio.toLowerCase().includes(busquedaReq.toLowerCase()) ||
-            r.descripcion.toLowerCase().includes(busquedaReq.toLowerCase())
+          const q = busquedaReq.toLowerCase();
+          const reqFiltradas = requisicionesDept.filter(r =>
+            r.folio.toLowerCase().includes(q) ||
+            (r.descripcion ?? '').toLowerCase().includes(q) ||
+            r.areaSolicitante.toLowerCase().includes(q)
           );
           if (isLoadingReqs) return (
             <div style={{ padding: '5rem', textAlign: 'center', color: '#94a3b8' }}>
@@ -770,15 +793,14 @@ export function Almacen() {
             <table style={{ width: '100%', borderCollapse: 'separate', borderSpacing: 0 }}>
               <thead>
                 <tr style={{ backgroundColor: '#f8fafc' }}>
-                  {['Fecha', 'Folio / Descripción', 'Área', 'Presupuesto', 'Estado', ''].map((h, i) => (
-                    <th key={i} style={{ padding: '1.1rem 1.5rem', textAlign: i === 5 ? 'right' : 'left', color: '#64748b', fontSize: '12px', fontWeight: '800', textTransform: 'uppercase', letterSpacing: '0.5px', borderBottom: '1px solid #e2e8f0', whiteSpace: 'nowrap' }}>{h}</th>
+                  {['Fecha', 'Folio', 'Área', 'Quién solicita', 'Arts.', 'Estado', ''].map((h, i) => (
+                    <th key={i} style={{ padding: '1.1rem 1.5rem', textAlign: i === 6 ? 'right' : 'left', color: '#64748b', fontSize: '12px', fontWeight: '800', textTransform: 'uppercase', letterSpacing: '0.5px', borderBottom: '1px solid #e2e8f0', whiteSpace: 'nowrap' }}>{h}</th>
                   ))}
                 </tr>
               </thead>
               <tbody>
                 {reqFiltradas.map((req, idx) => {
                   const style = ESTADO_REQ_STYLES[req.estado] ?? { bg: '#F8FAFC', text: '#64748B', dot: '#94A3B8' };
-                  const estadoUI = getEstadoCompraUI(req.estado as EstadoCompra);
                   return (
                     <tr key={req.id} style={{ borderBottom: idx < reqFiltradas.length - 1 ? '1px solid #f1f5f9' : 'none' }}
                       onMouseEnter={e => (e.currentTarget.style.background = '#fafafa')}
@@ -787,33 +809,33 @@ export function Almacen() {
                         <div style={{ fontSize: 13, fontWeight: 600, color: '#374151' }}>{new Date(req.createdAt).toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: 'numeric' })}</div>
                         <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 2 }}>{new Date(req.createdAt).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' })}</div>
                       </td>
-                      <td style={{ padding: '1.25rem 1.5rem', verticalAlign: 'middle', maxWidth: 340 }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4, flexWrap: 'wrap' }}>
-                          <span style={{ fontWeight: 700, fontSize: 14, color: '#111827' }}>{req.folio}</span>
-                          <span style={{ background: req.tipo === 'EXTRAORDINARIA' ? '#FEF2F2' : '#EFF6FF', color: req.tipo === 'EXTRAORDINARIA' ? '#DC2626' : '#2563EB', fontSize: 10, fontWeight: 700, padding: '2px 7px', borderRadius: 5, border: `1px solid ${req.tipo === 'EXTRAORDINARIA' ? '#FECACA' : '#BFDBFE'}`, whiteSpace: 'nowrap' }}>
-                            {req.tipo}
-                          </span>
-                        </div>
-                        <div style={{ fontSize: 13, color: '#64748b', lineHeight: 1.5, wordBreak: 'break-word' }}>{req.descripcion}</div>
-                        {req.usuario && <div style={{ fontSize: 12, color: '#94a3b8', marginTop: 3 }}>{req.usuario.nombre} {req.usuario.apellidos}</div>}
+                      <td style={{ padding: '1.25rem 1.5rem', verticalAlign: 'middle', maxWidth: 300 }}>
+                        <div style={{ fontWeight: 700, fontSize: 14, color: '#111827', marginBottom: 2 }}>{req.folio}</div>
+                        {req.descripcion && <div style={{ fontSize: 12, color: '#64748b', lineHeight: 1.4 }}>{req.descripcion}</div>}
+                        {req.justificacion && <div style={{ fontSize: 12, color: '#94a3b8', lineHeight: 1.4, marginTop: 2 }}>{req.justificacion.slice(0, 80)}{req.justificacion.length > 80 ? '…' : ''}</div>}
                       </td>
                       <td style={{ padding: '1.25rem 1.5rem', verticalAlign: 'middle', maxWidth: 200 }}>
                         <span style={{ fontSize: 13, color: '#374151', lineHeight: 1.4, display: 'block', wordBreak: 'break-word' }}>{req.areaSolicitante}</span>
                       </td>
                       <td style={{ padding: '1.25rem 1.5rem', verticalAlign: 'middle', whiteSpace: 'nowrap' }}>
-                        <span style={{ fontSize: 14, color: '#374151', fontWeight: 600 }}>
-                          {req.presupuestoEstimado ? `$${req.presupuestoEstimado.toLocaleString('es-MX')}` : '—'}
+                        <span style={{ fontSize: 13, color: '#374151' }}>
+                          {req.usuarioSolicita ? `${req.usuarioSolicita.nombre} ${req.usuarioSolicita.apellidos}` : '—'}
+                        </span>
+                      </td>
+                      <td style={{ padding: '1.25rem 1.5rem', verticalAlign: 'middle', textAlign: 'center' }}>
+                        <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', background: '#f1f5f9', color: '#475569', fontWeight: 700, fontSize: 13, borderRadius: 8, padding: '3px 10px', minWidth: 28 }}>
+                          {req.detalles.length}
                         </span>
                       </td>
                       <td style={{ padding: '1.25rem 1.5rem', verticalAlign: 'middle' }}>
                         <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, background: style.bg, color: style.text, border: `1px solid ${style.dot}33`, padding: '4px 10px', borderRadius: 8, fontSize: 12, fontWeight: 600, whiteSpace: 'nowrap' }}>
                           <span style={{ width: 6, height: 6, borderRadius: '50%', background: style.dot, flexShrink: 0 }} />
-                          {estadoUI.label}
+                          {req.estado.replace(/_/g, ' ')}
                         </span>
                       </td>
                       <td style={{ padding: '1.25rem 1.5rem', verticalAlign: 'middle', textAlign: 'right' }}>
                         <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
-                          <button onClick={() => setReqSeleccionada(req)} style={{ display: 'flex', alignItems: 'center', gap: 5, background: 'white', color: '#374151', border: '1px solid #e2e8f0', borderRadius: 10, padding: '7px 12px', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
+                          <button onClick={() => setReqAlmacenDetalle(req)} style={{ display: 'flex', alignItems: 'center', gap: 5, background: 'white', color: '#374151', border: '1px solid #e2e8f0', borderRadius: 10, padding: '7px 12px', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
                             <Eye size={14} /> Detalles
                           </button>
                         </div>
@@ -1459,6 +1481,26 @@ export function Almacen() {
       {renderCreate()}
       {renderRevision()}
       {notif && <Notif msg={notif} onClose={() => setNotif(null)} />}
+      <NuevaRequisicionModal
+        isOpen={showNuevaRequisicion}
+        onClose={() => setShowNuevaRequisicion(false)}
+        onSuccess={() => queryClient.invalidateQueries({ queryKey: ['requisiciones'] })}
+      />
+      <RequisicionAlmacenModal
+        key={reqAlmacenDetalle?.id}
+        req={reqAlmacenDetalle}
+        isOpen={reqAlmacenDetalle !== null}
+        productos={productosData ?? []}
+        onClose={() => setReqAlmacenDetalle(null)}
+        onSalidaRegistrada={() => {
+          queryClient.invalidateQueries({ queryKey: ['productos'] });
+          queryClient.invalidateQueries({ queryKey: ['movimientos'] });
+        }}
+        onEnviadoACompras={() => {
+          queryClient.invalidateQueries({ queryKey: ['requisiciones'] });
+          queryClient.invalidateQueries({ queryKey: ['compras'] });
+        }}
+      />
     </div>
   );
 }

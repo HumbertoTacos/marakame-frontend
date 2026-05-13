@@ -1,6 +1,7 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Banknote, FileText, ChevronRight, Wallet, ShoppingCart, AlertCircle } from 'lucide-react';
+import { Banknote, FileText, ChevronRight, Wallet, ShoppingCart, AlertCircle, ClipboardList } from 'lucide-react';
+import { NuevaRequisicionModal } from '../../components/common/NuevaRequisicionModal';
 import { useNominaStore } from '../../stores/nominaStore';
 import type { Nomina } from '../../types';
 
@@ -18,6 +19,7 @@ const getEstadoConfig = (estado: string) => {
 const DashboardFinanzas: React.FC = () => {
   const navigate = useNavigate();
   const { nominas, fetchNominas, isLoading } = useNominaStore();
+  const [showNuevaRequisicion, setShowNuevaRequisicion] = useState(false);
 
   useEffect(() => { fetchNominas(); }, [fetchNominas]);
 
@@ -28,13 +30,22 @@ const DashboardFinanzas: React.FC = () => {
   return (
     <div style={{ padding: '2rem', maxWidth: '1400px', margin: '0 auto' }}>
       {/* Header */}
-      <div style={{ marginBottom: '2rem' }}>
-        <h1 style={{ fontSize: '32px', fontWeight: '900', color: '#1e293b', margin: 0, letterSpacing: '-1px' }}>
-          Recursos Financieros
-        </h1>
-        <p style={{ color: '#64748b', fontSize: '15px', marginTop: '4px' }}>
-          Solicitud de subsidio, control de pagos y compras del Instituto.
-        </p>
+      <div style={{ marginBottom: '2rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <div>
+          <h1 style={{ fontSize: '32px', fontWeight: '900', color: '#1e293b', margin: 0, letterSpacing: '-1px' }}>
+            Recursos Financieros
+          </h1>
+          <p style={{ color: '#64748b', fontSize: '15px', marginTop: '4px' }}>
+            Solicitud de subsidio, control de pagos y compras del Instituto.
+          </p>
+        </div>
+        <button
+          onClick={() => setShowNuevaRequisicion(true)}
+          style={{ backgroundColor: 'white', color: '#1e293b', border: '1px solid #e2e8f0', padding: '0.75rem 1.5rem', borderRadius: '12px', fontWeight: '700', display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', boxShadow: '0 1px 3px rgba(0,0,0,0.05)', whiteSpace: 'nowrap' }}
+        >
+          <ClipboardList size={18} color="#3b82f6" />
+          Nueva requisición
+        </button>
       </div>
 
       {/* Accesos rápidos */}
@@ -73,6 +84,11 @@ const DashboardFinanzas: React.FC = () => {
           enFlujoPosterior.map((n: Nomina) => <NominaRow key={n.id} nomina={n} onClick={() => navigate(`/nominas/${n.id}`)} compacto />)
         )}
       </div>
+
+      <NuevaRequisicionModal
+        isOpen={showNuevaRequisicion}
+        onClose={() => setShowNuevaRequisicion(false)}
+      />
     </div>
   );
 };

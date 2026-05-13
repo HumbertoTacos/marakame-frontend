@@ -9,7 +9,9 @@ import {
   X,
   CheckCircle2,
   Loader2,
+  ClipboardList,
 } from 'lucide-react';
+import { NuevaRequisicionModal } from '../../components/common/NuevaRequisicionModal';
 import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../../stores/authStore';
 import apiClient from '../../services/api';
@@ -261,6 +263,7 @@ export function DashboardMedico() {
   const { usuario } = useAuthStore();
   const navigate = useNavigate();
   const [solicitudOpen, setSolicitudOpen] = useState(false);
+  const [showNuevaRequisicion, setShowNuevaRequisicion] = useState(false);
 
   const { data: stats } = useQuery<DashboardStats>({
     queryKey: ['dashboard_stats'],
@@ -340,6 +343,19 @@ export function DashboardMedico() {
           </div>
 
           <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: '1rem' }}>
+            <button
+              onClick={() => setShowNuevaRequisicion(true)}
+              style={{
+                display: 'flex', alignItems: 'center', gap: '0.5rem',
+                padding: '0.6rem 1.2rem', borderRadius: '14px',
+                background: 'rgba(255,255,255,0.1)',
+                border: '1px solid rgba(255,255,255,0.2)',
+                color: 'white', fontWeight: '700', fontSize: '13px',
+                cursor: 'pointer', whiteSpace: 'nowrap',
+              }}
+            >
+              <ClipboardList size={14} /> Nueva requisición
+            </button>
             <button
               onClick={() => setSolicitudOpen(true)}
               style={{
@@ -424,6 +440,10 @@ export function DashboardMedico() {
         isOpen={solicitudOpen}
         onClose={() => setSolicitudOpen(false)}
         nombreUsuario={usuario?.nombre}
+      />
+      <NuevaRequisicionModal
+        isOpen={showNuevaRequisicion}
+        onClose={() => setShowNuevaRequisicion(false)}
       />
     </div>
   );
