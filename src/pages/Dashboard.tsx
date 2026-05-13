@@ -73,14 +73,18 @@ const SectionHeader = ({ icon: Icon, label, color }: { icon: React.ElementType; 
 );
 
 const WELCOME_SUBTITLES: Record<string, string> = {
-  NUTRICION:     'Revisa el estado nutricional y los planes de los pacientes internados.',
-  PSICOLOGIA:    'Gestiona las sesiones clínicas de psicología, consejería y familia.',
-  AREA_MEDICA:   'Monitorea el estado clínico y la evolución de los pacientes.',
-  ENFERMERIA:    'Gestiona los signos vitales y cuidados de los pacientes.',
-  ADMISIONES:    'Administra el proceso de admisión de nuevos candidatos.',
-  ALMACEN:       'Controla el inventario y los suministros de la clínica.',
-  RRHH_FINANZAS: 'Gestiona nóminas, compras y operaciones financieras.',
-  ADMIN_GENERAL: 'Panel de control operativo completo de Marakame.',
+  NUTRICION:         'Revisa el estado nutricional y los planes de los pacientes internados.',
+  PSICOLOGIA:        'Gestiona las sesiones clínicas de psicología, consejería y familia.',
+  AREA_MEDICA:       'Monitorea el estado clínico y la evolución de los pacientes.',
+  ENFERMERIA:        'Gestiona los signos vitales y cuidados de los pacientes.',
+  ADMISIONES:        'Administra el proceso de admisión de nuevos candidatos.',
+  JEFE_ADMISIONES:   'Supervisa el flujo de ingresos y valoración de candidatos.',
+  ALMACEN:           'Controla el inventario y los suministros de la clínica.',
+  RRHH_FINANZAS:     'Gestiona nóminas, compras y operaciones financieras.',
+  ADMIN_GENERAL:     'Panel de control operativo completo de Marakame.',
+  DIRECCION_GENERAL: 'Visión estratégica y control total del centro Marakame.',
+  JEFE_MEDICO:       'Supervisa la operación clínica y médica del centro.',
+  JEFE_CLINICO:      'Supervisa la atención terapéutica y clínica de los pacientes.',
 };
 
 export function Dashboard() {
@@ -98,11 +102,11 @@ export function Dashboard() {
   }
 
   const rol = usuario?.rol ?? '';
-  const esAdmin      = rol === 'ADMIN_GENERAL';
-  const esMedico     = ['AREA_MEDICA', 'NUTRICION', 'PSICOLOGIA', 'ENFERMERIA'].includes(rol);
+  const esAdmin      = ['ADMIN_GENERAL', 'DIRECCION_GENERAL', 'DIRECCION'].includes(rol);
+  const esMedico     = ['AREA_MEDICA', 'NUTRICION', 'PSICOLOGIA', 'ENFERMERIA', 'JEFE_MEDICO', 'JEFE_CLINICO'].includes(rol);
   const esNutricion  = rol === 'NUTRICION';
   const esPsicologia = rol === 'PSICOLOGIA';
-  const esOperativo  = ['ALMACEN', 'RRHH_FINANZAS', 'ADMISIONES'].includes(rol);
+  const esOperativo  = ['ALMACEN', 'RRHH_FINANZAS', 'ADMISIONES', 'JEFE_ADMISIONES', 'JEFE_ADMINISTRATIVO'].includes(rol);
 
   const subtitle = WELCOME_SUBTITLES[rol] ?? 'Te presentamos el resumen operativo de Marakame para hoy.';
 

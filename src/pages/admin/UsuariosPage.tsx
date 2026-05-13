@@ -5,10 +5,10 @@ import { useAuthStore } from '../../stores/authStore';
 import apiClient from '../../services/api';
 
 type Rol =
-  | 'ADMIN_GENERAL' | 'DIRECCION' | 'AREA_MEDICA' | 'ENFERMERIA'
+  | 'ADMIN_GENERAL' | 'DIRECCION' | 'DIRECCION_GENERAL' | 'AREA_MEDICA' | 'ENFERMERIA'
   | 'NUTRICION' | 'PSICOLOGIA' | 'RRHH_FINANZAS'
   | 'RECURSOS_HUMANOS' | 'RECURSOS_FINANCIEROS' | 'JEFE_ADMINISTRATIVO'
-  | 'ADMISIONES' | 'ALMACEN' | 'JEFE_MEDICO';
+  | 'ADMISIONES' | 'ALMACEN' | 'JEFE_MEDICO' | 'JEFE_CLINICO' | 'JEFE_ADMISIONES';
 
 interface UsuarioItem {
   id: number;
@@ -32,14 +32,15 @@ interface FormData {
 }
 
 const ROLES: Rol[] = [
-  'ADMIN_GENERAL', 'DIRECCION', 'AREA_MEDICA', 'ENFERMERIA', 'NUTRICION',
+  'ADMIN_GENERAL', 'DIRECCION_GENERAL', 'DIRECCION', 'AREA_MEDICA', 'ENFERMERIA', 'NUTRICION',
   'PSICOLOGIA', 'RRHH_FINANZAS', 'RECURSOS_HUMANOS', 'RECURSOS_FINANCIEROS',
-  'JEFE_ADMINISTRATIVO', 'ADMISIONES', 'ALMACEN', 'JEFE_MEDICO',
+  'JEFE_ADMINISTRATIVO', 'ADMISIONES', 'ALMACEN', 'JEFE_MEDICO', 'JEFE_CLINICO', 'JEFE_ADMISIONES',
 ];
 
 const ROL_LABELS: Record<Rol, string> = {
   ADMIN_GENERAL:        'Admin General',
-  DIRECCION:            'Dirección',
+  DIRECCION:            'Dirección (legacy)',
+  DIRECCION_GENERAL:    'Dirección General',
   AREA_MEDICA:          'Área Médica',
   ENFERMERIA:           'Enfermería',
   NUTRICION:            'Nutrición',
@@ -51,11 +52,14 @@ const ROL_LABELS: Record<Rol, string> = {
   ADMISIONES:           'Admisiones',
   ALMACEN:              'Almacén',
   JEFE_MEDICO:          'Jefe Médico',
+  JEFE_CLINICO:         'Jefe Clínico',
+  JEFE_ADMISIONES:      'Jefe de Admisiones',
 };
 
 const ROL_COLORS: Record<Rol, string> = {
   ADMIN_GENERAL:        '#6366f1',
   DIRECCION:            '#4f46e5',
+  DIRECCION_GENERAL:    '#4338ca',
   AREA_MEDICA:          '#0891b2',
   ENFERMERIA:           '#0d9488',
   NUTRICION:             '#d97706',
@@ -67,13 +71,15 @@ const ROL_COLORS: Record<Rol, string> = {
   ADMISIONES:           '#2563eb',
   ALMACEN:              '#dc2626',
   JEFE_MEDICO:          '#0e7490',
+  JEFE_CLINICO:         '#0369a1',
+  JEFE_ADMISIONES:      '#1d4ed8',
 };
 
 const EMPTY_FORM: FormData = { nombre: '', apellidos: '', correo: '', rol: 'ADMISIONES', esJefe: false, password: '' };
 
 export default function UsuariosPage() {
   const { usuario: currentUser } = useAuthStore();
-  const isAdminOrDirector = currentUser?.rol === 'ADMIN_GENERAL' || currentUser?.rol === 'DIRECCION';
+  const isAdminOrDirector = currentUser?.rol === 'ADMIN_GENERAL' || currentUser?.rol === 'DIRECCION_GENERAL' || (currentUser?.rol as string) === 'DIRECCION';
   const qc = useQueryClient();
   const [busqueda, setBusqueda] = useState('');
   const [modal, setModal] = useState<'crear' | 'editar' | 'reset' | null>(null);

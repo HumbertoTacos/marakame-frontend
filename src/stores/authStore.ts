@@ -3,6 +3,7 @@ import { persist } from 'zustand/middleware';
 
 type Rol =
   | 'ADMIN_GENERAL'
+  | 'DIRECCION'
   | 'AREA_MEDICA'
   | 'NUTRICION'
   | 'PSICOLOGIA'
