@@ -15,7 +15,10 @@ export type Rol =
   | 'JEFE_ADMINISTRATIVO'
   | 'ADMISIONES'
   | 'ALMACEN'
-  | 'JEFE_MEDICO';
+  | 'JEFE_MEDICO'
+  | 'JEFE_CLINICO'
+  | 'JEFE_ADMISIONES'
+  | 'DIRECCION_GENERAL';      // titular que firma el paso 3 del flujo de nómina
 
 export const EstadoPaciente = {
   PROSPECTO: 'PROSPECTO',

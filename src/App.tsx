@@ -3,6 +3,23 @@ import { BrowserRouter as Router, Routes, Route, Navigate, Outlet } from 'react-
 import { Layout } from './components/Layout';
 import { ProtectedRoute } from './components/ProtectedRoute';
 import { Login } from './pages/Login';
+import { useAuthStore } from './stores/authStore';
+
+// Redirige al landing correcto según el rol — usado en la ruta index para que un refresh
+// o entrar a "/" aterrice en el panel del usuario y no en el Dashboard genérico.
+const HomeRedirect = () => {
+  const rol = useAuthStore(s => s.usuario?.rol?.toUpperCase());
+  let destino = '/dashboard';
+  if (rol === 'ADMIN_GENERAL' || rol === 'DIRECCION_GENERAL') destino = '/directora';
+  else if (rol === 'RRHH_FINANZAS' || rol === 'RECURSOS_HUMANOS') destino = '/nominas';
+  else if (rol === 'RECURSOS_FINANCIEROS') destino = '/finanzas';
+  else if (rol === 'JEFE_ADMINISTRATIVO') destino = '/administracion';
+  else if (rol === 'JEFE_MEDICO') destino = '/medico/dashboard';
+  else if (rol === 'JEFE_CLINICO') destino = '/jefe-clinico/dashboard';
+  else if (rol === 'JEFE_ADMISIONES') destino = '/jefe-admisiones/dashboard';
+  else if (rol === 'ADMISIONES') destino = '/admisiones';
+  return <Navigate to={destino} replace />;
+};
 
 // Implementación de Lazy Loading
 const Dashboard = lazy(() => import('./pages/Dashboard').then(m => ({ default: m.Dashboard })));
@@ -47,6 +64,10 @@ const UsuariosPage = lazy(() => import('./pages/admin/UsuariosPage'));
 const DashboardDirectora = lazy(() => import('./pages/admin/DashboardDirectora'));
 const PagosPacientePage = lazy(() => import('./pages/operativos/PagosPacientePage'));
 
+// Paneles de jefatura (solo lectura/resumen)
+const DashboardJefeClinico = lazy(() => import('./pages/jefes/DashboardJefeClinico'));
+const DashboardJefeAdmisiones = lazy(() => import('./pages/jefes/DashboardJefeAdmisiones'));
+
 // Loader Premium para Suspense
 const PageLoader = () => (
   <div style={{
@@ -70,7 +91,7 @@ function App() {
 
           {/* Rutas protegidas */}
           <Route path="/" element={<ProtectedRoute><Layout /></ProtectedRoute>}>
-            <Route index element={<Navigate to="/dashboard" replace />} />
+            <Route index element={<HomeRedirect />} />
             <Route path="dashboard" element={<Dashboard />} />
 
             {/* Módulo de Admisiones */}
@@ -103,9 +124,9 @@ function App() {
               </ProtectedRoute>
             } />
 
-            {/* Módulo Área Médica */}
+            {/* Módulo Área Médica — JEFE_MEDICO queda restringido a su panel/justificaciones */}
             <Route path="medica" element={
-              <ProtectedRoute allowedRoles={['AREA_MEDICA', 'JEFE_MEDICO', 'ENFERMERIA', 'PSICOLOGIA', 'NUTRICION', 'ADMIN_GENERAL']}>
+              <ProtectedRoute allowedRoles={['AREA_MEDICA', 'ENFERMERIA', 'PSICOLOGIA', 'NUTRICION', 'ADMIN_GENERAL']}>
                 <Outlet />
               </ProtectedRoute>
             }>
@@ -119,20 +140,24 @@ function App() {
                 </ProtectedRoute>
               } />
               <Route path="historia-clinica/:pacienteId" element={
-                <ProtectedRoute allowedRoles={['AREA_MEDICA', 'JEFE_MEDICO', 'ADMIN_GENERAL']}>
+                <ProtectedRoute allowedRoles={['AREA_MEDICA', 'ADMIN_GENERAL']}>
                   <GenerarExpedientePage />
                 </ProtectedRoute>
               } />
             </Route>
 
-            {/* Módulo Jefatura */}
+            {/* Módulo Jefatura — JEFE_MEDICO mantiene la lista de personal (vista), Solicitudes pasa a Dirección */}
             <Route path="jefatura" element={
               <ProtectedRoute allowedRoles={['JEFE_MEDICO', 'ADMIN_GENERAL']}>
                 <Outlet />
               </ProtectedRoute>
             }>
               <Route path="personal" element={<PersonalPage />} />
-              <Route path="solicitudes" element={<SolicitudesPage />} />
+              <Route path="solicitudes" element={
+                <ProtectedRoute allowedRoles={['ADMIN_GENERAL']}>
+                  <SolicitudesPage />
+                </ProtectedRoute>
+              } />
             </Route>
 
             <Route path="almacen" element={
@@ -142,7 +167,7 @@ function App() {
             } />
 
             <Route path="compras" element={
-              <ProtectedRoute allowedRoles={['RRHH_FINANZAS', 'RECURSOS_FINANCIEROS', 'JEFE_ADMINISTRATIVO', 'ADMIN_GENERAL']}>
+              <ProtectedRoute allowedRoles={['RRHH_FINANZAS', 'RECURSOS_FINANCIEROS', 'ADMIN_GENERAL']}>
                 <Compras />
               </ProtectedRoute>
             } />
@@ -167,16 +192,28 @@ function App() {
               </ProtectedRoute>
             } />
 
-            {/* NUEVO: Módulo de Asistencias (Para todos los Jefes de Departamento) */}
+            {/* Paneles de jefatura — solo lectura/resumen */}
+            <Route path="jefe-clinico/dashboard" element={
+              <ProtectedRoute allowedRoles={['JEFE_CLINICO', 'ADMIN_GENERAL']}>
+                <DashboardJefeClinico />
+              </ProtectedRoute>
+            } />
+            <Route path="jefe-admisiones/dashboard" element={
+              <ProtectedRoute allowedRoles={['JEFE_ADMISIONES', 'ADMIN_GENERAL']}>
+                <DashboardJefeAdmisiones />
+              </ProtectedRoute>
+            } />
+
+            {/* Justificaciones de Asistencia — solo jefes departamentales y RH/Dirección */}
             <Route path="asistencias" element={
-              <ProtectedRoute allowedRoles={['ADMIN_GENERAL', 'RRHH_FINANZAS', 'RECURSOS_HUMANOS', 'JEFE_ADMINISTRATIVO', 'JEFE_MEDICO', 'AREA_MEDICA', 'ADMISIONES', 'ALMACEN', 'PSICOLOGIA', 'NUTRICION', 'ENFERMERIA']}>
+              <ProtectedRoute allowedRoles={['ADMIN_GENERAL', 'RRHH_FINANZAS', 'RECURSOS_HUMANOS', 'JEFE_ADMINISTRATIVO', 'JEFE_MEDICO', 'JEFE_CLINICO', 'JEFE_ADMISIONES']}>
                 <ControlAsistencias />
               </ProtectedRoute>
             } />
 
-            {/* Módulo de Nóminas: RH crea, Finanzas/Jefatura/Dirección firman en orden */}
+            {/* Módulo de Nóminas — Dirección General firma el paso 3; admin tiene acceso total */}
             <Route path="nominas" element={
-              <ProtectedRoute allowedRoles={['RRHH_FINANZAS', 'RECURSOS_HUMANOS', 'RECURSOS_FINANCIEROS', 'JEFE_ADMINISTRATIVO', 'ADMIN_GENERAL']}>
+              <ProtectedRoute allowedRoles={['RRHH_FINANZAS', 'RECURSOS_HUMANOS', 'RECURSOS_FINANCIEROS', 'ADMIN_GENERAL', 'DIRECCION_GENERAL']}>
                 <Outlet />
               </ProtectedRoute>
             }>
@@ -189,26 +226,26 @@ function App() {
               <Route path=":id" element={<DetalleNomina />} />
             </Route>
 
-            <Route path="bitacora" element={
-              <ProtectedRoute>
+            <Route path="auditoria" element={
+              <ProtectedRoute allowedRoles={['ADMIN_GENERAL', 'DIRECCION_GENERAL']}>
                 <Bitacora />
               </ProtectedRoute>
             } />
 
             <Route path="exportaciones" element={
-              <ProtectedRoute allowedRoles={['ADMIN_GENERAL', 'DIRECCION']}>
+              <ProtectedRoute allowedRoles={['ADMIN_GENERAL', 'DIRECCION_GENERAL']}>
                 <Reportes />
               </ProtectedRoute>
             } />
 
             <Route path="usuarios" element={
-              <ProtectedRoute allowedRoles={['ADMIN_GENERAL', 'DIRECCION']}>
+              <ProtectedRoute allowedRoles={['ADMIN_GENERAL', 'DIRECCION_GENERAL']}>
                 <UsuariosPage />
               </ProtectedRoute>
             } />
 
             <Route path="directora" element={
-              <ProtectedRoute allowedRoles={['ADMIN_GENERAL', 'DIRECCION']}>
+              <ProtectedRoute allowedRoles={['ADMIN_GENERAL', 'DIRECCION_GENERAL']}>
                 <DashboardDirectora />
               </ProtectedRoute>
             } />

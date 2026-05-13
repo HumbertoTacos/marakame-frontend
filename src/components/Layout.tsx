@@ -71,9 +71,13 @@ export function Layout() {
   const getHomeRoute = () => {
     const rol = usuario?.rol?.toUpperCase();
     if (rol === 'ADMIN_GENERAL') return '/directora';
+    if (rol === 'DIRECCION_GENERAL') return '/directora';
     if (rol === 'RRHH_FINANZAS' || rol === 'RECURSOS_HUMANOS') return '/nominas';
     if (rol === 'RECURSOS_FINANCIEROS') return '/finanzas';
     if (rol === 'JEFE_ADMINISTRATIVO') return '/administracion';
+    if (rol === 'JEFE_MEDICO') return '/medico/dashboard';
+    if (rol === 'JEFE_CLINICO') return '/jefe-clinico/dashboard';
+    if (rol === 'JEFE_ADMISIONES') return '/jefe-admisiones/dashboard';
     if (rol === 'ADMISIONES') return '/admisiones/dashboard';
     return '/dashboard';
   };
@@ -119,9 +123,9 @@ export function Layout() {
         <div style={{ padding: '0 1.5rem 1.5rem', flex: 1, overflowY: 'auto' }} className="custom-scrollbar">
           
           {/* ========================================================= */}
-          {/* Módulo Transversal: ASISTENCIAS (Visible para todos los jefes) */}
+          {/* Justificaciones de Asistencia — jefes departamentales y RH/Dirección */}
           {/* ========================================================= */}
-          {(['ADMIN_GENERAL', 'RRHH_FINANZAS', 'RECURSOS_HUMANOS', 'JEFE_ADMINISTRATIVO', 'JEFE_MEDICO', 'AREA_MEDICA', 'ADMISIONES', 'ALMACEN', 'PSICOLOGIA', 'NUTRICION', 'ENFERMERIA'].includes(usuario?.rol || '')) && (
+          {(['ADMIN_GENERAL', 'RRHH_FINANZAS', 'RECURSOS_HUMANOS', 'JEFE_ADMINISTRATIVO', 'JEFE_MEDICO', 'JEFE_CLINICO', 'JEFE_ADMISIONES'].includes(usuario?.rol || '')) && (
             <>
               <div style={{ fontSize: '11px', color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '1.5px', margin: '1rem 0 1rem 0', fontWeight: '700' }}>Operación Diaria</div>
               <div style={navItemStyle('asistencias')} onClick={() => navigate('/asistencias')}
@@ -129,10 +133,7 @@ export function Layout() {
                    onMouseLeave={(e) => { if (!location.pathname.includes('asistencias')) { e.currentTarget.style.backgroundColor = 'transparent'; e.currentTarget.style.color = '#475569'; } }}
               >
                 <CalendarCheck size={20} style={{ marginRight: '1rem' }}/>
-                {/* CONDICIONAL DEL TÍTULO SEGÚN EL ROL */}
-                {usuario?.rol === 'ADMIN_GENERAL' || usuario?.rol === 'DIRECCION' || usuario?.rol === 'JEFE_MEDICO' || usuario?.rol === 'JEFE_ADMINISTRATIVO'
-                  ? 'Reporte de Asistencias'
-                  : 'Pasar Asistencia'}
+                Justificaciones
               </div>
             </>
           )}
@@ -169,8 +170,8 @@ export function Layout() {
             </>
           )}
 
-          {/* Módulo Médico — visible para médico, jefe médico, staff clínico y admin */}
-          {(['AREA_MEDICA', 'JEFE_MEDICO', 'ENFERMERIA', 'PSICOLOGIA', 'NUTRICION', 'ADMIN_GENERAL'].includes(usuario?.rol || '')) && (
+          {/* Módulo Médico — visible para médico, staff clínico y admin (jefe médico tiene su propio panel) */}
+          {(['AREA_MEDICA', 'ENFERMERIA', 'PSICOLOGIA', 'NUTRICION', 'ADMIN_GENERAL'].includes(usuario?.rol || '')) && (
             <>
               <div style={{ fontSize: '11px', color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '1.5px', margin: '2rem 0 1rem 0', fontWeight: '700' }}>Área Médica</div>
               <div style={navItemStyle('medico/dashboard')} onClick={() => navigate('/medico/dashboard')}
@@ -200,21 +201,57 @@ export function Layout() {
             </>
           )}
 
-          {/* Jefatura — visible solo para jefe médico y admin */}
+          {/* Jefatura Médica — Panel resumen + Personal (vista). Solicitudes solo Dirección */}
           {(['JEFE_MEDICO', 'ADMIN_GENERAL'].includes(usuario?.rol || '')) && (
             <>
-              <div style={{ fontSize: '11px', color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '1.5px', margin: '2rem 0 1rem 0', fontWeight: '700' }}>Jefatura</div>
+              <div style={{ fontSize: '11px', color: '#64748b', textTransform: 'uppercase', letterSpacing: '1.5px', margin: '2rem 0 1rem 0', fontWeight: '700' }}>Jefatura Médica</div>
+              {usuario?.rol === 'JEFE_MEDICO' && (
+                <div style={navItemStyle('medico/dashboard')} onClick={() => navigate('/medico/dashboard')}
+                     onMouseEnter={(e) => { if (!location.pathname.includes('medico/dashboard')) { e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.05)'; e.currentTarget.style.color = '#e2e8f0'; } }}
+                     onMouseLeave={(e) => { if (!location.pathname.includes('medico/dashboard')) { e.currentTarget.style.backgroundColor = 'transparent'; e.currentTarget.style.color = '#94a3b8'; } }}
+                >
+                  <LayoutDashboard size={20} style={{ marginRight: '1rem' }}/> Panel Médico
+                </div>
+              )}
               <div style={navItemStyle('jefatura/personal')} onClick={() => navigate('/jefatura/personal')}
                    onMouseEnter={(e) => { if (!location.pathname.includes('jefatura/personal')) { e.currentTarget.style.backgroundColor = '#f1f5f9'; e.currentTarget.style.color = '#0f172a'; } }}
                    onMouseLeave={(e) => { if (!location.pathname.includes('jefatura/personal')) { e.currentTarget.style.backgroundColor = 'transparent'; e.currentTarget.style.color = '#475569'; } }}
               >
                 <UserCog size={20} style={{ marginRight: '1rem' }}/> Personal
               </div>
-              <div style={navItemStyle('jefatura/solicitudes')} onClick={() => navigate('/jefatura/solicitudes')}
-                   onMouseEnter={(e) => { if (!location.pathname.includes('jefatura/solicitudes')) { e.currentTarget.style.backgroundColor = '#f1f5f9'; e.currentTarget.style.color = '#0f172a'; } }}
-                   onMouseLeave={(e) => { if (!location.pathname.includes('jefatura/solicitudes')) { e.currentTarget.style.backgroundColor = 'transparent'; e.currentTarget.style.color = '#475569'; } }}
+              {usuario?.rol === 'ADMIN_GENERAL' && (
+                <div style={navItemStyle('jefatura/solicitudes')} onClick={() => navigate('/jefatura/solicitudes')}
+                     onMouseEnter={(e) => { if (!location.pathname.includes('jefatura/solicitudes')) { e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.05)'; e.currentTarget.style.color = '#e2e8f0'; } }}
+                     onMouseLeave={(e) => { if (!location.pathname.includes('jefatura/solicitudes')) { e.currentTarget.style.backgroundColor = 'transparent'; e.currentTarget.style.color = '#94a3b8'; } }}
+                >
+                  <ClipboardCheck size={20} style={{ marginRight: '1rem' }}/> Solicitudes
+                </div>
+              )}
+            </>
+          )}
+
+          {/* Jefatura Clínica — panel resumen del equipo */}
+          {(['JEFE_CLINICO', 'ADMIN_GENERAL'].includes(usuario?.rol || '')) && (
+            <>
+              <div style={{ fontSize: '11px', color: '#64748b', textTransform: 'uppercase', letterSpacing: '1.5px', margin: '2rem 0 1rem 0', fontWeight: '700' }}>Jefatura Clínica</div>
+              <div style={navItemStyle('jefe-clinico/dashboard')} onClick={() => navigate('/jefe-clinico/dashboard')}
+                   onMouseEnter={(e) => { if (!location.pathname.includes('jefe-clinico/dashboard')) { e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.05)'; e.currentTarget.style.color = '#e2e8f0'; } }}
+                   onMouseLeave={(e) => { if (!location.pathname.includes('jefe-clinico/dashboard')) { e.currentTarget.style.backgroundColor = 'transparent'; e.currentTarget.style.color = '#94a3b8'; } }}
               >
-                <ClipboardCheck size={20} style={{ marginRight: '1rem' }}/> Solicitudes
+                <LayoutDashboard size={20} style={{ marginRight: '1rem' }}/> Panel Clínico
+              </div>
+            </>
+          )}
+
+          {/* Jefatura de Admisiones — panel resumen del embudo */}
+          {(['JEFE_ADMISIONES', 'ADMIN_GENERAL'].includes(usuario?.rol || '')) && (
+            <>
+              <div style={{ fontSize: '11px', color: '#64748b', textTransform: 'uppercase', letterSpacing: '1.5px', margin: '2rem 0 1rem 0', fontWeight: '700' }}>Jefatura de Admisiones</div>
+              <div style={navItemStyle('jefe-admisiones/dashboard')} onClick={() => navigate('/jefe-admisiones/dashboard')}
+                   onMouseEnter={(e) => { if (!location.pathname.includes('jefe-admisiones/dashboard')) { e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.05)'; e.currentTarget.style.color = '#e2e8f0'; } }}
+                   onMouseLeave={(e) => { if (!location.pathname.includes('jefe-admisiones/dashboard')) { e.currentTarget.style.backgroundColor = 'transparent'; e.currentTarget.style.color = '#94a3b8'; } }}
+              >
+                <LayoutDashboard size={20} style={{ marginRight: '1rem' }}/> Panel Admisiones
               </div>
             </>
           )}
@@ -275,7 +312,7 @@ export function Layout() {
             </>
           )}
 
-          {/* Jefatura Administrativa: paso intermedio del flujo de nómina antes de Dirección */}
+          {/* Jefatura Administrativa — solo panel resumen (sin firma de nóminas) */}
           {(['JEFE_ADMINISTRATIVO', 'ADMIN_GENERAL'].includes(usuario?.rol || '')) && (
             <>
               <div style={{ fontSize: '11px', color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '1.5px', margin: '2rem 0 1rem 0', fontWeight: '700' }}>Jefatura Administrativa</div>
@@ -283,52 +320,83 @@ export function Layout() {
                   onMouseEnter={(e) => { if (!location.pathname.includes('administracion')) { e.currentTarget.style.backgroundColor = '#f1f5f9'; e.currentTarget.style.color = '#0f172a'; } }}
                   onMouseLeave={(e) => { if (!location.pathname.includes('administracion')) { e.currentTarget.style.backgroundColor = 'transparent'; e.currentTarget.style.color = '#475569'; } }}
               >
-                <ClipboardCheck size={20} style={{ marginRight: '1rem' }}/> Revisión de Pre-Nóminas
+                <ClipboardCheck size={20} style={{ marginRight: '1rem' }}/> Panel Administrativo
               </div>
-              <div style={navItemStyle('nominas')} onClick={() => navigate('/nominas')}
-                  onMouseEnter={(e) => { if (!location.pathname.includes('nominas')) { e.currentTarget.style.backgroundColor = '#f1f5f9'; e.currentTarget.style.color = '#0f172a'; } }}
-                  onMouseLeave={(e) => { if (!location.pathname.includes('nominas')) { e.currentTarget.style.backgroundColor = 'transparent'; e.currentTarget.style.color = '#475569'; } }}
-              >
-                <Banknote size={20} style={{ marginRight: '1rem' }}/> Histórico de Nóminas
-              </div>
+              {usuario?.rol === 'ADMIN_GENERAL' && (
+                <div style={navItemStyle('nominas')} onClick={() => navigate('/nominas')}
+                    onMouseEnter={(e) => { if (!location.pathname.includes('nominas')) { e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.05)'; e.currentTarget.style.color = '#e2e8f0'; } }}
+                    onMouseLeave={(e) => { if (!location.pathname.includes('nominas')) { e.currentTarget.style.backgroundColor = 'transparent'; e.currentTarget.style.color = '#94a3b8'; } }}
+                >
+                  <Banknote size={20} style={{ marginRight: '1rem' }}/> Histórico de Nóminas
+                </div>
+              )}
             </>
           )}
 
-          {/* Gerencial */}
-          {(usuario?.rol === 'ADMIN_GENERAL' || usuario?.rol === 'DIRECCION') && (
+          {/* Dirección General — panel ejecutivo, firma de nómina y herramientas gerenciales */}
+          {usuario?.rol === 'DIRECCION_GENERAL' && (
             <>
-              <div style={{ fontSize: '11px', color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '1.5px', margin: '2rem 0 1rem 0', fontWeight: '700' }}>Dirección</div>
+              <div style={{ fontSize: '11px', color: '#64748b', textTransform: 'uppercase', letterSpacing: '1.5px', margin: '1rem 0 1rem 0', fontWeight: '700' }}>Dirección General</div>
               <div style={navItemStyle('directora')} onClick={() => navigate('/directora')}
-                   onMouseEnter={(e) => { if (!location.pathname.includes('directora')) { e.currentTarget.style.backgroundColor = '#f1f5f9'; e.currentTarget.style.color = '#0f172a'; } }}
-                   onMouseLeave={(e) => { if (!location.pathname.includes('directora')) { e.currentTarget.style.backgroundColor = 'transparent'; e.currentTarget.style.color = '#475569'; } }}
+                   onMouseEnter={(e) => { if (!location.pathname.includes('directora')) { e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.05)'; e.currentTarget.style.color = '#e2e8f0'; } }}
+                   onMouseLeave={(e) => { if (!location.pathname.includes('directora')) { e.currentTarget.style.backgroundColor = 'transparent'; e.currentTarget.style.color = '#94a3b8'; } }}
               >
                 <LayoutDashboard size={20} style={{ marginRight: '1rem' }}/> Panel Ejecutivo
               </div>
-
+              <div style={navItemStyle('nominas')} onClick={() => navigate('/nominas')}
+                   onMouseEnter={(e) => { if (!location.pathname.includes('nominas')) { e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.05)'; e.currentTarget.style.color = '#e2e8f0'; } }}
+                   onMouseLeave={(e) => { if (!location.pathname.includes('nominas')) { e.currentTarget.style.backgroundColor = 'transparent'; e.currentTarget.style.color = '#94a3b8'; } }}
+              >
+                <Banknote size={20} style={{ marginRight: '1rem' }}/> Firma de Nóminas
+              </div>
+              <div style={navItemStyle('auditoria')} onClick={() => navigate('/auditoria')}
+                   onMouseEnter={(e) => { if (!location.pathname.includes('auditoria')) { e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.05)'; e.currentTarget.style.color = '#e2e8f0'; } }}
+                   onMouseLeave={(e) => { if (!location.pathname.includes('auditoria')) { e.currentTarget.style.backgroundColor = 'transparent'; e.currentTarget.style.color = '#94a3b8'; } }}
+              >
+                <ShieldAlert size={20} style={{ marginRight: '1rem' }}/> Auditoría
+              </div>
               <div style={navItemStyle('exportaciones')} onClick={() => navigate('/exportaciones')}
-                   onMouseEnter={(e) => { if (!location.pathname.includes('exportaciones')) { e.currentTarget.style.backgroundColor = '#f1f5f9'; e.currentTarget.style.color = '#0f172a'; } }}
-                   onMouseLeave={(e) => { if (!location.pathname.includes('exportaciones')) { e.currentTarget.style.backgroundColor = 'transparent'; e.currentTarget.style.color = '#475569'; } }}
+                   onMouseEnter={(e) => { if (!location.pathname.includes('exportaciones')) { e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.05)'; e.currentTarget.style.color = '#e2e8f0'; } }}
+                   onMouseLeave={(e) => { if (!location.pathname.includes('exportaciones')) { e.currentTarget.style.backgroundColor = 'transparent'; e.currentTarget.style.color = '#94a3b8'; } }}
               >
                 <FileOutput size={20} style={{ marginRight: '1rem' }}/> Exportar Datos
               </div>
               <div style={navItemStyle('usuarios')} onClick={() => navigate('/usuarios')}
-                   onMouseEnter={(e) => { if (!location.pathname.includes('usuarios')) { e.currentTarget.style.backgroundColor = '#f1f5f9'; e.currentTarget.style.color = '#0f172a'; } }}
-                   onMouseLeave={(e) => { if (!location.pathname.includes('usuarios')) { e.currentTarget.style.backgroundColor = 'transparent'; e.currentTarget.style.color = '#475569'; } }}
+                   onMouseEnter={(e) => { if (!location.pathname.includes('usuarios')) { e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.05)'; e.currentTarget.style.color = '#e2e8f0'; } }}
+                   onMouseLeave={(e) => { if (!location.pathname.includes('usuarios')) { e.currentTarget.style.backgroundColor = 'transparent'; e.currentTarget.style.color = '#94a3b8'; } }}
               >
                 <UserCog size={20} style={{ marginRight: '1rem' }}/> Gestión de Usuarios
               </div>
             </>
           )}
 
-          {/* Opciones Generales (Para Todos) */}
-          {(usuario?.rol === 'ADMIN_GENERAL' || usuario?.rol === 'DIRECCION' || usuario?.esJefe) && (
+          {/* Gerencial */}
+          {usuario?.rol === 'ADMIN_GENERAL' && (
             <>
-              <div style={{ fontSize: '11px', color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '1.5px', margin: '2rem 0 1rem 0', fontWeight: '700' }}>Sistema</div>
-              <div style={navItemStyle('bitacora')} onClick={() => navigate('/bitacora')}
-                   onMouseEnter={(e) => { if (!location.pathname.includes('bitacora')) { e.currentTarget.style.backgroundColor = '#f1f5f9'; e.currentTarget.style.color = '#0f172a'; } }}
-                   onMouseLeave={(e) => { if (!location.pathname.includes('bitacora')) { e.currentTarget.style.backgroundColor = 'transparent'; e.currentTarget.style.color = '#475569'; } }}
+              <div style={{ fontSize: '11px', color: '#64748b', textTransform: 'uppercase', letterSpacing: '1.5px', margin: '2rem 0 1rem 0', fontWeight: '700' }}>Dirección</div>
+              <div style={navItemStyle('directora')} onClick={() => navigate('/directora')}
+                   onMouseEnter={(e) => { if (!location.pathname.includes('directora')) { e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.05)'; e.currentTarget.style.color = '#e2e8f0'; } }}
+                   onMouseLeave={(e) => { if (!location.pathname.includes('directora')) { e.currentTarget.style.backgroundColor = 'transparent'; e.currentTarget.style.color = '#94a3b8'; } }}
               >
-                <ShieldAlert size={20} style={{ marginRight: '1rem' }}/> Bitácora {(usuario?.rol !== 'ADMIN_GENERAL' && usuario?.rol !== 'DIRECCION') ? 'Departamental' : ''}
+                <LayoutDashboard size={20} style={{ marginRight: '1rem' }}/> Panel Ejecutivo
+              </div>
+              <div style={navItemStyle('auditoria')} onClick={() => navigate('/auditoria')}
+                   onMouseEnter={(e) => { if (!location.pathname.includes('auditoria')) { e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.05)'; e.currentTarget.style.color = '#e2e8f0'; } }}
+                   onMouseLeave={(e) => { if (!location.pathname.includes('auditoria')) { e.currentTarget.style.backgroundColor = 'transparent'; e.currentTarget.style.color = '#94a3b8'; } }}
+              >
+                <ShieldAlert size={20} style={{ marginRight: '1rem' }}/> Auditoría
+              </div>
+              <div style={navItemStyle('exportaciones')} onClick={() => navigate('/exportaciones')}
+                   onMouseEnter={(e) => { if (!location.pathname.includes('exportaciones')) { e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.05)'; e.currentTarget.style.color = '#e2e8f0'; } }}
+                   onMouseLeave={(e) => { if (!location.pathname.includes('exportaciones')) { e.currentTarget.style.backgroundColor = 'transparent'; e.currentTarget.style.color = '#94a3b8'; } }}
+              >
+                <FileOutput size={20} style={{ marginRight: '1rem' }}/> Exportar Datos
+              </div>
+              <div style={navItemStyle('usuarios')} onClick={() => navigate('/usuarios')}
+                   onMouseEnter={(e) => { if (!location.pathname.includes('usuarios')) { e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.05)'; e.currentTarget.style.color = '#e2e8f0'; } }}
+                   onMouseLeave={(e) => { if (!location.pathname.includes('usuarios')) { e.currentTarget.style.backgroundColor = 'transparent'; e.currentTarget.style.color = '#94a3b8'; } }}
+              >
+                <UserCog size={20} style={{ marginRight: '1rem' }}/> Gestión de Usuarios
               </div>
             </>
           )}

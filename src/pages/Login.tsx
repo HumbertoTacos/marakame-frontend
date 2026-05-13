@@ -24,19 +24,27 @@ export function Login() {
         // Guardamos la sesión en Zustand
         setAuth(usuario, data.data.accessToken);
 
-        // --- LÓGICA DE REDIRECCIÓN POR ROL ---
-        const rol = usuario.rol?.toUpperCase(); // Convertimos a mayúsculas para evitar errores de dedo
+        // --- LÓGICA DE REDIRECCIÓN POR ROL (mantén en sincronía con Layout.getHomeRoute) ---
+        const rol = usuario.rol?.toUpperCase();
 
-        if (rol === 'RRHH_FINANZAS' || rol === 'RECURSOS_HUMANOS') {
+        if (rol === 'ADMIN_GENERAL' || rol === 'DIRECCION_GENERAL') {
+          navigate('/directora');
+        } else if (rol === 'RRHH_FINANZAS' || rol === 'RECURSOS_HUMANOS') {
           navigate('/nominas');
         } else if (rol === 'RECURSOS_FINANCIEROS') {
           navigate('/finanzas');
         } else if (rol === 'JEFE_ADMINISTRATIVO') {
           navigate('/administracion');
+        } else if (rol === 'JEFE_MEDICO') {
+          navigate('/medico/dashboard');
+        } else if (rol === 'JEFE_CLINICO') {
+          navigate('/jefe-clinico/dashboard');
+        } else if (rol === 'JEFE_ADMISIONES') {
+          navigate('/jefe-admisiones/dashboard');
         } else if (rol === 'ADMISIONES') {
           navigate('/admisiones');
         } else {
-          navigate('/dashboard'); // Ruta por defecto para ADMIN y otros
+          navigate('/dashboard');
         }
       }
     } catch (err: unknown) {
