@@ -16,9 +16,16 @@ import {
   MapPin,
   ShieldCheck,
   ArrowLeft,
+  AlertTriangle,
+  Eye,
+  Pencil,
+  Printer,
+  CheckCircle2,
 } from 'lucide-react';
 import { useNavigate, useParams } from 'react-router-dom';
 import apiClient from '../../services/api';
+import { useAuthStore } from '../../stores/authStore';
+import { generarExpedientePDF } from '../../utils/expedientePDF';
 
 import SeccionHistoriaClinica from '../../components/medico/SeccionHistoriaClinica';
 import SeccionMedica from '../../components/medico/SeccionMedica';
@@ -41,7 +48,7 @@ type TabId =
   | 'seguimiento';
 
 const TABS: { id: TabId; label: string; icon: React.ElementType; color: string }[] = [
-  { id: 'preAdmision',  label: 'Historia Médica',  icon: BookOpen,       color: '#0891b2' },
+  { id: 'preAdmision',  label: 'Resumen Médico',   icon: BookOpen,       color: '#0891b2' },
   { id: 'areaMedica',   label: 'Área Médica',       icon: Stethoscope,    color: '#10b981' },
   { id: 'tratamientos', label: 'Tratamientos',      icon: Pill,           color: '#d97706' },
   { id: 'evaluaciones', label: 'Evaluaciones',      icon: ClipboardCheck, color: '#f59e0b' },
@@ -56,10 +63,18 @@ const TABS: { id: TabId; label: string; icon: React.ElementType; color: string }
 const ExpedienteDigitalPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const { usuario } = useAuthStore();
   const [activeTab, setActiveTab] = useState<TabId>('preAdmision');
   const [expedienteRaw, setExpedienteRaw] = useState<any>(null);
   const [pacienteLocal, setPacienteLocal] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+
+  const handleImprimirPDF = () => {
+    if (!pacienteLocal && !expedienteRaw?.paciente) return;
+    if (!expedienteRaw?.historiaClinica) return;
+    const pac = expedienteRaw?.paciente ?? pacienteLocal;
+    generarExpedientePDF(pac, expedienteRaw.historiaClinica, usuario?.nombre ?? 'Médico', expedienteRaw.id);
+  };
 
   const fetchExpediente = async () => {
     try {
@@ -96,6 +111,7 @@ const ExpedienteDigitalPage: React.FC = () => {
     </div>
   );
   const activeColor = TABS.find(t => t.id === activeTab)?.color ?? '#0891b2';
+  const historiaGenerada = !!(expedienteRaw?.historiaClinica);
 
   return (
     <div style={{ padding: '2rem', maxWidth: '1600px', margin: '0 auto' }}>
@@ -155,6 +171,97 @@ const ExpedienteDigitalPage: React.FC = () => {
           <ArrowLeft size={18} /> Volver
         </button>
       </div>
+
+      {/* Banner condicional: Expediente Clínico Inicial */}
+      {!historiaGenerada ? (
+        <div style={{
+          backgroundColor: '#fffbeb', border: '1.5px solid #fcd34d',
+          borderRadius: '20px', padding: '1.25rem 1.75rem',
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+          gap: '1rem', flexWrap: 'wrap',
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.85rem' }}>
+            <div style={{ backgroundColor: '#fef3c7', padding: '0.6rem', borderRadius: '12px', color: '#d97706', flexShrink: 0 }}>
+              <AlertTriangle size={20} />
+            </div>
+            <div>
+              <p style={{ margin: 0, fontWeight: '800', color: '#92400e', fontSize: '14px' }}>
+                Historia Clínica Inicial pendiente
+              </p>
+              <p style={{ margin: 0, fontSize: '12px', color: '#b45309', fontWeight: '600' }}>
+                Para acceder a todas las secciones del expediente es necesario generar la historia clínica inicial del paciente.
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={() => navigate(`/medica/historia-clinica/${paciente.id}`)}
+            style={{
+              padding: '0.7rem 1.4rem', borderRadius: '14px', border: 'none',
+              background: 'linear-gradient(135deg,#d97706,#b45309)',
+              color: 'white', fontWeight: '800', cursor: 'pointer', fontSize: '13px',
+              display: 'flex', alignItems: 'center', gap: '0.5rem', flexShrink: 0,
+            }}
+          >
+            <FileText size={15} /> Generar Historia Clínica Inicial
+          </button>
+        </div>
+      ) : (
+        <div style={{
+          backgroundColor: '#f0fdf4', border: '1.5px solid #86efac',
+          borderRadius: '20px', padding: '1.25rem 1.75rem',
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+          gap: '1rem', flexWrap: 'wrap',
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.85rem' }}>
+            <div style={{ backgroundColor: '#dcfce7', padding: '0.6rem', borderRadius: '12px', color: '#16a34a', flexShrink: 0 }}>
+              <CheckCircle2 size={20} />
+            </div>
+            <div>
+              <p style={{ margin: 0, fontWeight: '800', color: '#166534', fontSize: '15px' }}>
+                Expediente Clínico Inicial
+              </p>
+              <p style={{ margin: 0, fontSize: '12px', color: '#15803d', fontWeight: '600' }}>
+                Historia clínica generada y disponible para consulta e impresión.
+              </p>
+            </div>
+          </div>
+          <div style={{ display: 'flex', gap: '0.65rem', flexShrink: 0 }}>
+            <button
+              onClick={() => navigate(`/medica/historia-clinica/${paciente.id}`)}
+              style={{
+                padding: '0.6rem 1.1rem', borderRadius: '12px',
+                border: '1.5px solid #86efac', background: 'white',
+                color: '#166534', fontWeight: '700', cursor: 'pointer', fontSize: '13px',
+                display: 'flex', alignItems: 'center', gap: '0.45rem',
+              }}
+            >
+              <Eye size={14} /> Ver
+            </button>
+            <button
+              onClick={() => navigate(`/medica/historia-clinica/${paciente.id}`)}
+              style={{
+                padding: '0.6rem 1.1rem', borderRadius: '12px',
+                border: '1.5px solid #6ee7b7', background: '#f0fdf4',
+                color: '#047857', fontWeight: '700', cursor: 'pointer', fontSize: '13px',
+                display: 'flex', alignItems: 'center', gap: '0.45rem',
+              }}
+            >
+              <Pencil size={14} /> Editar
+            </button>
+            <button
+              onClick={handleImprimirPDF}
+              style={{
+                padding: '0.6rem 1.2rem', borderRadius: '12px', border: 'none',
+                background: 'linear-gradient(135deg,#16a34a,#15803d)',
+                color: 'white', fontWeight: '800', cursor: 'pointer', fontSize: '13px',
+                display: 'flex', alignItems: 'center', gap: '0.45rem',
+              }}
+            >
+              <Printer size={14} /> Imprimir PDF
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Navegación de pestañas */}
       <div style={{
@@ -229,9 +336,13 @@ const ExpedienteDigitalPage: React.FC = () => {
           <SeccionSesiones expedienteId={expedienteRaw.id} tipo="SEGUIMIENTO" />
         )}
 
-        {!expedienteRaw && ['areaMedica','tratamientos','nutricion','psicologia','consejeria','familia','seguimiento'].includes(activeTab) && (
-          <div style={{ padding: '3rem', textAlign: 'center', color: '#94a3b8', border: '1px dashed #e2e8f0', borderRadius: '20px' }}>
-            El expediente clínico está siendo generado. Recarga la página en un momento.
+        {!historiaGenerada && ['areaMedica','tratamientos','nutricion','psicologia','consejeria','familia','seguimiento'].includes(activeTab) && (
+          <div style={{ padding: '3rem', textAlign: 'center', color: '#94a3b8', border: '1px dashed #fcd34d', borderRadius: '20px', backgroundColor: '#fffbeb' }}>
+            <AlertTriangle size={32} color="#d97706" style={{ marginBottom: '0.75rem' }} />
+            <p style={{ fontWeight: '700', color: '#92400e', margin: '0 0 0.5rem' }}>Historia Clínica Inicial no generada</p>
+            <p style={{ fontSize: '13px', color: '#b45309', margin: 0 }}>
+              Genera la historia clínica inicial para desbloquear esta sección.
+            </p>
           </div>
         )}
       </div>

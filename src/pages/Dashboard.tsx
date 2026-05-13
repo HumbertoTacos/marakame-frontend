@@ -73,14 +73,18 @@ const SectionHeader = ({ icon: Icon, label, color }: { icon: React.ElementType; 
 );
 
 const WELCOME_SUBTITLES: Record<string, string> = {
-  NUTRICION:     'Revisa el estado nutricional y los planes de los pacientes internados.',
-  PSICOLOGIA:    'Gestiona las sesiones clínicas de psicología, consejería y familia.',
-  AREA_MEDICA:   'Monitorea el estado clínico y la evolución de los pacientes.',
-  ENFERMERIA:    'Gestiona los signos vitales y cuidados de los pacientes.',
-  ADMISIONES:    'Administra el proceso de admisión de nuevos candidatos.',
-  ALMACEN:       'Controla el inventario y los suministros de la clínica.',
-  RRHH_FINANZAS: 'Gestiona nóminas, compras y operaciones financieras.',
-  ADMIN_GENERAL: 'Panel de control operativo completo de Marakame.',
+  NUTRICION:         'Revisa el estado nutricional y los planes de los pacientes internados.',
+  PSICOLOGIA:        'Gestiona las sesiones clínicas de psicología, consejería y familia.',
+  AREA_MEDICA:       'Monitorea el estado clínico y la evolución de los pacientes.',
+  ENFERMERIA:        'Gestiona los signos vitales y cuidados de los pacientes.',
+  ADMISIONES:        'Administra el proceso de admisión de nuevos candidatos.',
+  JEFE_ADMISIONES:   'Supervisa el flujo de ingresos y valoración de candidatos.',
+  ALMACEN:           'Controla el inventario y los suministros de la clínica.',
+  RRHH_FINANZAS:     'Gestiona nóminas, compras y operaciones financieras.',
+  ADMIN_GENERAL:     'Panel de control operativo completo de Marakame.',
+  DIRECCION_GENERAL: 'Visión estratégica y control total del centro Marakame.',
+  JEFE_MEDICO:       'Supervisa la operación clínica y médica del centro.',
+  JEFE_CLINICO:      'Supervisa la atención terapéutica y clínica de los pacientes.',
 };
 
 export function Dashboard() {
@@ -98,11 +102,11 @@ export function Dashboard() {
   }
 
   const rol = usuario?.rol ?? '';
-  const esAdmin      = rol === 'ADMIN_GENERAL';
-  const esMedico     = ['AREA_MEDICA', 'NUTRICION', 'PSICOLOGIA', 'ENFERMERIA'].includes(rol);
+  const esAdmin      = ['ADMIN_GENERAL', 'DIRECCION_GENERAL', 'DIRECCION'].includes(rol);
+  const esMedico     = ['AREA_MEDICA', 'NUTRICION', 'PSICOLOGIA', 'ENFERMERIA', 'JEFE_MEDICO', 'JEFE_CLINICO'].includes(rol);
   const esNutricion  = rol === 'NUTRICION';
   const esPsicologia = rol === 'PSICOLOGIA';
-  const esOperativo  = ['ALMACEN', 'RRHH_FINANZAS', 'ADMISIONES'].includes(rol);
+  const esOperativo  = ['ALMACEN', 'RRHH_FINANZAS', 'ADMISIONES', 'JEFE_ADMISIONES', 'JEFE_ADMINISTRATIVO'].includes(rol);
 
   const subtitle = WELCOME_SUBTITLES[rol] ?? 'Te presentamos el resumen operativo de Marakame para hoy.';
 
@@ -113,30 +117,31 @@ export function Dashboard() {
       <div style={{
         display: 'flex', alignItems: 'center', marginBottom: '3rem',
         padding: '2.5rem',
-        background: 'linear-gradient(135deg, #1e293b 0%, #0f172a 100%)',
-        borderRadius: 'var(--radius-xl)', color: 'white',
-        boxShadow: '0 20px 25px -5px rgba(0,0,0,0.1)',
+        backgroundColor: '#ffffff',
+        borderRadius: 'var(--radius-xl)', color: '#0f172a',
+        boxShadow: '0 4px 20px rgba(0, 0, 0, 0.04)',
+        border: '1px solid #f1f5f9',
         position: 'relative', overflow: 'hidden'
       }}>
-        <div style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, background: 'url("https://www.transparenttextures.com/patterns/cubes.png")', opacity: 0.05 }} />
+        <div style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, background: 'radial-gradient(circle, #fef2f2 0%, transparent 70%)', opacity: 0.5 }} />
         <div style={{ position: 'relative', zIndex: 1, display: 'flex', alignItems: 'center', width: '100%' }}>
-          <div style={{ background: 'rgba(255,255,255,0.1)', backgroundColor: 'white', padding: '1.25rem', borderRadius: '20px', marginRight: '1.5rem' }}>
-            <LayoutDashboard size={40} color="#60a5fa" />
+          <div style={{ backgroundColor: '#fef2f2', padding: '1.25rem', borderRadius: '20px', border: '1px solid #fee2e2', marginRight: '1.5rem' }}>
+            <LayoutDashboard size={40} color="#dc2626" />
           </div>
           <div>
-            <h1 style={{ fontSize: '32px', fontWeight: '800', color: '#ffffff', margin: 0, letterSpacing: '-0.5px' }}>
+            <h1 style={{ fontSize: '32px', fontWeight: '800', color: '#0f172a', margin: 0, letterSpacing: '-0.5px' }}>
               Hola, {usuario?.nombre}
             </h1>
-            <p style={{ color: '#94a3b8', margin: 0, marginTop: '0.4rem', fontSize: '16px', fontWeight: '500' }}>
+            <p style={{ color: '#64748b', margin: 0, marginTop: '0.4rem', fontSize: '16px', fontWeight: '500' }}>
               {subtitle}
             </p>
           </div>
           <div style={{ marginLeft: 'auto', textAlign: 'right' }}>
             <div style={{ fontSize: '14px', color: '#64748b', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '1px' }}>Rol Actual</div>
             <div style={{
-              fontSize: '13px', background: 'rgba(96,165,250,0.2)', color: '#60a5fa',
+              fontSize: '13px', background: '#fef2f2', color: '#dc2626',
               padding: '0.4rem 1rem', borderRadius: '100px', display: 'inline-block',
-              marginTop: '0.5rem', fontWeight: '700', border: '1px solid rgba(96,165,250,0.3)'
+              marginTop: '0.5rem', fontWeight: '700', border: '1px solid #fee2e2'
             }}>
               {rol.replace('_', ' ')}
             </div>

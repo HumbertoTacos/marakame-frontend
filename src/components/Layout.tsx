@@ -1,6 +1,6 @@
 import { Outlet, useNavigate, useLocation } from 'react-router-dom';
-import { LogOut, Search, Bell, HeartPulse, Stethoscope, PackageOpen, ShoppingCart, Banknote, ShieldAlert, FileOutput, ChevronRight, Users, Clock, ClipboardList, LayoutDashboard, Droplets, FlaskConical, UserCog, ClipboardCheck, Wallet, CalendarCheck, Building2, ShieldCheck } from 'lucide-react';
-import { useState, useEffect } from 'react';
+import { LogOut, Search, Bell, HeartPulse, Stethoscope, PackageOpen, ShoppingCart, Banknote, ShieldAlert, FileOutput, ChevronRight, Users, Clock, ClipboardList, LayoutDashboard, Droplets, FlaskConical, UserCog, ClipboardCheck, Wallet, CalendarCheck } from 'lucide-react';
+import { useState, useEffect, useCallback } from 'react';
 import { useAuthStore } from '../stores/authStore';
 import { notificacionService, type Notificacion } from '../services/notificacion.service';
 import apiClient from '../services/api';
@@ -16,7 +16,7 @@ export function Layout() {
   const [notificaciones, setNotificaciones] = useState<Notificacion[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
 
-  const fetchNotificaciones = async () => {
+  const fetchNotificaciones = useCallback(async () => {
     try {
       const res = await notificacionService.getMisNotificaciones();
       if (res.success) {
@@ -26,33 +26,55 @@ export function Layout() {
     } catch (err) {
       console.error('Error fetching notifications:', err);
     }
-  };
+  }, []);
 
-  // Heartbeat: actualiza ultimoAcceso en el servidor para el usuario activo
   const pingUltimoAcceso = async () => {
     try { await apiClient.get('/auth/me'); } catch { /* silencioso */ }
   };
 
   useEffect(() => {
     fetchNotificaciones();
-    pingUltimoAcceso(); // Al montar el Layout, registrar actividad inmediatamente
+    pingUltimoAcceso();
 
-    const intervalNotif  = setInterval(fetchNotificaciones, 60000);   // cada 60s
-    const intervalPing   = setInterval(pingUltimoAcceso,   5 * 60000); // cada 5 min
+    const intervalNotif  = setInterval(fetchNotificaciones, 60000);
+    const intervalPing   = setInterval(pingUltimoAcceso,   5 * 60000);
+
+    const onRefresh = () => { fetchNotificaciones(); };
+    window.addEventListener('notif-refresh', onRefresh);
+
     return () => {
       clearInterval(intervalNotif);
       clearInterval(intervalPing);
+      window.removeEventListener('notif-refresh', onRefresh);
     };
-  }, []);
+  }, [fetchNotificaciones]);
 
   const handleMarcarLeida = async (id: number) => {
-    await notificacionService.marcarComoLeida(id);
-    fetchNotificaciones();
+    // Optimistic Update: Actualizamos localmente de inmediato
+    setNotificaciones(prev => prev.map(n => n.id === id ? { ...n, leida: true } : n));
+    setUnreadCount(prev => Math.max(0, prev - 1));
+
+    // Llamada asíncrona en segundo plano
+    try {
+      await notificacionService.marcarComoLeida(id);
+    } catch (err) {
+      console.error('Error marking notification as read:', err);
+      // Opcionalmente: recargar si falla para sincronizar estado real
+      fetchNotificaciones();
+    }
   };
 
   const handleMarcarTodasLeidas = async () => {
-    await notificacionService.marcarTodasComoLeidas();
-    fetchNotificaciones();
+    // Optimistic Update: Todo leído localmente
+    setNotificaciones(prev => prev.map(n => ({ ...n, leida: true })));
+    setUnreadCount(0);
+
+    try {
+      await notificacionService.marcarTodasComoLeidas();
+    } catch (err) {
+      console.error('Error marking all notifications as read:', err);
+      fetchNotificaciones();
+    }
   };
 
   const handleLogout = () => {
@@ -63,231 +85,191 @@ export function Layout() {
   const getHomeRoute = () => {
     const rol = usuario?.rol?.toUpperCase();
     if (rol === 'ADMIN_GENERAL') return '/directora';
-    if (rol === 'RRHH_FINANZAS') return '/nominas';
+    if (rol === 'DIRECCION_GENERAL') return '/directora';
+    if (rol === 'RRHH_FINANZAS' || rol === 'RECURSOS_HUMANOS') return '/nominas';
+    if (rol === 'RECURSOS_FINANCIEROS') return '/finanzas';
+    if (rol === 'JEFE_ADMINISTRATIVO') return '/administracion';
+    if (rol === 'JEFE_MEDICO') return '/medico/dashboard';
+    if (rol === 'JEFE_CLINICO') return '/jefe-clinico/dashboard';
+    if (rol === 'JEFE_ADMISIONES') return '/jefe-admisiones/dashboard';
     if (rol === 'ADMISIONES') return '/admisiones/dashboard';
     return '/dashboard';
   };
 
-  const navItemStyle = (path: string) => {
+  const getNavItemClass = (path: string) => {
     const isActive = location.pathname.includes(path);
-    return {
-      display: 'flex',
-      alignItems: 'center',
-      padding: '0.875rem 1.25rem',
-      color: isActive ? '#ffffff' : '#94a3b8',
-      backgroundColor: isActive ? 'var(--primary)' : 'transparent',
-      borderRadius: '12px',
-      cursor: 'pointer',
-      marginBottom: '0.5rem',
-      fontWeight: isActive ? '600' as const : '500' as const,
-      transition: 'all 0.25s ease',
-      boxShadow: isActive ? '0 4px 12px rgba(59, 130, 246, 0.3)' : 'none',
-      transform: isActive ? 'translateY(-1px)' : 'translateY(0)',
-    };
+    return `nav-item ${isActive ? 'active' : ''}`;
   };
 
   return (
-    <div style={{ display: 'flex', height: '100vh', backgroundColor: 'var(--bg)', background: 'radial-gradient(at top left, #f8fafc 0%, #f1f5f9 100%)', overflow: 'hidden' }}>
+    <div className="layout-container">
       {/* Navigation Sidebar */}
-      <aside style={{ 
-        width: '280px', 
-        background: 'linear-gradient(180deg, #0f172a 0%, #1e293b 100%)', 
-        color: 'white', 
-        display: 'flex', 
-        flexDirection: 'column',
-        boxShadow: '4px 0 24px rgba(0,0,0,0.1)',
-        zIndex: 20
-      }}>
-        <div
-          onClick={() => navigate(getHomeRoute())}
-          style={{ padding: '1.5rem 1.5rem', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}
-        >
+      <aside className="sidebar">
+        <div className="sidebar-logo" onClick={() => navigate(getHomeRoute())}>
           <img src={marakameLogo} alt="Marakame" style={{ width: '100%', maxWidth: '200px', objectFit: 'contain' }} />
         </div>
         
-        <div style={{ padding: '0 1.5rem 1.5rem', flex: 1, overflowY: 'auto' }} className="custom-scrollbar">
+        <div className="sidebar-content custom-scrollbar">
           
-          {/* Módulo de Admisiones */}
+          {/* Operación Diaria */}
+          {(['ADMIN_GENERAL', 'RRHH_FINANZAS', 'RECURSOS_HUMANOS', 'JEFE_ADMINISTRATIVO', 'JEFE_MEDICO', 'JEFE_CLINICO', 'JEFE_ADMISIONES'].includes(usuario?.rol || '')) && (
+            <>
+              <div className="sidebar-section-title">Operación Diaria</div>
+              <div className={getNavItemClass('asistencias')} onClick={() => navigate('/asistencias')}>
+                <CalendarCheck size={20} style={{ marginRight: '1rem' }}/>
+                Justificaciones
+              </div>
+            </>
+          )}
+
+          {/* Admisiones */}
           {(usuario?.rol === 'ADMISIONES' || usuario?.rol === 'ADMIN_GENERAL') && (
             <>
-              <div style={{ fontSize: '11px', color: '#64748b', textTransform: 'uppercase', letterSpacing: '1.5px', margin: '1rem 0 1rem 0', fontWeight: '700' }}>Admisiones</div>
-              <div style={navItemStyle('admisiones/dashboard')} onClick={() => navigate('/admisiones/dashboard')}
-                   onMouseEnter={(e) => { if (!location.pathname.includes('admisiones/dashboard')) { e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.05)'; e.currentTarget.style.color = '#e2e8f0'; } }}
-                   onMouseLeave={(e) => { if (!location.pathname.includes('admisiones/dashboard')) { e.currentTarget.style.backgroundColor = 'transparent'; e.currentTarget.style.color = '#94a3b8'; } }}
-              >
+              <div className="sidebar-section-title">Admisiones</div>
+              <div className={getNavItemClass('admisiones/dashboard')} onClick={() => navigate('/admisiones/dashboard')}>
                 <Users size={20} style={{ marginRight: '1rem' }}/> Dashboard Admisión
               </div>
-              <div style={navItemStyle('admisiones/primer-contacto')} onClick={() => navigate('/admisiones/primer-contacto')}
-                   onMouseEnter={(e) => { if (!location.pathname.includes('admisiones/primer-contacto')) { e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.05)'; e.currentTarget.style.color = '#e2e8f0'; } }}
-                   onMouseLeave={(e) => { if (!location.pathname.includes('admisiones/primer-contacto')) { e.currentTarget.style.backgroundColor = 'transparent'; e.currentTarget.style.color = '#94a3b8'; } }}
-              >
+              <div className={getNavItemClass('admisiones/primer-contacto')} onClick={() => navigate('/admisiones/primer-contacto')}>
                 <ClipboardList size={20} style={{ marginRight: '1rem' }}/> Primer Contacto
               </div>
-              <div style={navItemStyle('admisiones/seguimiento')} onClick={() => navigate('/admisiones/seguimiento')}
-                   onMouseEnter={(e) => { if (!location.pathname.includes('admisiones/seguimiento')) { e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.05)'; e.currentTarget.style.color = '#e2e8f0'; } }}
-                   onMouseLeave={(e) => { if (!location.pathname.includes('admisiones/seguimiento')) { e.currentTarget.style.backgroundColor = 'transparent'; e.currentTarget.style.color = '#94a3b8'; } }}
-              >
+              <div className={getNavItemClass('admisiones/seguimiento')} onClick={() => navigate('/admisiones/seguimiento')}>
                 <Clock size={20} style={{ marginRight: '1rem' }}/> Seguimiento de Prospectos
               </div>
-
-              <div style={navItemStyle('admisiones/areas')} onClick={() => navigate('/admisiones/areas')}
-                   onMouseEnter={(e) => { if (!location.pathname.includes('admisiones/areas')) { e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.05)'; e.currentTarget.style.color = '#e2e8f0'; } }}
-                   onMouseLeave={(e) => { if (!location.pathname.includes('admisiones/areas')) { e.currentTarget.style.backgroundColor = 'transparent'; e.currentTarget.style.color = '#94a3b8'; } }}
-              >
+              <div className={getNavItemClass('admisiones/areas')} onClick={() => navigate('/admisiones/areas')}>
                 <PackageOpen size={20} style={{ marginRight: '1rem' }}/> Mapa de Áreas
               </div>
             </>
           )}
 
-          {/* Módulo Médico — visible para médico, jefe médico, staff clínico y admin */}
-          {(['AREA_MEDICA', 'JEFE_MEDICO', 'ENFERMERIA', 'PSICOLOGIA', 'NUTRICION', 'ADMIN_GENERAL'].includes(usuario?.rol || '')) && (
+          {/* Área Médica */}
+          {(['AREA_MEDICA', 'ENFERMERIA', 'PSICOLOGIA', 'NUTRICION', 'ADMIN_GENERAL'].includes(usuario?.rol || '')) && (
             <>
-              <div style={{ fontSize: '11px', color: '#64748b', textTransform: 'uppercase', letterSpacing: '1.5px', margin: '2rem 0 1rem 0', fontWeight: '700' }}>Área Médica</div>
-              <div style={navItemStyle('medico/dashboard')} onClick={() => navigate('/medico/dashboard')}
-                   onMouseEnter={(e) => { if (!location.pathname.includes('medico/dashboard')) { e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.05)'; e.currentTarget.style.color = '#e2e8f0'; } }}
-                   onMouseLeave={(e) => { if (!location.pathname.includes('medico/dashboard')) { e.currentTarget.style.backgroundColor = 'transparent'; e.currentTarget.style.color = '#94a3b8'; } }}
-              >
+              <div className="sidebar-section-title">Área Médica</div>
+              <div className={getNavItemClass('medico/dashboard')} onClick={() => navigate('/medico/dashboard')}>
                 <LayoutDashboard size={20} style={{ marginRight: '1rem' }}/> Inicio
               </div>
-              <div style={navItemStyle('medica/pacientes')} onClick={() => navigate('/medica/pacientes')}
-                   onMouseEnter={(e) => { if (!location.pathname.includes('medica/pacientes')) { e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.05)'; e.currentTarget.style.color = '#e2e8f0'; } }}
-                   onMouseLeave={(e) => { if (!location.pathname.includes('medica/pacientes')) { e.currentTarget.style.backgroundColor = 'transparent'; e.currentTarget.style.color = '#94a3b8'; } }}
-              >
+              <div className={getNavItemClass('medica/pacientes')} onClick={() => navigate('/medica/pacientes')}>
                 <Stethoscope size={20} style={{ marginRight: '1rem' }}/> Pacientes
               </div>
-              <div style={navItemStyle('medica/desintoxicacion')} onClick={() => navigate('/medica/desintoxicacion')}
-                   onMouseEnter={(e) => { if (!location.pathname.includes('medica/desintoxicacion')) { e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.05)'; e.currentTarget.style.color = '#e2e8f0'; } }}
-                   onMouseLeave={(e) => { if (!location.pathname.includes('medica/desintoxicacion')) { e.currentTarget.style.backgroundColor = 'transparent'; e.currentTarget.style.color = '#94a3b8'; } }}
-              >
+              <div className={getNavItemClass('medica/desintoxicacion')} onClick={() => navigate('/medica/desintoxicacion')}>
                 <Droplets size={20} style={{ marginRight: '1rem' }}/> Desintoxicación
               </div>
-              <div style={navItemStyle('medica/laboratorio')} onClick={() => navigate('/medica/laboratorio')}
-                   onMouseEnter={(e) => { if (!location.pathname.includes('medica/laboratorio')) { e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.05)'; e.currentTarget.style.color = '#e2e8f0'; } }}
-                   onMouseLeave={(e) => { if (!location.pathname.includes('medica/laboratorio')) { e.currentTarget.style.backgroundColor = 'transparent'; e.currentTarget.style.color = '#94a3b8'; } }}
-              >
+              <div className={getNavItemClass('medica/laboratorio')} onClick={() => navigate('/medica/laboratorio')}>
                 <FlaskConical size={20} style={{ marginRight: '1rem' }}/> Laboratorio
               </div>
             </>
           )}
 
-          {/* Jefatura — visible solo para jefe médico y admin */}
+          {/* Jefaturas */}
           {(['JEFE_MEDICO', 'ADMIN_GENERAL'].includes(usuario?.rol || '')) && (
             <>
-              <div style={{ fontSize: '11px', color: '#64748b', textTransform: 'uppercase', letterSpacing: '1.5px', margin: '2rem 0 1rem 0', fontWeight: '700' }}>Jefatura</div>
-              <div style={navItemStyle('jefatura/personal')} onClick={() => navigate('/jefatura/personal')}
-                   onMouseEnter={(e) => { if (!location.pathname.includes('jefatura/personal')) { e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.05)'; e.currentTarget.style.color = '#e2e8f0'; } }}
-                   onMouseLeave={(e) => { if (!location.pathname.includes('jefatura/personal')) { e.currentTarget.style.backgroundColor = 'transparent'; e.currentTarget.style.color = '#94a3b8'; } }}
-              >
+              <div className="sidebar-section-title">Jefatura Médica</div>
+              {usuario?.rol === 'JEFE_MEDICO' && (
+                <div className={getNavItemClass('medico/dashboard')} onClick={() => navigate('/medico/dashboard')}>
+                  <LayoutDashboard size={20} style={{ marginRight: '1rem' }}/> Panel Médico
+                </div>
+              )}
+              <div className={getNavItemClass('jefatura/personal')} onClick={() => navigate('/jefatura/personal')}>
                 <UserCog size={20} style={{ marginRight: '1rem' }}/> Personal
               </div>
-              <div style={navItemStyle('jefatura/solicitudes')} onClick={() => navigate('/jefatura/solicitudes')}
-                   onMouseEnter={(e) => { if (!location.pathname.includes('jefatura/solicitudes')) { e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.05)'; e.currentTarget.style.color = '#e2e8f0'; } }}
-                   onMouseLeave={(e) => { if (!location.pathname.includes('jefatura/solicitudes')) { e.currentTarget.style.backgroundColor = 'transparent'; e.currentTarget.style.color = '#94a3b8'; } }}
-              >
-                <ClipboardCheck size={20} style={{ marginRight: '1rem' }}/> Solicitudes
+              {usuario?.rol === 'ADMIN_GENERAL' && (
+                <div className={getNavItemClass('jefatura/solicitudes')} onClick={() => navigate('/jefatura/solicitudes')}>
+                  <ClipboardCheck size={20} style={{ marginRight: '1rem' }}/> Solicitudes
+                </div>
+              )}
+            </>
+          )}
+
+          {(['JEFE_CLINICO', 'ADMIN_GENERAL'].includes(usuario?.rol || '')) && (
+            <>
+              <div className="sidebar-section-title">Jefatura Clínica</div>
+              <div className={getNavItemClass('jefe-clinico/dashboard')} onClick={() => navigate('/jefe-clinico/dashboard')}>
+                <LayoutDashboard size={20} style={{ marginRight: '1rem' }}/> Panel Clínico
               </div>
             </>
           )}
 
-          {/* Módulo Operativo - Almacén */}
+          {(['JEFE_ADMISIONES', 'ADMIN_GENERAL'].includes(usuario?.rol || '')) && (
+            <>
+              <div className="sidebar-section-title">Jefatura de Admisiones</div>
+              <div className={getNavItemClass('jefe-admisiones/dashboard')} onClick={() => navigate('/jefe-admisiones/dashboard')}>
+                <LayoutDashboard size={20} style={{ marginRight: '1rem' }}/> Panel Admisiones
+              </div>
+            </>
+          )}
+
+          {/* Logística */}
           {(usuario?.rol === 'ALMACEN' || usuario?.rol === 'ADMIN_GENERAL') && (
             <>
-              <div style={{ fontSize: '11px', color: '#64748b', textTransform: 'uppercase', letterSpacing: '1.5px', margin: '2rem 0 1rem 0', fontWeight: '700' }}>Logística</div>
-              <div style={navItemStyle('almacen')} onClick={() => navigate('/almacen')}
-                   onMouseEnter={(e) => { if (!location.pathname.includes('almacen')) { e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.05)'; e.currentTarget.style.color = '#e2e8f0'; } }}
-                   onMouseLeave={(e) => { if (!location.pathname.includes('almacen')) { e.currentTarget.style.backgroundColor = 'transparent'; e.currentTarget.style.color = '#94a3b8'; } }}
-              >
+              <div className="sidebar-section-title">Logística</div>
+              <div className={getNavItemClass('almacen')} onClick={() => navigate('/almacen')}>
                 <PackageOpen size={20} style={{ marginRight: '1rem' }}/> Almacén General
               </div>
             </>
           )}
 
-          {/* Módulo Operativo - RRHH y Compras */}
-          {(usuario?.rol === 'RRHH_FINANZAS' || usuario?.rol === 'ADMIN_GENERAL') && (
+          {/* Recursos Humanos */}
+          {(['RRHH_FINANZAS', 'RECURSOS_HUMANOS', 'ADMIN_GENERAL'].includes(usuario?.rol || '')) && (
             <>
-              <div style={{ fontSize: '11px', color: '#64748b', textTransform: 'uppercase', letterSpacing: '1.5px', margin: '2rem 0 1rem 0', fontWeight: '700' }}>Administración</div>
-              
-              <div style={navItemStyle('compras')} onClick={() => navigate('/compras')}
-                  onMouseEnter={(e) => { if (!location.pathname.includes('compras')) { e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.05)'; e.currentTarget.style.color = '#e2e8f0'; } }}
-                  onMouseLeave={(e) => { if (!location.pathname.includes('compras')) { e.currentTarget.style.backgroundColor = 'transparent'; e.currentTarget.style.color = '#94a3b8'; } }}
-              >
+              <div className="sidebar-section-title">Recursos Humanos</div>
+              <div className={getNavItemClass('nominas')} onClick={() => navigate('/nominas')}>
+                <Banknote size={20} style={{ marginRight: '1rem' }}/> Nóminas y Personal
+              </div>
+            </>
+          )}
+
+          {/* Recursos Financieros */}
+          {(['RRHH_FINANZAS', 'RECURSOS_FINANCIEROS', 'ADMIN_GENERAL'].includes(usuario?.rol || '')) && (
+            <>
+              <div className="sidebar-section-title">Recursos Financieros</div>
+              {(['RECURSOS_FINANCIEROS', 'ADMIN_GENERAL'].includes(usuario?.rol || '')) && (
+                <div className={getNavItemClass('finanzas')} onClick={() => navigate('/finanzas')}>
+                  <Banknote size={20} style={{ marginRight: '1rem' }}/> Panel de Finanzas
+                </div>
+              )}
+              <div className={getNavItemClass('compras')} onClick={() => navigate('/compras')}>
                 <ShoppingCart size={20} style={{ marginRight: '1rem' }}/> Control de Compras
               </div>
-
-              {/* RUTA CORREGIDA: Apunta a /nominas para cargar el nuevo Dashboard */}
-              <div style={navItemStyle('pagos')} onClick={() => navigate('/pagos')}
-                  onMouseEnter={(e) => { if (!location.pathname.includes('pagos')) { e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.05)'; e.currentTarget.style.color = '#e2e8f0'; } }}
-                  onMouseLeave={(e) => { if (!location.pathname.includes('pagos')) { e.currentTarget.style.backgroundColor = 'transparent'; e.currentTarget.style.color = '#94a3b8'; } }}
-              >
+              <div className={getNavItemClass('pagos')} onClick={() => navigate('/pagos')}>
                 <Wallet size={20} style={{ marginRight: '1rem' }}/> Pagos de Pacientes
               </div>
-
-              <div style={navItemStyle('proveedores')} onClick={() => navigate('/proveedores')}
-                  onMouseEnter={(e) => { if (!location.pathname.includes('proveedores')) { e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.05)'; e.currentTarget.style.color = '#e2e8f0'; } }}
-                  onMouseLeave={(e) => { if (!location.pathname.includes('proveedores')) { e.currentTarget.style.backgroundColor = 'transparent'; e.currentTarget.style.color = '#94a3b8'; } }}
-              >
-                <Building2 size={20} style={{ marginRight: '1rem' }}/> Catálogo de Proveedores
-              </div>
             </>
           )}
 
-          {/* Jefatura Administrativa: paso intermedio del flujo de nómina antes de Dirección */}
+          {/* Jefatura Administrativa */}
           {(['JEFE_ADMINISTRATIVO', 'ADMIN_GENERAL'].includes(usuario?.rol || '')) && (
             <>
-              <div style={{ fontSize: '11px', color: '#64748b', textTransform: 'uppercase', letterSpacing: '1.5px', margin: '2rem 0 1rem 0', fontWeight: '700' }}>Jefatura Administrativa</div>
-              <div style={navItemStyle('administracion')} onClick={() => navigate('/administracion')}
-                  onMouseEnter={(e) => { if (!location.pathname.includes('administracion')) { e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.05)'; e.currentTarget.style.color = '#e2e8f0'; } }}
-                  onMouseLeave={(e) => { if (!location.pathname.includes('administracion')) { e.currentTarget.style.backgroundColor = 'transparent'; e.currentTarget.style.color = '#94a3b8'; } }}
-              >
-                <ClipboardCheck size={20} style={{ marginRight: '1rem' }}/> Revisión de Pre-Nóminas
+              <div className="sidebar-section-title">Jefatura Administrativa</div>
+              <div className={getNavItemClass('administracion')} onClick={() => navigate('/administracion')}>
+                <ClipboardCheck size={20} style={{ marginRight: '1rem' }}/> Panel Administrativo
               </div>
-              <div style={navItemStyle('nominas')} onClick={() => navigate('/nominas')}
-                  onMouseEnter={(e) => { if (!location.pathname.includes('nominas')) { e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.05)'; e.currentTarget.style.color = '#e2e8f0'; } }}
-                  onMouseLeave={(e) => { if (!location.pathname.includes('nominas')) { e.currentTarget.style.backgroundColor = 'transparent'; e.currentTarget.style.color = '#94a3b8'; } }}
-              >
-                <Banknote size={20} style={{ marginRight: '1rem' }}/> Nóminas y RRHH
-              </div>
-              <div style={navItemStyle('revision-compras')} onClick={() => navigate('/revision-compras')}
-                  onMouseEnter={(e) => { if (!location.pathname.includes('revision-compras')) { e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.05)'; e.currentTarget.style.color = '#e2e8f0'; } }}
-                  onMouseLeave={(e) => { if (!location.pathname.includes('revision-compras')) { e.currentTarget.style.backgroundColor = 'transparent'; e.currentTarget.style.color = '#94a3b8'; } }}
-              >
-                <ShoppingCart size={20} style={{ marginRight: '1rem' }}/> Revisión Adm. de Compras
-              </div>
+              {usuario?.rol === 'ADMIN_GENERAL' && (
+                <div className={getNavItemClass('nominas')} onClick={() => navigate('/nominas')}>
+                  <Banknote size={20} style={{ marginRight: '1rem' }}/> Histórico de Nóminas
+                </div>
+              )}
             </>
           )}
 
-          {/* Gerencial */}
-          {usuario?.rol === 'ADMIN_GENERAL' && (
+          {/* Dirección */}
+          {(usuario?.rol === 'DIRECCION_GENERAL' || usuario?.rol === 'ADMIN_GENERAL') && (
             <>
-              <div style={{ fontSize: '11px', color: '#64748b', textTransform: 'uppercase', letterSpacing: '1.5px', margin: '2rem 0 1rem 0', fontWeight: '700' }}>Dirección</div>
-              <div style={navItemStyle('directora')} onClick={() => navigate('/directora')}
-                   onMouseEnter={(e) => { if (!location.pathname.includes('directora')) { e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.05)'; e.currentTarget.style.color = '#e2e8f0'; } }}
-                   onMouseLeave={(e) => { if (!location.pathname.includes('directora')) { e.currentTarget.style.backgroundColor = 'transparent'; e.currentTarget.style.color = '#94a3b8'; } }}
-              >
+              <div className="sidebar-section-title">Dirección</div>
+              <div className={getNavItemClass('directora')} onClick={() => navigate('/directora')}>
                 <LayoutDashboard size={20} style={{ marginRight: '1rem' }}/> Panel Ejecutivo
               </div>
-              <div style={navItemStyle('autorizacion-compras')} onClick={() => navigate('/autorizacion-compras')}
-                   onMouseEnter={(e) => { if (!location.pathname.includes('autorizacion-compras')) { e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.05)'; e.currentTarget.style.color = '#e2e8f0'; } }}
-                   onMouseLeave={(e) => { if (!location.pathname.includes('autorizacion-compras')) { e.currentTarget.style.backgroundColor = 'transparent'; e.currentTarget.style.color = '#94a3b8'; } }}
-              >
-                <ShieldCheck size={20} style={{ marginRight: '1rem' }}/> Autorización de Compras
-              </div>
-              <div style={navItemStyle('auditoria')} onClick={() => navigate('/auditoria')}
-                   onMouseEnter={(e) => { if (!location.pathname.includes('auditoria')) { e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.05)'; e.currentTarget.style.color = '#e2e8f0'; } }}
-                   onMouseLeave={(e) => { if (!location.pathname.includes('auditoria')) { e.currentTarget.style.backgroundColor = 'transparent'; e.currentTarget.style.color = '#94a3b8'; } }}
-              >
+              {usuario?.rol === 'DIRECCION_GENERAL' && (
+                <div className={getNavItemClass('nominas')} onClick={() => navigate('/nominas')}>
+                  <Banknote size={20} style={{ marginRight: '1rem' }}/> Firma de Nóminas
+                </div>
+              )}
+              <div className={getNavItemClass('auditoria')} onClick={() => navigate('/auditoria')}>
                 <ShieldAlert size={20} style={{ marginRight: '1rem' }}/> Auditoría
               </div>
-              <div style={navItemStyle('exportaciones')} onClick={() => navigate('/exportaciones')}
-                   onMouseEnter={(e) => { if (!location.pathname.includes('exportaciones')) { e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.05)'; e.currentTarget.style.color = '#e2e8f0'; } }}
-                   onMouseLeave={(e) => { if (!location.pathname.includes('exportaciones')) { e.currentTarget.style.backgroundColor = 'transparent'; e.currentTarget.style.color = '#94a3b8'; } }}
-              >
+              <div className={getNavItemClass('exportaciones')} onClick={() => navigate('/exportaciones')}>
                 <FileOutput size={20} style={{ marginRight: '1rem' }}/> Exportar Datos
               </div>
-              <div style={navItemStyle('usuarios')} onClick={() => navigate('/usuarios')}
-                   onMouseEnter={(e) => { if (!location.pathname.includes('usuarios')) { e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.05)'; e.currentTarget.style.color = '#e2e8f0'; } }}
-                   onMouseLeave={(e) => { if (!location.pathname.includes('usuarios')) { e.currentTarget.style.backgroundColor = 'transparent'; e.currentTarget.style.color = '#94a3b8'; } }}
-              >
+              <div className={getNavItemClass('usuarios')} onClick={() => navigate('/usuarios')}>
                 <UserCog size={20} style={{ marginRight: '1rem' }}/> Gestión de Usuarios
               </div>
             </>
@@ -296,138 +278,68 @@ export function Layout() {
       </aside>
 
       {/* Main Content Area */}
-      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-        
-        {/* Top Header Premium */}
-        <header style={{ 
-          height: '80px', 
-          backgroundColor: 'white',
-          borderBottom: '1px solid var(--glass-border)', 
-          display: 'flex', 
-          alignItems: 'center', 
-          justifyContent: 'space-between', /* ¡AQUÍ ESTABA EL DETALLE! */
-          padding: '0 2.5rem', 
-          zIndex: 10,
-          boxShadow: '0 4px 30px rgba(0, 0, 0, 0.03)',
-          width: '100%', /* Añadido para mayor seguridad */
-          boxSizing: 'border-box' /* Añadido para que el padding no desborde */
-        }}>
-          
-          {/* Breadcrumb / Title area */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#64748b', fontSize: '14px', fontWeight: '500' }}>
+      <div className="main-content">
+        {/* Top Header */}
+        <header className="main-header">
+          {/* Breadcrumb */}
+          <div className="breadcrumb">
             <span>Portal</span>
             <ChevronRight size={16} />
-            <span style={{ color: '#0f172a', fontWeight: '600', textTransform: 'capitalize' }}>
+            <span className="breadcrumb-current">
               {location.pathname.split('/')[1] || 'Dashboard'}
             </span>
           </div>
 
           {/* User & Notifications Area */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '2rem' }}>
+          <div className="header-controls">
             
-            {/* Buscador Global Mini */}
-            <div style={{ position: 'relative', width: '280px' }}>
-              <Search size={16} color="#94a3b8" style={{ position: 'absolute', top: '50%', left: '1rem', transform: 'translateY(-50%)' }} />
+            {/* Global Search */}
+            <div className="search-container">
+              <Search size={16} color="var(--primary-light)" className="search-icon" />
               <input 
                 type="text" 
                 placeholder="Buscar..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                style={{ 
-                  width: '100%', 
-                  padding: '0.6rem 1rem 0.6rem 2.8rem', 
-                  backgroundColor: '#f1f5f9', 
-                  border: '1px solid transparent', 
-                  borderRadius: '100px', 
-                  fontSize: '14px', 
-                  outline: 'none', 
-                  transition: 'all 0.3s ease',
-                  color: '#334155',
-                  boxSizing: 'border-box'
-                }}
-                onFocus={(e) => {
-                  e.target.style.backgroundColor = '#ffffff';
-                  e.target.style.border = '1px solid var(--primary)';
-                  e.target.style.boxShadow = '0 0 0 3px var(--primary-bg)';
-                }}
-                onBlur={(e) => {
-                  e.target.style.backgroundColor = '#f1f5f9';
-                  e.target.style.border = '1px solid transparent';
-                  e.target.style.boxShadow = 'none';
-                }}
+                className="search-input"
               />
             </div>
 
-            {/* Campanita de Notificaciones */}
+            {/* Notifications */}
             <div style={{ position: 'relative' }}>
               <button 
                 onClick={() => setShowNotifications(!showNotifications)}
-                style={{ 
-                  background: '#f1f5f9', 
-                  border: '1px solid transparent', 
-                  cursor: 'pointer', 
-                  position: 'relative', 
-                  padding: '0.6rem',
-                  borderRadius: '50%',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  transition: 'all 0.2s ease'
-                }}
-                onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#e2e8f0'}
-                onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#f1f5f9'}
+                className="icon-btn-pill"
+                title="Notificaciones"
               >
-                <Bell size={20} color="#475569" />
+                <Bell size={20} />
                 {unreadCount > 0 && (
-                  <span style={{ 
-                    position: 'absolute', 
-                    top: '-2px', 
-                    right: '-2px', 
-                    backgroundColor: '#ef4444', 
-                    color: 'white', 
-                    fontSize: '10px', 
-                    height: '18px', 
-                    width: '18px', 
-                    display: 'flex', 
-                    alignItems: 'center', 
-                    justifyContent: 'center', 
-                    borderRadius: '50%', 
-                    fontWeight: 'bold', 
-                    border: '2px solid white' 
-                  }}>{unreadCount}</span>
+                  <span className="notification-badge">{unreadCount}</span>
                 )}
               </button>
 
-              {/* Dropdown de Notificaciones */}
+              {/* Dropdown */}
               {showNotifications && (
-                <div style={{ position: 'absolute', top: 'calc(100% + 10px)', right: '0', width: '340px', backgroundColor: 'white', borderRadius: '16px', boxShadow: 'var(--shadow-lg)', border: '1px solid #f1f5f9', overflow: 'hidden', zIndex: 50, transformOrigin: 'top right', animation: 'fadeIn 0.2s ease-out' }}>
-                  <div style={{ padding: '1.25rem', backgroundColor: '#ffffff', borderBottom: '1px solid #f1f5f9', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <h3 style={{ margin: 0, fontSize: '15px', fontWeight: '600', color: '#0f172a' }}>Notificaciones</h3>
-                    <span 
+                <div className="notification-dropdown">
+                  <div className="dropdown-header">
+                    <h3 style={{ margin: 0, fontSize: '15px' }}>Notificaciones</h3>
+                    <button 
                       onClick={handleMarcarTodasLeidas}
-                      style={{ fontSize: '12px', color: 'var(--primary)', cursor: 'pointer', fontWeight: '500' }}
-                    >Marcar todas como leídas</span>
+                      style={{ border: 'none', background: 'none', padding: 0, color: 'var(--primary)', cursor: 'pointer', fontSize: '12px', fontWeight: '600' }}
+                    >Marcar todas como leídas</button>
                   </div>
-                  <div style={{ maxHeight: '350px', overflowY: 'auto' }}>
+                  <div style={{ maxHeight: '350px', overflowY: 'auto' }} className="custom-scrollbar">
                     {notificaciones.length === 0 ? (
-                      <div style={{ padding: '2rem', textAlign: 'center', color: '#94a3b8', fontSize: '14px' }}>No hay notificaciones</div>
+                      <div style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-light)', fontSize: '14px' }}>No hay notificaciones</div>
                     ) : (
                       notificaciones.map(notif => (
                         <div key={notif.id} 
-                        onClick={() => {
-                          if (!notif.leida) handleMarcarLeida(notif.id);
-                          if (notif.link) navigate(notif.link);
-                          setShowNotifications(false);
-                        }}
-                        style={{ 
-                          padding: '1.25rem', 
-                          borderBottom: '1px solid #f8fafc', 
-                          backgroundColor: !notif.leida ? '#f0f9ff' : 'white', 
-                          cursor: 'pointer',
-                          transition: 'background-color 0.2s ease'
-                        }}
-                        onMouseEnter={(e) => e.currentTarget.style.backgroundColor = !notif.leida ? '#e0f2fe' : '#f8fafc'}
-                        onMouseLeave={(e) => e.currentTarget.style.backgroundColor = !notif.leida ? '#f0f9ff' : 'white'}
+                          onClick={() => {
+                            if (!notif.leida) handleMarcarLeida(notif.id);
+                            if (notif.link) navigate(notif.link);
+                            setShowNotifications(false);
+                          }}
+                          className={`notification-item ${!notif.leida ? 'unread' : ''}`}
                         >
                           <div style={{ display: 'flex', gap: '0.75rem' }}>
                             <div style={{ 
@@ -437,9 +349,9 @@ export function Layout() {
                               display: notif.leida ? 'none' : 'block'
                             }}></div>
                             <div>
-                              <p style={{ margin: 0, fontSize: '14px', color: '#334155', fontWeight: !notif.leida ? '600' : '500', lineHeight: '1.4' }}>{notif.titulo}</p>
-                              <p style={{ margin: '0.25rem 0 0', fontSize: '13px', color: '#64748b', lineHeight: '1.4' }}>{notif.mensaje}</p>
-                              <p style={{ margin: 0, fontSize: '11px', color: '#94a3b8', marginTop: '0.5rem' }}>
+                              <p style={{ margin: 0, fontSize: '14px', color: 'var(--text-h)', fontWeight: !notif.leida ? '600' : '500', lineHeight: '1.4' }}>{notif.titulo}</p>
+                              <p style={{ margin: '0.25rem 0 0', fontSize: '13px', color: 'var(--text-muted)', lineHeight: '1.4' }}>{notif.mensaje}</p>
+                              <p style={{ margin: 0, fontSize: '11px', color: 'var(--text-light)', marginTop: '0.5rem' }}>
                                 {new Date(notif.createdAt).toLocaleString()}
                               </p>
                             </div>
@@ -452,36 +364,22 @@ export function Layout() {
               )}
             </div>
 
-            {/* Separador */}
-            <div style={{ height: '32px', width: '1px', backgroundColor: '#e2e8f0' }}></div>
+            {/* Separator */}
+            <div style={{ height: '32px', width: '1px', backgroundColor: 'rgba(255,255,255,0.2)' }}></div>
 
-            {/* Perfil */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', cursor: 'pointer', padding: '0.25rem', borderRadius: '50px', transition: 'background-color 0.2s ease' }}>
-              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
-                <span style={{ fontSize: '14px', fontWeight: '600', color: '#0f172a' }}>{usuario?.nombre || 'Usuario'}</span>
-                <span style={{ fontSize: '12px', color: '#64748b', fontWeight: '500' }}>{usuario?.rol?.replace('_', ' ') || 'Admin'}</span>
+            {/* Profile */}
+            <div className="user-profile-trigger">
+              <div className="user-info">
+                <span className="user-name">{usuario?.nombre || 'Usuario'}</span>
+                <span className="user-role">{usuario?.rol?.replace('_', ' ') || 'Admin'}</span>
               </div>
-              <div style={{ width: '44px', height: '44px', background: 'linear-gradient(135deg, var(--primary), #60a5fa)', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: '50%', fontWeight: '700', fontSize: '16px', boxShadow: '0 4px 10px rgba(59, 130, 246, 0.2)' }}>
+              <div className="user-avatar">
                 {usuario?.nombre?.[0] || 'U'}{usuario?.apellidos?.[0] || ''}
               </div>
               <button 
                 onClick={(e) => { e.stopPropagation(); handleLogout(); }} 
                 title="Cerrar Sesión"
-                style={{ 
-                  border: 'none', 
-                  background: 'white', 
-                  cursor: 'pointer', 
-                  display: 'flex', 
-                  alignItems: 'center', 
-                  color: '#94a3b8', 
-                  marginLeft: '0.25rem', 
-                  padding: '0.6rem',
-                  borderRadius: '50%',
-                  boxShadow: '0 2px 5px rgba(0,0,0,0.05)',
-                  transition: 'all 0.2s ease'
-                }}
-                onMouseEnter={(e) => { e.currentTarget.style.color = '#ef4444'; e.currentTarget.style.boxShadow = '0 4px 8px rgba(239, 68, 68, 0.15)'; }}
-                onMouseLeave={(e) => { e.currentTarget.style.color = '#94a3b8'; e.currentTarget.style.boxShadow = '0 2px 5px rgba(0,0,0,0.05)'; }}
+                className="logout-btn"
               >
                 <LogOut size={18} />
               </button>
@@ -489,8 +387,8 @@ export function Layout() {
           </div>
         </header>
 
-        {/* Page Content Backdrop */}
-        <main className="animate-fade-in" style={{ padding: '2.5rem', flex: 1, overflowY: 'auto' }}>
+        {/* Content Area */}
+        <main className="animate-fade-in custom-scrollbar" style={{ padding: '2.5rem', flex: 1, overflowY: 'auto' }}>
           <Outlet />
         </main>
       </div>

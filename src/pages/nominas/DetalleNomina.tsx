@@ -1,279 +1,411 @@
-import React, { useState, useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Settings2, Save, X } from 'lucide-react';
+import {
+  ArrowLeft, CheckCircle, Archive, Banknote, FileText, ExternalLink,
+  UploadCloud, Loader2, Calculator
+} from 'lucide-react';
 import { useNominaStore } from '../../stores/nominaStore';
-
-// --- INTERFACES ---
-interface Empleado {
-  id: number;
-  nombre: string;
-  apellidos: string;
-}
-
-interface PreNomina {
-  id: number;
-  empleado: Empleado;
-  sueldoBruto: number;
-  compensacion: number;
-  horasExtra: number;
-  otrasPercepciones: number;
-  retencionISR: number;
-  descuentoIncidencias: number;
-  otrasDeducciones: number;
-  totalPercepciones: number;
-  totalDeducciones: number;
-  totalAPagar: number;
-}
-
-const formatCurrency = (amount: number) => {
-  return new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' }).format(amount);
-};
+import { useAuthStore } from '../../stores/authStore';
+import apiClient from '../../services/api';
 
 export const DetalleNomina = () => {
   const { id } = useParams();
   const navigate = useNavigate();
   const nominaId = Number(id);
 
-  const { 
-    nominaActual: nomina, 
-    isLoading: loading, 
-    fetchNominaById, 
-    actualizarPreNomina 
+  const {
+    nominaActual: nomina,
+    isLoading: loading,
+    fetchNominaById,
+    archivarNomina
   } = useNominaStore();
-  
-  const [empleadoEditando, setEmpleadoEditando] = useState<PreNomina | null>(null);
-  
-  // 1. AHORA ACEPTAMOS STRINGS VACÍOS PARA PODER BORRAR EL CERO
-  const [formData, setFormData] = useState({
-    sueldoBruto: 0 as number | string,
-    compensacion: 0 as number | string,
-    horasExtra: 0 as number | string,
-    otrasPercepciones: 0 as number | string,
-    retencionISR: 0 as number | string,
-    diasFalta: 0 as number | string, // <--- NUEVO CAMPO DE DÍAS
-    otrasDeducciones: 0 as number | string
-  });
+
+  const userRol = useAuthStore(s => s.usuario?.rol);
+
+  // Estados para los pasos del flujo
+  const [archivoSubsidio, setArchivoSubsidio] = useState<File | null>(null);
+  const [subiendoSubsidio, setSubiendoSubsidio] = useState(false);
+  const [firmandoAdmin, setFirmandoAdmin] = useState(false);
+  const [enviandoAsistencias, setEnviandoAsistencias] = useState(false);
+  const [cerrandoNomina, setCerrandoNomina] = useState(false);
 
   useEffect(() => {
-    if (nominaId) {
-      fetchNominaById(nominaId);
-    }
+    if (nominaId) fetchNominaById(nominaId);
   }, [nominaId, fetchNominaById]);
 
-  const toggleEdicion = (prenomina: PreNomina) => {
-    if (empleadoEditando?.id === prenomina.id) {
-      setEmpleadoEditando(null); 
-    } else {
-      setEmpleadoEditando(prenomina); 
-      
-      // Calculamos cuántos días de falta tiene registrados actualmente
-      const pagoDiario = prenomina.sueldoBruto > 0 ? (prenomina.sueldoBruto / 15) : 0;
-      const diasRegistrados = pagoDiario > 0 ? (prenomina.descuentoIncidencias / pagoDiario) : 0;
+  // El backend marca como leídas las notificaciones del paso recién cerrado. Disparamos este
+  // evento para que el Layout recargue el badge al instante en vez de esperar al polling de 60s.
+  const refrescarNotificacionesHeader = () => {
+    window.dispatchEvent(new Event('notif-refresh'));
+  };
 
-      setFormData({
-        sueldoBruto: prenomina.sueldoBruto === 0 ? '' : prenomina.sueldoBruto,
-        compensacion: prenomina.compensacion === 0 ? '' : prenomina.compensacion,
-        horasExtra: prenomina.horasExtra === 0 ? '' : prenomina.horasExtra,
-        otrasPercepciones: prenomina.otrasPercepciones === 0 ? '' : prenomina.otrasPercepciones,
-        retencionISR: prenomina.retencionISR === 0 ? '' : prenomina.retencionISR,
-        diasFalta: diasRegistrados === 0 ? '' : diasRegistrados,
-        otrasDeducciones: prenomina.otrasDeducciones === 0 ? '' : prenomina.otrasDeducciones
+  const handleArchivar = async () => {
+    if (window.confirm("¿Confirmas archivar esta nómina? Cerrará definitivamente el ciclo.")) {
+      const exito = await archivarNomina(nominaId);
+      if (exito) {
+        alert("Nómina archivada y cerrada.");
+        refrescarNotificacionesHeader();
+      }
+    }
+  };
+
+  const handleSubirSubsidio = async () => {
+    if (!archivoSubsidio) return alert("Selecciona el documento de subsidio antes de subir.");
+    try {
+      setSubiendoSubsidio(true);
+      const fd = new FormData();
+      fd.append('archivo', archivoSubsidio);
+      const res = await apiClient.post(`/nominas/ciclo/${nominaId}/subsidio`, fd, {
+        headers: { 'Content-Type': 'multipart/form-data' }
       });
+      if (res.data.success) {
+        alert(res.data.message);
+        setArchivoSubsidio(null);
+        await fetchNominaById(nominaId);
+        refrescarNotificacionesHeader();
+      }
+    } catch (err: any) {
+      alert(err.response?.data?.message || 'Error al subir el documento de subsidio.');
+    } finally {
+      setSubiendoSubsidio(false);
     }
   };
 
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const { name, value } = e.target;
-    
-    // Si borramos todo, dejamos la cadena vacía (el cero rebelde desaparece)
-    if (value === '') {
-      setFormData({ ...formData, [name]: '' });
-      return;
-    }
-
-    const numero = Number(value);
-    if (numero < 0) return; // Validación anti-negativos
-
-    setFormData({ ...formData, [name]: numero });
-  };
-
-  const guardarCambios = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!empleadoEditando) return;
-
-    // 2. CÁLCULO DE FALTAS ANTES DE ENVIAR AL BACKEND
-    const sBruto = Number(formData.sueldoBruto) || 0;
-    const dFalta = Number(formData.diasFalta) || 0;
-    const pagoDiario = sBruto / 15;
-    const descuentoCalculado = pagoDiario * dFalta;
-
-    const payload = {
-      sueldoBruto: sBruto,
-      compensacion: Number(formData.compensacion) || 0,
-      horasExtra: Number(formData.horasExtra) || 0,
-      otrasPercepciones: Number(formData.otrasPercepciones) || 0,
-      retencionISR: Number(formData.retencionISR) || 0,
-      descuentoIncidencias: descuentoCalculado, // <--- Mandamos el descuento total monetario
-      otrasDeducciones: Number(formData.otrasDeducciones) || 0
-    };
-
-    const exito = await actualizarPreNomina(empleadoEditando.id, payload);
-    
-    if (exito) {
-      setEmpleadoEditando(null); 
-    } else {
-      alert("Error al actualizar el recibo.");
+  const handleFirmarAdministracion = async () => {
+    if (!window.confirm("Vas a aplicar la firma de Administración a esta pre-nómina. ¿Continuar?")) return;
+    try {
+      setFirmandoAdmin(true);
+      const res = await apiClient.post(`/nominas/ciclo/${nominaId}/administracion-firma`);
+      if (res.data.success) {
+        alert(res.data.message);
+        await fetchNominaById(nominaId);
+        refrescarNotificacionesHeader();
+      }
+    } catch (err: any) {
+      alert(err.response?.data?.message || 'Error al firmar Administración.');
+    } finally {
+      setFirmandoAdmin(false);
     }
   };
 
-  if (loading) return <div style={{ padding: '4rem', textAlign: 'center', color: '#64748b', fontWeight: '700' }}>Cargando detalles...</div>;
-  if (!nomina) return <div style={{ padding: '4rem', textAlign: 'center', color: '#ef4444', fontWeight: '700' }}>No se encontró la nómina.</div>;
+  const handleFirmarDireccion = async () => {
+    if (!window.confirm("Vas a aplicar la firma de Dirección General a esta pre-nómina. ¿Continuar?")) return;
+    try {
+      setEnviandoAsistencias(true);
+      const res = await apiClient.put(`/nominas/ciclo/${nominaId}/firmar`);
+      if (res.data.success) {
+        alert(res.data.message);
+        await fetchNominaById(nominaId);
+        refrescarNotificacionesHeader();
+      }
+    } catch (err: any) {
+      alert(err.response?.data?.message || 'Error al firmar como Dirección.');
+    } finally {
+      setEnviandoAsistencias(false);
+    }
+  };
+
+  const handleCerrarNomina = async () => {
+    if (!window.confirm('Vas a cerrar la nómina aplicando los descuentos por faltas no justificadas del periodo. Esta acción no se puede deshacer. ¿Continuar?')) return;
+    try {
+      setCerrandoNomina(true);
+      const res = await apiClient.post(`/nominas/ciclo/${nominaId}/cerrar`);
+      if (res.data.success) {
+        alert(res.data.message);
+        await fetchNominaById(nominaId);
+        refrescarNotificacionesHeader();
+      }
+    } catch (err: any) {
+      alert(err.response?.data?.message || 'Error al cerrar la nómina.');
+    } finally {
+      setCerrandoNomina(false);
+    }
+  };
+
+  if (loading) return <div style={{ padding: '4rem', textAlign: 'center', color: '#64748b', fontWeight: 'bold' }}>Cargando detalles de la nómina...</div>;
+  if (!nomina) return <div style={{ padding: '4rem', textAlign: 'center', color: '#ef4444' }}>No se encontró la nómina.</div>;
+
+  let estadoReal = nomina.estado;
+  const firmaRH = !!nomina.firmaRecursosHumanos;
+  const firmaDireccion = !!(nomina as any).firmaDireccion;
+
+  // Roles del flujo (4 firmas: Finanzas → Administración → Dirección → RH).
+  //   Finanzas       → RECURSOS_FINANCIEROS o RRHH_FINANZAS  (sube subsidio)
+  //   Administración → RRHH_FINANZAS                          (firma con botón)
+  //   Dirección      → DIRECCION_GENERAL (direccion@marakame.com — firma y envía lista a RH)
+  //   RH cierre      → RECURSOS_HUMANOS o RRHH_FINANZAS       (sube nómina firmada)
+  const esFinanzas       = userRol === 'RECURSOS_FINANCIEROS' || userRol === 'RRHH_FINANZAS';
+  const esAdministracion = userRol === 'RRHH_FINANZAS';
+  const esDireccion      = userRol === 'DIRECCION_GENERAL';
+  const esRH             = userRol === 'RECURSOS_HUMANOS' || userRol === 'RRHH_FINANZAS';
+
+  // Mensaje del turno actual
+  let mensajeTurno = "";
+  if (!nomina.firmaFinanzas)             mensajeTurno = "Turno: Recursos Financieros (subir documento de subsidio)";
+  else if (!nomina.firmaAdministracion)  mensajeTurno = "Turno: Administración (revisar y firmar)";
+  else if (!firmaDireccion)              mensajeTurno = "Turno: Dirección General (firmar)";
+  else if (!firmaRH)                     mensajeTurno = "Turno: Recursos Humanos (cerrar nómina y aplicar descuentos)";
+  else                                   mensajeTurno = "Turno: Recursos Financieros (archivar nómina)";
+
+  // Links absolutos a los archivos del ciclo.
+  const apiBase = (apiClient.defaults.baseURL || '').replace(/\/api\/v1\/?$/, '');
+  const link = (rel?: string | null) => (rel ? `${apiBase}${rel}` : null);
+  const preNominaPdfAbs     = link((nomina as any).archivoUrl);
+  const subsidioUrlAbs      = link((nomina as any).archivoSubsidioUrl);
 
   return (
-    <div style={{ padding: '2rem', maxWidth: '1600px', margin: '0 auto', backgroundColor: '#f8fafc', minHeight: '100vh' }}>
-      
-      {/* BOTÓN VOLVER */}
-      <button 
-        onClick={() => navigate('/nominas')} 
-        style={{ display: 'flex', alignItems: 'center', gap: '8px', background: 'none', border: 'none', color: '#64748b', cursor: 'pointer', fontWeight: '600', marginBottom: '1.5rem', padding: 0 }}
-      >
+    <div style={{ padding: '2rem', maxWidth: '1400px', margin: '0 auto', backgroundColor: '#f8fafc', minHeight: '100vh' }}>
+
+      <button onClick={() => navigate('/nominas')} style={{ display: 'flex', alignItems: 'center', gap: '8px', background: 'none', border: 'none', color: '#64748b', cursor: 'pointer', fontWeight: '600', marginBottom: '1.5rem' }}>
         <ArrowLeft size={20} /> Volver al Dashboard
       </button>
 
-      {/* CABECERA DE TOTALES GLOBALES */}
-      <div style={{ backgroundColor: 'white', padding: '2rem', borderRadius: '20px', border: '1px solid #e2e8f0', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)', marginBottom: '2rem' }}>
-        <h2 style={{ fontSize: '28px', fontWeight: '900', color: '#1e293b', margin: '0 0 1.5rem 0' }}>
-          Folio: {nomina.folio} 
-          <span style={{ fontSize: '14px', fontWeight: '800', color: '#3b82f6', backgroundColor: '#eff6ff', padding: '4px 12px', borderRadius: '8px', marginLeft: '12px', border: '1px solid #bfdbfe' }}>
-            {nomina.estado}
-          </span>
-        </h2>
-        
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1.5rem' }}>
-          <div style={{ backgroundColor: '#f0fdf4', padding: '1.25rem', borderRadius: '16px', border: '1px solid #dcfce7' }}>
-            <p style={{ margin: 0, fontSize: '12px', color: '#166534', fontWeight: 'bold', textTransform: 'uppercase' }}>Total Percepciones (+)</p>
-            <p style={{ margin: '4px 0 0', fontSize: '24px', fontWeight: '900', color: '#15803d' }}>{formatCurrency(nomina.totalPercepciones || 0)}</p>
+      {/* BANNER PAGADO */}
+      {estadoReal === 'PAGADO' && (
+        <div style={{ backgroundColor: '#dcfce7', border: '1px solid #86efac', padding: '1.5rem 2rem', borderRadius: '20px', marginBottom: '2rem', display: 'flex', alignItems: 'center', gap: '1rem' }}>
+          <CheckCircle size={32} color="#166534" />
+          <div>
+            <h2 style={{ margin: 0, fontSize: '18px', fontWeight: '900', color: '#166534' }}>Procedimiento Terminado</h2>
+            <p style={{ margin: 0, color: '#15803d', fontSize: '14px', marginTop: '4px' }}>Esta nómina ya fue archivada por Finanzas. Ciclo cerrado.</p>
           </div>
-          <div style={{ backgroundColor: '#fef2f2', padding: '1.25rem', borderRadius: '16px', border: '1px solid #fee2e2' }}>
-            <p style={{ margin: 0, fontSize: '12px', color: '#991b1b', fontWeight: 'bold', textTransform: 'uppercase' }}>Total Deducciones (-)</p>
-            <p style={{ margin: '4px 0 0', fontSize: '24px', fontWeight: '900', color: '#b91c1c' }}>{formatCurrency(nomina.totalDeducciones || 0)}</p>
+        </div>
+      )}
+
+      {/* PROGRESO DE FIRMAS (4/4) */}
+      {estadoReal !== 'PAGADO' && (
+        <div style={{ backgroundColor: 'white', padding: '1.5rem 2rem', borderRadius: '20px', border: '1px solid #e2e8f0', marginBottom: '2rem', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem' }}>
+            <div style={{ display: 'flex', gap: '2.5rem' }}>
+              <FirmaPaso label="Financieros" firmado={nomina.firmaFinanzas} />
+              <FirmaPaso label="Administración" firmado={nomina.firmaAdministracion} />
+              <FirmaPaso label="Dirección" firmado={firmaDireccion} />
+              <FirmaPaso label="Rec. Humanos" firmado={firmaRH} />
+            </div>
+            <p style={{ margin: 0, fontSize: '13px', fontWeight: '800', color: '#3b82f6' }}>{mensajeTurno}</p>
           </div>
-          <div style={{ backgroundColor: '#eff6ff', padding: '1.25rem', borderRadius: '16px', border: '1px solid #dbeafe' }}>
-            <p style={{ margin: 0, fontSize: '12px', color: '#1e40af', fontWeight: 'bold', textTransform: 'uppercase' }}>Gran Total a Pagar</p>
-            <p style={{ margin: '4px 0 0', fontSize: '24px', fontWeight: '900', color: '#1d4ed8' }}>{formatCurrency(nomina.totalNetoPagar || 0)}</p>
+        </div>
+      )}
+
+      {/* ACCIONES SEGÚN PASO Y ROL */}
+      {estadoReal !== 'PAGADO' && (
+        <div style={{ marginBottom: '2rem' }}>
+
+          {/* PASO 1: Finanzas sube documento de subsidio */}
+          {!nomina.firmaFinanzas && esFinanzas && (
+            <UploadCard
+              titulo="Subir documento de solicitud de subsidio"
+              descripcion="Al cargar el oficio de subsidio se aplica automáticamente la firma de Recursos Financieros y la nómina pasa al siguiente paso."
+              file={archivoSubsidio}
+              onFile={setArchivoSubsidio}
+              onSubmit={handleSubirSubsidio}
+              loading={subiendoSubsidio}
+              ctaLabel="Subir documento y firmar"
+              accept=".pdf,.jpg,.jpeg,.png,.xlsx,.xls,.csv"
+            />
+          )}
+
+          {/* PASO 2: Administración revisa y firma con un botón (sin subir documento). */}
+          {nomina.firmaFinanzas && !nomina.firmaAdministracion && esAdministracion && (
+            <div style={{ backgroundColor: 'white', padding: '1.5rem 2rem', borderRadius: '20px', border: '1px solid #e2e8f0', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)' }}>
+              <h3 style={{ margin: '0 0 6px 0', color: '#1e293b' }}>Firma de Administración</h3>
+              <p style={{ margin: '0 0 1rem 0', fontSize: '13px', color: '#64748b', lineHeight: 1.5 }}>
+                Revisa el documento de subsidio que subió Recursos Financieros y aplica tu firma.
+                Después, la pre-nómina pasará a Dirección General para generar el reporte de asistencias.
+              </p>
+              <button
+                onClick={handleFirmarAdministracion}
+                disabled={firmandoAdmin}
+                style={{
+                  display: 'inline-flex', alignItems: 'center', gap: '8px',
+                  backgroundColor: firmandoAdmin ? '#94a3b8' : '#0ea5e9',
+                  color: 'white', border: 'none', padding: '0.8rem 1.4rem', borderRadius: '10px',
+                  fontWeight: '800', cursor: firmandoAdmin ? 'not-allowed' : 'pointer'
+                }}
+              >
+                {firmandoAdmin ? <Loader2 size={18} className="animate-spin" /> : <CheckCircle size={18} />}
+                {firmandoAdmin ? 'Firmando…' : 'Firmar como Administración'}
+              </button>
+            </div>
+          )}
+
+          {/* PASO 3: Dirección General aplica su firma (sin enviar listas adicionales). */}
+          {nomina.firmaAdministracion && !firmaDireccion && esDireccion && (
+            <div style={{ backgroundColor: 'white', padding: '1.5rem 2rem', borderRadius: '20px', border: '1px solid #e2e8f0', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)' }}>
+              <h3 style={{ margin: '0 0 6px 0', color: '#1e293b' }}>Firma de Dirección General</h3>
+              <p style={{ margin: '0 0 1rem 0', fontSize: '13px', color: '#64748b', lineHeight: 1.5 }}>
+                Revisa la pre-nómina y aplica tu firma. Después, RH cerrará la nómina aplicando los descuentos por faltas no justificadas del periodo.
+              </p>
+              <button
+                onClick={handleFirmarDireccion}
+                disabled={enviandoAsistencias}
+                style={{
+                  display: 'inline-flex', alignItems: 'center', gap: '8px',
+                  backgroundColor: enviandoAsistencias ? '#94a3b8' : '#10b981',
+                  color: 'white', border: 'none', padding: '0.8rem 1.4rem', borderRadius: '10px',
+                  fontWeight: '800', cursor: enviandoAsistencias ? 'not-allowed' : 'pointer'
+                }}
+              >
+                {enviandoAsistencias ? <Loader2 size={18} className="animate-spin" /> : <CheckCircle size={18} />}
+                {enviandoAsistencias ? 'Firmando…' : 'Firmar como Dirección'}
+              </button>
+            </div>
+          )}
+
+          {/* PASO 4: AUTORIZADO + RH sube nómina firmada */}
+          {estadoReal === 'AUTORIZADO' && !firmaRH && esRH && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+              {/* Acceso directo a documentos del flujo (pre-nómina + lista final de asistencias). */}
+              <div style={{ backgroundColor: 'white', padding: '1.25rem 2rem', borderRadius: '20px', border: '1px solid #e2e8f0', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)' }}>
+                <h3 style={{ margin: '0 0 6px 0', color: '#1e293b', fontSize: '16px' }}>Pre-nómina autorizada</h3>
+                <p style={{ margin: 0, fontSize: '13px', color: '#64748b', lineHeight: 1.5 }}>
+                  La pre-nómina ya tiene las firmas de Finanzas, Administración y Dirección. Al cerrar, el sistema recalcula cada recibo descontando las faltas no justificadas del periodo y aplica tu firma de RH.
+                </p>
+              </div>
+
+              {/* CTA: Cerrar nómina (calcula descuentos por faltas y firma de RH automáticamente) */}
+              <div style={{ backgroundColor: 'white', padding: '1.5rem 2rem', borderRadius: '20px', border: '1px solid #e2e8f0', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)' }}>
+                <h3 style={{ margin: '0 0 6px 0', color: '#1e293b' }}>Cerrar nómina y aplicar descuentos</h3>
+                <p style={{ margin: '0 0 1rem 0', fontSize: '13px', color: '#64748b', lineHeight: 1.5 }}>
+                  El sistema recalcula cada recibo descontando las faltas no justificadas del periodo (sueldo/15 × días de falta). Al confirmar se aplica tu firma de RH y la nómina queda lista para que Finanzas la archive.
+                </p>
+                <button
+                  onClick={handleCerrarNomina}
+                  disabled={cerrandoNomina}
+                  style={{
+                    display: 'inline-flex', alignItems: 'center', gap: '8px',
+                    backgroundColor: cerrandoNomina ? '#94a3b8' : '#0ea5e9',
+                    color: 'white', border: 'none', padding: '0.85rem 1.5rem', borderRadius: '10px',
+                    fontWeight: '800', cursor: cerrandoNomina ? 'not-allowed' : 'pointer'
+                  }}
+                >
+                  {cerrandoNomina ? <Loader2 size={18} className="animate-spin" /> : <Calculator size={18} />}
+                  {cerrandoNomina ? 'Calculando y cerrando…' : 'Calcular y cerrar nómina'}
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* PASO 5: Finanzas archiva */}
+          {estadoReal === 'AUTORIZADO' && firmaRH && esFinanzas && (
+            <div style={{ backgroundColor: '#1e293b', padding: '1.5rem 2rem', borderRadius: '20px', color: 'white', display: 'flex', justifyContent: 'space-between', alignItems: 'center', boxShadow: '0 10px 15px -3px rgba(0,0,0,0.1)' }}>
+              <div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '6px' }}>
+                  <Banknote size={22} color="#34d399" />
+                  <h2 style={{ margin: 0, fontSize: '18px', fontWeight: '900' }}>Lista para archivar</h2>
+                </div>
+                <p style={{ margin: 0, color: '#94a3b8', fontSize: '13px', maxWidth: '600px' }}>
+                  RH ya entregó la nómina firmada por el trabajador. Archiva para cerrar el ciclo.
+                </p>
+              </div>
+              <button onClick={handleArchivar} style={{ backgroundColor: '#34d399', color: '#064e3b', border: 'none', padding: '0.8rem 1.5rem', borderRadius: '12px', fontWeight: '900', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <Archive size={18} /> Archivar Nómina
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* RESUMEN + ARCHIVOS */}
+      <div style={{ backgroundColor: 'white', padding: '2rem', borderRadius: '20px', border: '1px solid #e2e8f0' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '1.5rem' }}>
+          <div>
+            <h2 style={{ fontSize: '22px', fontWeight: '900', color: '#1e293b', margin: '0 0 4px 0' }}>Pre-Nómina</h2>
+            <p style={{ margin: 0, color: '#64748b', fontWeight: '600' }}>{nomina.periodo}</p>
           </div>
+          <div style={{ textAlign: 'right' }}>
+            <h3 style={{ fontSize: '16px', fontWeight: '900', color: '#1e293b', margin: 0 }}>Folio: {nomina.folio}</h3>
+            <span style={{ fontSize: '12px', fontWeight: 'bold', color: estadoReal === 'PAGADO' ? '#166534' : '#3b82f6', backgroundColor: estadoReal === 'PAGADO' ? '#dcfce7' : '#eff6ff', padding: '4px 12px', borderRadius: '8px', display: 'inline-block', marginTop: '8px' }}>
+              ESTADO: {estadoReal}
+            </span>
+          </div>
+        </div>
+
+        <p style={{ margin: '0 0 1rem 0', fontSize: '13px', color: '#64748b', lineHeight: 1.5 }}>
+          Documentos del ciclo. La pre-nómina y los descuentos por faltas se calculan dentro del sistema.
+        </p>
+
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+          <ArchivoLink
+            url={preNominaPdfAbs}
+            etiqueta="Pre-nómina (PDF) — generado al crear el ciclo"
+            faltaTexto="Aún no se ha generado el PDF de la pre-nómina"
+          />
+          <ArchivoLink
+            url={subsidioUrlAbs}
+            etiqueta="Solicitud de subsidio — subido por Finanzas"
+            faltaTexto="Aún no se sube el documento de subsidio"
+          />
         </div>
       </div>
 
-      {/* TABLA DE EMPLEADOS */}
-      <div style={{ backgroundColor: 'white', borderRadius: '20px', border: '1px solid #e2e8f0', overflow: 'hidden', boxShadow: '0 10px 15px -3px rgba(0,0,0,0.05)' }}>
-        <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
-          <thead>
-            <tr style={{ backgroundColor: '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
-              <th style={{ padding: '1.25rem 1.5rem', fontSize: '12px', fontWeight: '800', color: '#64748b', textTransform: 'uppercase' }}>Empleado</th>
-              <th style={{ padding: '1.25rem 1.5rem', fontSize: '12px', fontWeight: '800', color: '#64748b', textTransform: 'uppercase' }}>Sueldo Base</th>
-              <th style={{ padding: '1.25rem 1.5rem', fontSize: '12px', fontWeight: '800', color: '#64748b', textTransform: 'uppercase' }}>Compensación</th>
-              <th style={{ padding: '1.25rem 1.5rem', fontSize: '12px', fontWeight: '800', color: '#ef4444', textTransform: 'uppercase' }}>Retención ISR</th>
-              <th style={{ padding: '1.25rem 1.5rem', fontSize: '12px', fontWeight: '800', color: '#ef4444', textTransform: 'uppercase' }}>Faltas</th>
-              <th style={{ padding: '1.25rem 1.5rem', fontSize: '12px', fontWeight: '800', color: '#1d4ed8', textTransform: 'uppercase' }}>Total Neto</th>
-              <th style={{ padding: '1.25rem 1.5rem', fontSize: '12px', fontWeight: '800', color: '#64748b', textTransform: 'uppercase', textAlign: 'right' }}>Acción</th>
-            </tr>
-          </thead>
-          <tbody>
-            {nomina.prenominas?.map((pn) => (
-              <React.Fragment key={pn.id}>
-                <tr style={{ 
-                  borderBottom: empleadoEditando?.id === pn.id ? 'none' : '1px solid #e2e8f0',
-                  backgroundColor: empleadoEditando?.id === pn.id ? '#f8fafc' : 'transparent',
-                  transition: 'background-color 0.2s'
-                }}>
-                  <td style={{ padding: '1.25rem 1.5rem', fontWeight: '800', color: '#1e293b' }}>
-                    {pn.empleado?.nombre} {pn.empleado?.apellidos}
-                  </td>
-                  <td style={{ padding: '1.25rem 1.5rem', color: '#64748b', fontWeight: '600' }}>{formatCurrency(pn.sueldoBruto)}</td>
-                  <td style={{ padding: '1.25rem 1.5rem', color: '#64748b', fontWeight: '600' }}>{formatCurrency(pn.compensacion)}</td>
-                  <td style={{ padding: '1.25rem 1.5rem', color: '#ef4444', fontWeight: '600' }}>-{formatCurrency(pn.retencionISR)}</td>
-                  <td style={{ padding: '1.25rem 1.5rem', color: '#ef4444', fontWeight: '600' }}>-{formatCurrency(pn.descuentoIncidencias)}</td>
-                  <td style={{ padding: '1.25rem 1.5rem', fontWeight: '900', color: '#1e293b', fontSize: '16px' }}>{formatCurrency(pn.totalAPagar)}</td>
-                  <td style={{ padding: '1.25rem 1.5rem', textAlign: 'right' }}>
-                    <button 
-                      onClick={() => toggleEdicion(pn)}
-                      style={{ 
-                        backgroundColor: empleadoEditando?.id === pn.id ? '#e2e8f0' : '#eff6ff', 
-                        border: 'none', 
-                        color: empleadoEditando?.id === pn.id ? '#475569' : '#3b82f6', 
-                        padding: '8px 16px', 
-                        borderRadius: '8px', 
-                        fontWeight: 'bold', 
-                        cursor: 'pointer',
-                        display: 'inline-flex',
-                        alignItems: 'center',
-                        gap: '6px'
-                      }}
-                    >
-                      <Settings2 size={16} />
-                      {empleadoEditando?.id === pn.id ? 'Cerrar' : 'Ajustar'}
-                    </button>
-                  </td>
-                </tr>
-
-                {/* FILA DESPLEGABLE DE EDICIÓN EN LÍNEA */}
-                {empleadoEditando?.id === pn.id && (
-                  <tr style={{ backgroundColor: '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
-                    <td colSpan={7} style={{ padding: '0 1.5rem 1.5rem 1.5rem' }}>
-                      <div style={{ backgroundColor: 'white', padding: '1.5rem', borderRadius: '16px', border: '1px dashed #cbd5e1', boxShadow: 'inset 0 2px 4px 0 rgba(0, 0, 0, 0.02)' }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem', borderBottom: '1px solid #f1f5f9', paddingBottom: '0.75rem' }}>
-                          <h4 style={{ margin: 0, color: '#3b82f6', fontWeight: '800', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                            <Settings2 size={18} /> Ajuste manual de nómina
-                          </h4>
-                        </div>
-                        
-                        <form onSubmit={guardarCambios} style={{ display: 'flex', alignItems: 'flex-start', gap: '1rem', flexWrap: 'wrap' }}>
-                          <div style={{ flex: '1 1 120px' }}>
-                            <label style={{ display: 'block', fontSize: '12px', fontWeight: '700', color: '#64748b', marginBottom: '6px' }}>Sueldo Bruto</label>
-                            <input type="number" min="0" step="any" name="sueldoBruto" value={formData.sueldoBruto} onChange={handleInputChange} style={{ width: '100%', boxSizing: 'border-box', padding: '0.75rem', borderRadius: '10px', border: '1px solid #cbd5e1', outline: 'none', fontWeight: '600', color: '#1e293b' }} />
-                          </div>
-                          <div style={{ flex: '1 1 120px' }}>
-                            <label style={{ display: 'block', fontSize: '12px', fontWeight: '700', color: '#64748b', marginBottom: '6px' }}>Compensación</label>
-                            <input type="number" min="0" step="any" name="compensacion" value={formData.compensacion} onChange={handleInputChange} style={{ width: '100%', boxSizing: 'border-box', padding: '0.75rem', borderRadius: '10px', border: '1px solid #cbd5e1', outline: 'none', fontWeight: '600', color: '#1e293b' }} />
-                          </div>
-                          <div style={{ flex: '1 1 120px' }}>
-                            <label style={{ display: 'block', fontSize: '12px', fontWeight: '700', color: '#64748b', marginBottom: '6px' }}>Otras Percepciones</label>
-                            <input type="number" min="0" step="any" name="otrasPercepciones" value={formData.otrasPercepciones} onChange={handleInputChange} style={{ width: '100%', boxSizing: 'border-box', padding: '0.75rem', borderRadius: '10px', border: '1px solid #cbd5e1', outline: 'none', fontWeight: '600', color: '#15803d' }} />
-                          </div>
-                          <div style={{ width: '1px', backgroundColor: '#e2e8f0', margin: '0 0.5rem', alignSelf: 'stretch' }}></div>
-                          <div style={{ flex: '1 1 120px' }}>
-                            <label style={{ display: 'block', fontSize: '12px', fontWeight: '700', color: '#64748b', marginBottom: '6px' }}>Retención ISR</label>
-                            <input type="number" min="0" step="any" name="retencionISR" value={formData.retencionISR} onChange={handleInputChange} style={{ width: '100%', boxSizing: 'border-box', padding: '0.75rem', borderRadius: '10px', border: '1px solid #cbd5e1', outline: 'none', fontWeight: '600', color: '#ef4444' }} />
-                          </div>
-                          <div style={{ flex: '1 1 120px' }}>
-                            <label style={{ display: 'block', fontSize: '12px', fontWeight: '700', color: '#64748b', marginBottom: '6px' }}>Días de Falta</label>
-                            {/* CAMPO DE DÍAS QUE CALCULA EL DINERO ABAJO */}
-                            <input type="number" min="0" step="0.5" name="diasFalta" value={formData.diasFalta} onChange={handleInputChange} style={{ width: '100%', boxSizing: 'border-box', padding: '0.75rem', borderRadius: '10px', border: '1px solid #cbd5e1', outline: 'none', fontWeight: '600', color: '#ef4444' }} />
-                            <span style={{ fontSize: '11px', color: '#ef4444', fontWeight: '600', display: 'block', marginTop: '6px' }}>
-                              Deducción: {formatCurrency(((Number(formData.sueldoBruto) || 0) / 15) * (Number(formData.diasFalta) || 0))}
-                            </span>
-                          </div>
-                          
-                          <div style={{ display: 'flex', gap: '8px', flex: '0 0 auto', alignSelf: 'flex-start', marginTop: '22px' }}>
-                            <button type="button" onClick={() => setEmpleadoEditando(null)} style={{ padding: '0.75rem', borderRadius: '10px', border: '1px solid #cbd5e1', backgroundColor: 'white', color: '#64748b', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }} title="Cancelar">
-                              <X size={20} />
-                            </button>
-                            <button type="submit" style={{ padding: '0.75rem 1.5rem', borderRadius: '10px', border: 'none', backgroundColor: '#3b82f6', color: 'white', fontWeight: 'bold', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                              <Save size={18} /> Guardar Cambios
-                            </button>
-                          </div>
-                        </form>
-                      </div>
-                    </td>
-                  </tr>
-                )}
-              </React.Fragment>
-            ))}
-          </tbody>
-        </table>
-      </div>
-
     </div>
+  );
+};
+
+const FirmaPaso = ({ label, firmado }: { label: string, firmado: boolean }) => (
+  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px' }}>
+    <span style={{ fontSize: '10px', fontWeight: '900', color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.5px' }}>{label}</span>
+    {firmado ? (
+      <CheckCircle size={24} color="#10b981" />
+    ) : (
+      <div style={{ width: '22px', height: '22px', borderRadius: '50%', border: '2px dashed #cbd5e1' }} />
+    )}
+  </div>
+);
+
+const UploadCard = ({
+  titulo, descripcion, file, onFile, onSubmit, loading, ctaLabel, accept
+}: {
+  titulo: string;
+  descripcion: string;
+  file: File | null;
+  onFile: (f: File | null) => void;
+  onSubmit: () => void;
+  loading: boolean;
+  ctaLabel: string;
+  accept: string;
+}) => (
+  <div style={{ backgroundColor: 'white', padding: '1.5rem 2rem', borderRadius: '20px', border: '1px solid #e2e8f0', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)' }}>
+    <h3 style={{ margin: '0 0 6px 0', color: '#1e293b' }}>{titulo}</h3>
+    <p style={{ margin: '0 0 1rem 0', fontSize: '13px', color: '#64748b', lineHeight: 1.5 }}>{descripcion}</p>
+    <div style={{ display: 'flex', gap: '12px', alignItems: 'center', flexWrap: 'wrap' }}>
+      <label style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', padding: '0.7rem 1rem', backgroundColor: '#f8fafc', border: '1px dashed #cbd5e1', borderRadius: '10px', cursor: 'pointer', fontSize: '13px', color: '#475569', fontWeight: '600', flex: 1, minWidth: '260px' }}>
+        <UploadCloud size={16} color="#3b82f6" />
+        <span style={{ flex: 1 }}>{file ? file.name : `Seleccionar archivo (${accept})`}</span>
+        <input type="file" accept={accept} style={{ display: 'none' }}
+          onChange={(e) => onFile(e.target.files?.[0] || null)} />
+      </label>
+      <button
+        onClick={onSubmit}
+        disabled={!file || loading}
+        style={{
+          backgroundColor: (!file || loading) ? '#94a3b8' : '#10b981',
+          color: 'white', border: 'none', padding: '0.7rem 1.4rem', borderRadius: '10px',
+          fontWeight: '800', cursor: (!file || loading) ? 'not-allowed' : 'pointer',
+          display: 'flex', alignItems: 'center', gap: '8px'
+        }}
+      >
+        {loading ? <Loader2 size={16} className="animate-spin" /> : <UploadCloud size={16} />}
+        {ctaLabel}
+      </button>
+    </div>
+  </div>
+);
+
+const ArchivoLink = ({ url, etiqueta, faltaTexto }: { url: string | null, etiqueta: string, faltaTexto: string }) => {
+  if (!url) {
+    return (
+      <div style={{ padding: '0.75rem 1rem', backgroundColor: '#f8fafc', borderRadius: '10px', border: '1px dashed #cbd5e1', fontSize: '13px', color: '#94a3b8', fontStyle: 'italic' }}>
+        {faltaTexto}
+      </div>
+    );
+  }
+  return (
+    <a href={url} target="_blank" rel="noopener noreferrer"
+       style={{ display: 'inline-flex', alignItems: 'center', gap: '10px', padding: '0.75rem 1rem', backgroundColor: '#eff6ff', borderRadius: '10px', border: '1px solid #bfdbfe', color: '#1d4ed8', textDecoration: 'none', fontWeight: '700', fontSize: '13px' }}>
+      <FileText size={16} />
+      <span style={{ flex: 1 }}>{etiqueta}</span>
+      <ExternalLink size={14} />
+    </a>
   );
 };

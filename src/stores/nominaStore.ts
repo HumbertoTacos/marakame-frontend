@@ -10,20 +10,24 @@ interface NominaState {
   isLoading: boolean;
   error: string | null;
 
-  // Acciones
+  // Acciones - Nóminas
   fetchNominas: () => Promise<void>;
-  fetchEmpleados: () => Promise<void>;
   fetchNominaById: (id: number | string) => Promise<void>;
   setNominaActual: (nomina: Nomina | null) => void;
-  limpiarErrores: () => void;
-  
-  createNomina: (nomina: Partial<Nomina>) => Promise<void>; 
-  
-  // NUEVA DEFINICIÓN: Para actualizar un recibo de un empleado
+  createNomina: (nomina: FormData | Partial<Nomina>) => Promise<void>;
+  firmarNomina: (id: number) => Promise<boolean>;
+  archivarNomina: (id: number) => Promise<boolean>; // <--- FALTABA ESTO AQUÍ
   actualizarPreNomina: (id: number, data: any) => Promise<boolean>;
+
+  // Acciones - Empleados
+  fetchEmpleados: () => Promise<void>;
+  createEmpleado: (empleado: Partial<Empleado>) => Promise<void>;
+  updateEmpleado: (id: number, data: Partial<Empleado>) => Promise<void>;
+
+  // Utilidades
+  limpiarErrores: () => void;
 }
 
-// Agregamos "get" al callback de create para poder leer el estado interno
 export const useNominaStore = create<NominaState>((set, get) => ({
   nominas: [],
   empleados: [],
@@ -31,25 +35,20 @@ export const useNominaStore = create<NominaState>((set, get) => ({
   isLoading: false,
   error: null,
 
+  // =====================================
+  // NÓMINAS
+  // =====================================
   fetchNominas: async () => {
     set({ isLoading: true, error: null });
     try {
       const response = await apiClient.get('/nominas/ciclo');
-      set({ nominas: response.data.data || [], isLoading: false });
+      const lista = response.data?.data || [];
+      console.log(`[Nominas] cargadas ${lista.length} nóminas`, lista);
+      set({ nominas: lista, isLoading: false });
     } catch (error: any) {
-      console.error("Error al cargar la lista de nóminas:", error);
-      set({ error: error.message || 'Error al cargar nóminas', isLoading: false });
-    }
-  },
-
-  fetchEmpleados: async () => {
-    set({ isLoading: true, error: null });
-    try {
-      const response = await apiClient.get('/nominas/empleados');
-      set({ empleados: response.data.data || [], isLoading: false });
-    } catch (error: any) {
-      console.error("Error al cargar empleados activos:", error);
-      set({ error: error.message || 'Error al cargar empleados', isLoading: false });
+      // No borramos el listado si el fetch falla: dejamos lo que ya había y mostramos el error.
+      console.error("Error al cargar la lista de nóminas:", error?.response?.status, error?.response?.data || error.message);
+      set({ error: error?.response?.data?.message || error.message || 'Error al cargar nóminas', isLoading: false });
     }
   },
 
@@ -65,45 +64,119 @@ export const useNominaStore = create<NominaState>((set, get) => ({
   },
 
   setNominaActual: (nomina) => set({ nominaActual: nomina }),
-  
-  limpiarErrores: () => set({ error: null }),
 
   createNomina: async (nuevaNomina) => {
     set({ isLoading: true, error: null });
     try {
-      const response = await apiClient.post('/nominas/ciclo', nuevaNomina);
-      set((state) => ({ 
+      const isFormData = typeof FormData !== 'undefined' && nuevaNomina instanceof FormData;
+      const response = await apiClient.post(
+        '/nominas/ciclo',
+        nuevaNomina,
+        isFormData ? { headers: { 'Content-Type': 'multipart/form-data' } } : undefined
+      );
+      set((state) => ({
         nominas: [response.data.data, ...state.nominas],
-        isLoading: false 
+        isLoading: false
       }));
     } catch (error: any) {
       console.error("Error al guardar nómina:", error);
       set({ error: error.message || 'Error al guardar', isLoading: false });
-      throw error; 
+      throw error;
     }
   },
 
-  // NUEVA LÓGICA: Actualiza la prenómina y refresca los totales globales
+  firmarNomina: async (id) => {
+    set({ isLoading: true, error: null });
+    try {
+      await apiClient.put(`/nominas/ciclo/${id}/firmar`);
+      await get().fetchNominaById(id);
+      await get().fetchNominas();
+      set({ isLoading: false });
+      return true;
+    } catch (error: any) {
+      console.error("Error al firmar nómina:", error);
+      set({ error: error.message || 'Error al firmar', isLoading: false });
+      return false;
+    }
+  },
+
+  archivarNomina: async (id) => {
+    set({ isLoading: true, error: null });
+    try {
+      await apiClient.put(`/nominas/ciclo/${id}/archivar`);
+      await get().fetchNominaById(id);
+      await get().fetchNominas();
+      set({ isLoading: false });
+      return true;
+    } catch (error: any) {
+      console.error("Error al archivar nómina:", error);
+      set({ error: error.message || 'Error al archivar', isLoading: false });
+      return false;
+    }
+  },
+
   actualizarPreNomina: async (id, data) => {
     set({ isLoading: true, error: null });
     try {
       await apiClient.put(`/nominas/prenominas/${id}`, data);
-      
-      // Obtenemos el ID de la nómina que estamos viendo actualmente
       const currentNominaId = get().nominaActual?.id;
-      
-      // Si tenemos una nómina abierta, mandamos a pedir sus nuevos totales al backend
       if (currentNominaId) {
         await get().fetchNominaById(currentNominaId);
       }
-      
       set({ isLoading: false });
-      return true; // Retornamos true para que el componente sepa que todo salió bien
+      return true; 
     } catch (error: any) {
       console.error("Error al actualizar recibo:", error);
       set({ error: error.message || 'Error al actualizar recibo', isLoading: false });
-      return false; // Retornamos false si falló
+      return false; 
     }
   },
 
+  // =====================================
+  // EMPLEADOS
+  // =====================================
+  fetchEmpleados: async () => {
+    set({ isLoading: true, error: null });
+    try {
+      const response = await apiClient.get('/nominas/empleados');
+      set({ empleados: response.data.data || [], isLoading: false });
+    } catch (error: any) {
+      console.error("Error al cargar empleados activos:", error);
+      set({ error: error.message || 'Error al cargar empleados', isLoading: false });
+    }
+  },
+
+  createEmpleado: async (nuevoEmpleado) => {
+    set({ isLoading: true, error: null });
+    try {
+      const response = await apiClient.post('/nominas/empleados', nuevoEmpleado);
+      set((state) => ({
+        empleados: [...state.empleados, response.data.data],
+        isLoading: false
+      }));
+    } catch (error: any) {
+      console.error("Error al crear empleado:", error);
+      set({ error: error.message || 'Error al crear empleado', isLoading: false });
+      throw error;
+    }
+  },
+
+  updateEmpleado: async (id, data) => {
+    set({ isLoading: true, error: null });
+    try {
+      const response = await apiClient.put(`/nominas/empleados/${id}`, data);
+      set((state) => ({
+        empleados: state.empleados.map((emp) => 
+          emp.id === id ? response.data.data : emp
+        ),
+        isLoading: false
+      }));
+    } catch (error: any) {
+      console.error("Error al actualizar empleado:", error);
+      set({ error: error.message || 'Error al actualizar empleado', isLoading: false });
+      throw error;
+    }
+  },
+
+  limpiarErrores: () => set({ error: null }),
 }));

@@ -3,7 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   Activity, Search, Stethoscope, Users, Calendar, X,
   Trash2, Folder, ClipboardList, HeartPulse, Building2, History,
-  Brain, Apple, Heart, Droplets, LogOut,
+  Brain, Apple, Heart, Droplets, LogOut, Send, CheckCircle2, Loader2,
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import apiClient from '../../services/api';
@@ -25,13 +25,20 @@ const ROL_CONFIG: Record<RolMedico, { titulo: string; descripcion: string; acent
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-const calcularEdad = (fechaNacimiento: string | Date) => {
+const calcularEdad = (fechaNacimiento: string | Date | null | undefined): number => {
+  if (!fechaNacimiento) return 0;
   const hoy = new Date();
   const cumple = new Date(fechaNacimiento as string);
+  if (isNaN(cumple.getTime())) return 0;
   let edad = hoy.getFullYear() - cumple.getFullYear();
   const m = hoy.getMonth() - cumple.getMonth();
   if (m < 0 || (m === 0 && hoy.getDate() < cumple.getDate())) edad--;
-  return edad;
+  return (edad < 0 || edad > 120) ? 0 : edad;
+};
+
+const edadDisplay = (fecNac: string | Date | null | undefined): string => {
+  const e = calcularEdad(fecNac);
+  return e > 0 ? `${e} años` : 'N/A';
 };
 
 const AREA_CONFIG: Record<string, { color: string; light: string; border: string; label: string }> = {
@@ -94,7 +101,7 @@ const ValoracionInternaModal = ({ isOpen, onClose, paciente, onSuccess }: {
   const { usuario } = useAuthStore();
   const queryClient = useQueryClient();
 
-  const emptyForm = { temperatura: '', presionArterial: '', frecuenciaCardiaca: '', frecuenciaRespiratoria: '', oxigenacion: '', peso: '', nota: '' };
+  const emptyForm = { temperatura: '', presionArterial: '', frecuenciaCardiaca: '', frecuenciaRespiratoria: '', oxigenacion: '', peso: '', observacionesSV: '', tratamiento: '', nota: '' };
   const [form, setForm] = useState(emptyForm);
 
   const { data: expediente, isLoading: isLoadingExp } = useQuery<Expediente>({
@@ -118,6 +125,15 @@ const ValoracionInternaModal = ({ isOpen, onClose, paciente, onSuccess }: {
           ...(form.frecuenciaRespiratoria && { frecuenciaRespiratoria: parseInt(form.frecuenciaRespiratoria) }),
           ...(form.oxigenacion            && { oxigenacion:            parseInt(form.oxigenacion) }),
           ...(form.peso                   && { peso:                   parseFloat(form.peso) }),
+          ...(form.observacionesSV.trim() && { observaciones:          form.observacionesSV.trim() }),
+        }));
+      }
+
+      if (form.tratamiento.trim()) {
+        tasks.push(apiClient.post(`/expedientes/${expediente.id}/notas`, {
+          usuarioId: usuario?.id,
+          tipo: 'MEDICA',
+          nota: `[TRATAMIENTO] ${form.tratamiento.trim()}`,
         }));
       }
 
@@ -168,7 +184,7 @@ const ValoracionInternaModal = ({ isOpen, onClose, paciente, onSuccess }: {
               <div style={{ backgroundColor: '#eff6ff', padding: '0.5rem', borderRadius: '10px' }}>
                 <Stethoscope size={18} color="#3b82f6" />
               </div>
-              <h3 style={{ margin: 0, fontSize: '18px', fontWeight: '900', color: '#0f172a' }}>Valoración Médica</h3>
+              <h3 style={{ margin: 0, fontSize: '18px', fontWeight: '900', color: '#0f172a' }}>Seguimiento Clínico</h3>
             </div>
             <p style={{ margin: 0, fontSize: '13px', color: '#64748b', fontWeight: '600' }}>
               {paciente?.nombre} {paciente?.apellidoPaterno} · Cama {paciente?.cama?.numero || 'S/A'}
@@ -187,7 +203,7 @@ const ValoracionInternaModal = ({ isOpen, onClose, paciente, onSuccess }: {
           ) : (
             <>
               <p style={{ fontSize: '11px', fontWeight: '800', color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.8px', margin: '0 0 0.75rem' }}>Signos Vitales</p>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.85rem', marginBottom: '1.75rem' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.85rem', marginBottom: '1rem' }}>
                 {signosFields.map(({ label, key, placeholder }) => (
                   <div key={key}>
                     <label style={{ fontSize: '12px', fontWeight: '700', color: '#475569', display: 'block', marginBottom: '0.35rem' }}>{label}</label>
@@ -201,10 +217,28 @@ const ValoracionInternaModal = ({ isOpen, onClose, paciente, onSuccess }: {
                   </div>
                 ))}
               </div>
+              <div style={{ marginBottom: '1.75rem' }}>
+                <label style={{ fontSize: '12px', fontWeight: '700', color: '#475569', display: 'block', marginBottom: '0.35rem' }}>Observaciones de Signos Vitales</label>
+                <input
+                  type="text"
+                  placeholder="Observaciones adicionales de los signos..."
+                  value={form.observacionesSV}
+                  onChange={(e) => setForm(f => ({ ...f, observacionesSV: e.target.value }))}
+                  style={inp}
+                />
+              </div>
 
-              <p style={{ fontSize: '11px', fontWeight: '800', color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.8px', margin: '0 0 0.75rem' }}>Nota de Evolución Médica</p>
+              <p style={{ fontSize: '11px', fontWeight: '800', color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.8px', margin: '0 0 0.75rem' }}>Tratamientos / Medicamentos</p>
               <textarea
-                placeholder="Evolución clínica actual, ajustes al tratamiento, observaciones relevantes..."
+                placeholder="Medicamentos, dosis, vía de administración, ajustes al esquema terapéutico..."
+                value={form.tratamiento}
+                onChange={(e) => setForm(f => ({ ...f, tratamiento: e.target.value }))}
+                style={{ ...inp, minHeight: '80px', resize: 'vertical', marginBottom: '1.75rem' }}
+              />
+
+              <p style={{ fontSize: '11px', fontWeight: '800', color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.8px', margin: '0 0 0.75rem' }}>Nota de Evolución / Observaciones</p>
+              <textarea
+                placeholder="Evolución clínica actual, respuesta al tratamiento, observaciones relevantes del paciente..."
                 value={form.nota}
                 onChange={(e) => setForm(f => ({ ...f, nota: e.target.value }))}
                 style={{ ...inp, minHeight: '110px', resize: 'vertical' }}
@@ -229,10 +263,130 @@ const ValoracionInternaModal = ({ isOpen, onClose, paciente, onSuccess }: {
               disabled={submitMutation.isPending}
               style={{ padding: '0.75rem 1.75rem', backgroundColor: '#3b82f6', color: 'white', border: 'none', borderRadius: '14px', fontWeight: '800', cursor: submitMutation.isPending ? 'not-allowed' : 'pointer', fontSize: '14px', boxShadow: '0 4px 12px rgba(59,130,246,0.3)', opacity: submitMutation.isPending ? 0.7 : 1 }}
             >
-              {submitMutation.isPending ? 'Guardando...' : 'Guardar Valoración'}
+              {submitMutation.isPending ? 'Guardando...' : 'Guardar Seguimiento'}
             </button>
           </div>
         )}
+      </div>
+    </div>
+  );
+};
+
+// ─── Modal: Nueva Solicitud a Jefatura ────────────────────────────────────────
+
+const TIPOS_SOLICITUD = [
+  { value: 'REABASTECIMIENTO',  label: 'Reabastecimiento de medicamento' },
+  { value: 'MATERIAL_CURACION', label: 'Material de curación' },
+  { value: 'REPORTE',           label: 'Reporte especial' },
+  { value: 'PERSONAL',          label: 'Solicitud de personal' },
+  { value: 'OTRO',              label: 'Otro' },
+];
+
+const NuevaSolicitudModal = ({ isOpen, onClose }: { isOpen: boolean; onClose: () => void }) => {
+  const { usuario } = useAuthStore();
+  const [tipo, setTipo] = useState('');
+  const [contenido, setContenido] = useState('');
+  const [enviando, setEnviando] = useState(false);
+  const [exito, setExito] = useState(false);
+
+  const handleEnviar = async () => {
+    if (!tipo || !contenido.trim()) return;
+    setEnviando(true);
+    try {
+      await apiClient.post('/solicitudes-medicas', { tipo, contenido: contenido.trim() });
+      setExito(true);
+      setTimeout(() => {
+        setExito(false);
+        setTipo('');
+        setContenido('');
+        onClose();
+      }, 1500);
+    } catch (e) {
+      console.error(e);
+      alert('Error al enviar la solicitud. Intente nuevamente.');
+    } finally {
+      setEnviando(false);
+    }
+  };
+
+  if (!isOpen) return null;
+
+  const inp: React.CSSProperties = {
+    width: '100%', padding: '0.7rem 1rem', border: '1.5px solid #e2e8f0',
+    borderRadius: '12px', fontSize: '14px', outline: 'none', color: '#1e293b',
+    boxSizing: 'border-box',
+  };
+
+  return (
+    <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(15,23,42,0.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1100, padding: '1rem' }}>
+      <div style={{ backgroundColor: 'white', borderRadius: '28px', width: '100%', maxWidth: '500px', boxShadow: '0 25px 50px -12px rgba(0,0,0,0.25)', overflow: 'hidden' }}>
+
+        <div style={{ padding: '1.75rem 2rem', borderBottom: '1px solid #f1f5f9', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+            <div style={{ backgroundColor: '#eff6ff', padding: '0.5rem', borderRadius: '10px' }}>
+              <Send size={18} color="#3b82f6" />
+            </div>
+            <div>
+              <h3 style={{ margin: 0, fontSize: '17px', fontWeight: '900', color: '#0f172a' }}>Nueva Solicitud</h3>
+              <p style={{ margin: 0, fontSize: '12px', color: '#64748b', fontWeight: '600' }}>Petición dirigida a Jefatura Médica</p>
+            </div>
+          </div>
+          <button onClick={onClose} style={{ padding: '0.4rem', borderRadius: '10px', border: '1px solid #e2e8f0', backgroundColor: 'white', cursor: 'pointer', color: '#64748b' }}>
+            <X size={18} />
+          </button>
+        </div>
+
+        <div style={{ padding: '1.75rem 2rem', display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+          <div style={{ backgroundColor: '#f8fafc', borderRadius: '12px', padding: '0.85rem 1rem', fontSize: '13px', color: '#475569', fontWeight: '600' }}>
+            Solicitante: <strong>{usuario?.nombre} {usuario?.apellidos}</strong>
+          </div>
+
+          <div>
+            <label style={{ fontSize: '12px', fontWeight: '800', color: '#475569', display: 'block', marginBottom: '0.5rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Tipo de Solicitud</label>
+            <select
+              value={tipo}
+              onChange={e => setTipo(e.target.value)}
+              style={{ ...inp, backgroundColor: 'white', cursor: 'pointer' }}
+            >
+              <option value="">— Seleccionar tipo —</option>
+              {TIPOS_SOLICITUD.map(t => (
+                <option key={t.value} value={t.value}>{t.label}</option>
+              ))}
+            </select>
+          </div>
+
+          <div>
+            <label style={{ fontSize: '12px', fontWeight: '800', color: '#475569', display: 'block', marginBottom: '0.5rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Descripción de la solicitud</label>
+            <textarea
+              value={contenido}
+              onChange={e => setContenido(e.target.value)}
+              placeholder="Describe tu solicitud con el mayor detalle posible: qué se necesita, cantidad, urgencia..."
+              rows={4}
+              style={{ ...inp, resize: 'vertical' }}
+            />
+          </div>
+        </div>
+
+        <div style={{ padding: '1.25rem 2rem', borderTop: '1px solid #f1f5f9', display: 'flex', justifyContent: 'flex-end', gap: '0.75rem' }}>
+          <button onClick={onClose} style={{ padding: '0.7rem 1.4rem', border: '1.5px solid #e2e8f0', borderRadius: '12px', backgroundColor: 'white', color: '#475569', fontWeight: '700', cursor: 'pointer', fontSize: '14px' }}>
+            Cancelar
+          </button>
+          <button
+            onClick={handleEnviar}
+            disabled={enviando || !tipo || !contenido.trim()}
+            style={{
+              padding: '0.7rem 1.6rem', borderRadius: '12px', border: 'none',
+              background: enviando || !tipo || !contenido.trim() ? '#e2e8f0' : 'linear-gradient(135deg,#3b82f6,#1d4ed8)',
+              color: enviando || !tipo || !contenido.trim() ? '#94a3b8' : 'white',
+              fontWeight: '800', cursor: enviando || !tipo || !contenido.trim() ? 'not-allowed' : 'pointer',
+              fontSize: '14px', display: 'flex', alignItems: 'center', gap: '0.5rem',
+            }}
+          >
+            {exito ? <CheckCircle2 size={15} /> : enviando ? <Loader2 className="animate-spin" size={15} /> : <Send size={15} />}
+            {exito ? 'Enviada' : enviando ? 'Enviando...' : 'Enviar Solicitud'}
+          </button>
+        </div>
+
       </div>
     </div>
   );
@@ -459,6 +613,7 @@ export function AreaMedica() {
   const [sustanciasModal, setSustanciasModal] = useState({ isOpen: false, sustancias: [] as string[], nombre: '' });
   const [valoracionModal, setValoracionModal] = useState<{ isOpen: boolean; paciente: Paciente | null }>({ isOpen: false, paciente: null });
   const [detoxModal, setDetoxModal] = useState<{ isOpen: boolean; paciente: Paciente | null }>({ isOpen: false, paciente: null });
+  const [solicitudModalOpen, setSolicitudModalOpen] = useState(false);
 
   // ── Queries ───────────────────────────────────────────────────────────────
 
@@ -536,6 +691,20 @@ export function AreaMedica() {
           </div>
         </div>
 
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+          {(usuario?.rol === 'AREA_MEDICA' || usuario?.rol === 'JEFE_MEDICO' || usuario?.rol === 'ENFERMERIA' || usuario?.rol === 'NUTRICION' || usuario?.rol === 'PSICOLOGIA') && (
+            <button
+              onClick={() => setSolicitudModalOpen(true)}
+              style={{
+                padding: '0.7rem 1.2rem', borderRadius: '12px', border: '1.5px solid #bfdbfe',
+                backgroundColor: '#eff6ff', color: '#1d4ed8', fontWeight: '700', fontSize: '13px',
+                cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.45rem',
+                transition: 'all 0.2s',
+              }}
+            >
+              <Send size={14} /> Solicitudes
+            </button>
+          )}
         <div style={{ display: 'flex', backgroundColor: '#f1f5f9', padding: '0.4rem', borderRadius: '14px', gap: '0.25rem' }}>
           {config.showInbox && (
             <button
@@ -581,6 +750,7 @@ export function AreaMedica() {
               {pacientesInternados?.length ?? 0}
             </span>
           </button>
+        </div>
         </div>
       </div>
 
@@ -628,7 +798,7 @@ export function AreaMedica() {
                           <p style={{ fontSize: '11px', color: '#94a3b8', margin: 0 }}>#{pac.id}</p>
                         </td>
                         <td style={{ padding: '1.1rem 1.25rem' }}>
-                          <p style={{ fontWeight: '600', color: '#475569', margin: 0 }}>{calcularEdad(pac.fechaNacimiento)} años</p>
+                          <p style={{ fontWeight: '600', color: '#475569', margin: 0 }}>{edadDisplay(pac.fechaNacimiento)}</p>
                           <p style={{ fontSize: '11px', color: '#94a3b8', margin: 0 }}>{pac.sexo === 'M' ? 'Masculino' : 'Femenino'}</p>
                         </td>
                         <td style={{ padding: '1.1rem 1.25rem' }}>
@@ -733,7 +903,7 @@ export function AreaMedica() {
                             {pac.nombre} {pac.apellidoPaterno}
                           </p>
                           <p style={{ fontSize: '12px', color: '#64748b', margin: 0, fontWeight: '600' }}>
-                            Cama {pac.cama?.numero ?? 'S/A'} · {calcularEdad(pac.fechaNacimiento)} años · {pac.sexo === 'M' ? 'Masculino' : 'Femenino'}
+                            Cama {pac.cama?.numero ?? 'S/A'} · {edadDisplay(pac.fechaNacimiento)} · {pac.sexo === 'M' ? 'Masculino' : 'Femenino'}
                           </p>
                         </div>
 
@@ -750,7 +920,7 @@ export function AreaMedica() {
                           )}
                           {/* Expediente directo */}
                           <button
-                            onClick={() => navigate(`/medico/expediente/${pac.id}`)}
+                            onClick={() => navigate(`/medica/expediente/${pac.id}`)}
                             style={actionBtn('#10b981')}
                             title="Ver expediente digital completo"
                           >
@@ -809,6 +979,10 @@ export function AreaMedica() {
         onClose={() => setValoracionModal({ isOpen: false, paciente: null })}
         paciente={valoracionModal.paciente}
         onSuccess={() => queryClient.invalidateQueries({ queryKey: ['pacientes_internados'] })}
+      />
+      <NuevaSolicitudModal
+        isOpen={solicitudModalOpen}
+        onClose={() => setSolicitudModalOpen(false)}
       />
     </div>
   );

@@ -14,9 +14,11 @@ interface Props {
   pacienteId: number;
   onSuccess: () => void;
   onCancel: () => void;
+  /** Si se provee, reemplaza la llamada interna a /asignar-cama. Recibe la cama seleccionada. */
+  onConfirm?: (cama: Cama) => Promise<void>;
 }
 
-export const AsignacionCamaModal: React.FC<Props> = ({ pacienteId, onSuccess, onCancel }) => {
+export const AsignacionCamaModal: React.FC<Props> = ({ pacienteId, onSuccess, onCancel, onConfirm }) => {
   const [camas, setCamas] = useState<Cama[]>([]);
   const [selectedCama, setSelectedCama] = useState<Cama | null>(null);
   const [confirming, setConfirming] = useState(false);
@@ -34,10 +36,14 @@ export const AsignacionCamaModal: React.FC<Props> = ({ pacienteId, onSuccess, on
     if (!selectedCama) return;
     setSubmitting(true);
     try {
-      await apiClient.post(`/admisiones/paciente/${pacienteId}/asignar-cama`, {
-        camaId: selectedCama.id,
-        fechaIngreso: new Date().toISOString(),
-      });
+      if (onConfirm) {
+        await onConfirm(selectedCama);
+      } else {
+        await apiClient.post(`/admisiones/paciente/${pacienteId}/asignar-cama`, {
+          camaId: selectedCama.id,
+          fechaIngreso: new Date().toISOString(),
+        });
+      }
       onSuccess();
     } catch (err) {
       console.error(err);
