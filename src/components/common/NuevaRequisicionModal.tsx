@@ -18,6 +18,7 @@ interface ArticuloForm {
 interface RequisicionForm {
   fecha: string;
   areaSolicitante: string;
+  tipo: 'ORDINARIA' | 'EXTRAORDINARIA';
   quienSolicita: string;
   responsableArea: string;
   justificacion: string;
@@ -49,6 +50,7 @@ const emptyArticulo = (): ArticuloForm => ({
 const emptyForm = (): RequisicionForm => ({
   fecha: new Date().toISOString().split('T')[0],
   areaSolicitante: '',
+  tipo: 'ORDINARIA',
   quienSolicita: '',
   responsableArea: '',
   justificacion: '',
@@ -185,6 +187,7 @@ export function NuevaRequisicionModal({ isOpen, onClose, onSuccess }: Props) {
       await createRequisicion({
         areaSolicitante: form.areaSolicitante.trim(),
         justificacion: form.justificacion.trim(),
+        tipo: form.tipo,
         descripcion: form.responsableArea.trim() ? `Responsable: ${form.responsableArea.trim()}` : undefined,
         detalles: form.articulos.map(a => ({
           productoNombre: a.articulo.trim(),
@@ -325,6 +328,17 @@ export function NuevaRequisicionModal({ isOpen, onClose, onSuccess }: Props) {
                 style={inp(!!errors.areaSolicitante)}
               />
               {errors.areaSolicitante && <p style={sErrorMsg}>{errors.areaSolicitante}</p>}
+            </div>
+            <div>
+              <label style={sLabel}>Tipo de Requisición</label>
+              <select
+                value={form.tipo}
+                onChange={e => setForm(prev => ({ ...prev, tipo: e.target.value as 'ORDINARIA' | 'EXTRAORDINARIA' }))}
+                style={inp()}
+              >
+                <option value="ORDINARIA">Ordinaria</option>
+                <option value="EXTRAORDINARIA">Extraordinaria</option>
+              </select>
             </div>
             <div>
               <label style={sLabel}>Quién Solicita *</label>

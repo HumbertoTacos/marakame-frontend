@@ -10,6 +10,7 @@ export interface CreateRequisicionPayload {
   areaSolicitante: string;
   justificacion: string;
   descripcion?: string;
+  tipo?: 'ORDINARIA' | 'EXTRAORDINARIA';
   detalles: {
     productoNombre: string;
     unidadLibre: string;

@@ -331,6 +331,8 @@ export function Compras() {
 
   // FIX: todos los campos de formCot inicializados como string vacío, nunca undefined
   const [formCot, setFormCot] = useState({ proveedor: '', precio: '', tiempoEntrega: '' });
+  const [enviadoOrden, setEnviadoOrden] = useState(false);
+  const [enviadoFinalizar, setEnviadoFinalizar] = useState(false);
 
   // Nuevo flujo EN_COMPRAS: cotizaciones con catálogo de proveedores
   const [busquedaProveedor, setBusquedaProveedor] = useState('');
@@ -349,7 +351,7 @@ export function Compras() {
 
   // Pre-llenar cotPorProducto cuando se abre el modal con cotizaciones ya guardadas
   React.useEffect(() => {
-    if (!proceso) { setCotPorProducto({}); return; }
+    if (!proceso) { setCotPorProducto({}); setEnviadoOrden(false); setEnviadoFinalizar(false); return; }
     const cots = proceso.cotizaciones ?? [];
     const conDetalle = cots.filter(c => c.requisicionDetalleId != null);
     if (conDetalle.length === 0) return;
@@ -391,14 +393,14 @@ export function Compras() {
   const notify = (msg: string) => { setNotif(msg); setTimeout(() => setNotif(null), 3500); };
 
   const descargarOrdenPDF = async () => {
-    if (!ordenPdfRef.current || !ordenesDetalle?.ordenCompra) return;
+    if (!ordenPdfRef.current || !ordenesDetalle?.ordenes?.length) return;
     const canvas  = await html2canvas(ordenPdfRef.current, { scale: 2 });
     const imgData = canvas.toDataURL('image/png');
     const pdf     = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
     const pdfWidth  = pdf.internal.pageSize.getWidth();
     const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
     pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
-    pdf.save(`${ordenesDetalle.ordenCompra.folio}.pdf`);
+    pdf.save(`${ordenesDetalle.ordenes[0].folio}.pdf`);
   };
 
   const agregarDetalle    = () => setDetalles([...detalles, { producto: '', unidad: '', cantidad: 1 }]);
@@ -1820,12 +1822,13 @@ export function Compras() {
           <div style={{ display: 'flex', gap: 10 }}>
             <Btn
               icon={<Package size={15}/>}
-              disabled={!cot || createOrden.isPending}
+              disabled={!cot || createOrden.isPending || enviadoOrden}
               onClick={() => {
-                if (!cot) return;
+                if (!cot || enviadoOrden) return;
+                setEnviadoOrden(true);
                 createOrden.mutate(req.id, {
                   onSuccess: () => { estadoModalRef.current = null; setProceso(null); notify('Orden de compra generada'); },
-                  onError:   (err: any) => notify(`Error: ${err?.response?.data?.message ?? err?.message}`),
+                  onError:   (err: any) => { setEnviadoOrden(false); notify(`Error: ${err?.response?.data?.message ?? err?.message}`); },
                 });
               }}
             >
@@ -1841,22 +1844,22 @@ export function Compras() {
     if (estadoModal === 'ORDEN_GENERADA' && puedeHacer(rol, 'facturas')) {
       return (
         <Modal title="Orden de compra activa" onClose={() => { estadoModalRef.current = null; setProceso(null); }} width={560}>
-          {req.ordenCompra && (
-            <div style={{ background: '#F0FDF4', border: '1px solid #BBF7D0', borderRadius: 10, padding: '14px 18px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          {(req.ordenes ?? []).map(oc => (
+            <div key={oc.id} style={{ background: '#F0FDF4', border: '1px solid #BBF7D0', borderRadius: 10, padding: '14px 18px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <div>
                 <div style={{ fontSize: 11, color: '#6B7280', fontWeight: 600, marginBottom: 2, textTransform: 'uppercase' as const, letterSpacing: '0.06em' }}>Folio OC</div>
-                <div style={{ fontSize: 14, fontWeight: 700, color: '#166534' }}>{req.ordenCompra.folio}</div>
+                <div style={{ fontSize: 14, fontWeight: 700, color: '#166534' }}>{oc.folio}</div>
               </div>
               <div style={{ textAlign: 'center' as const }}>
                 <div style={{ fontSize: 11, color: '#6B7280', fontWeight: 600, marginBottom: 2, textTransform: 'uppercase' as const, letterSpacing: '0.06em' }}>Proveedor</div>
-                <div style={{ fontSize: 14, fontWeight: 600, color: '#111827' }}>{typeof req.ordenCompra.proveedor === 'object' && req.ordenCompra.proveedor !== null ? (req.ordenCompra.proveedor as any).nombre : String(req.ordenCompra.proveedor ?? '—')}</div>
+                <div style={{ fontSize: 14, fontWeight: 600, color: '#111827' }}>{typeof oc.proveedor === 'object' && oc.proveedor !== null ? (oc.proveedor as any).nombre : String(oc.proveedor ?? '—')}</div>
               </div>
               <div style={{ textAlign: 'right' as const }}>
                 <div style={{ fontSize: 11, color: '#6B7280', fontWeight: 600, marginBottom: 2, textTransform: 'uppercase' as const, letterSpacing: '0.06em' }}>Total</div>
-                <div style={{ fontSize: 16, fontWeight: 800, color: '#2563EB' }}>${Number(req.ordenCompra.total).toLocaleString('es-MX', { minimumFractionDigits: 2 })}</div>
+                <div style={{ fontSize: 16, fontWeight: 800, color: '#2563EB' }}>${Number(oc.total).toLocaleString('es-MX', { minimumFractionDigits: 2 })}</div>
               </div>
             </div>
-          )}
+          ))}
           <div style={{ background: '#FFFBEB', border: '1px solid #FDE68A', borderRadius: 10, padding: '12px 16px', fontSize: 13, color: '#92400E' }}>
             <div style={{ fontWeight: 600, marginBottom: 6 }}>Pasos a completar:</div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
@@ -2049,11 +2052,13 @@ export function Compras() {
             <Btn
               variant="success"
               icon={finalizar.isPending ? <Loader2 size={15} /> : <CheckCircle size={15}/>}
-              disabled={finalizar.isPending}
+              disabled={finalizar.isPending || enviadoFinalizar}
               onClick={() => {
+                if (enviadoFinalizar) return;
+                setEnviadoFinalizar(true);
                 finalizar.mutate({ id: req.id }, {
                   onSuccess: () => { estadoModalRef.current = null; setProceso(null); notify('Compra finalizada exitosamente'); },
-                  onError:   (err: any) => notify(`Error: ${err?.response?.data?.message ?? err?.message}`),
+                  onError:   (err: any) => { setEnviadoFinalizar(false); notify(`Error: ${err?.response?.data?.message ?? err?.message}`); },
                 });
               }}
             >
@@ -2087,11 +2092,13 @@ export function Compras() {
             <Btn
               variant="success"
               icon={finalizar.isPending ? <Loader2 size={15} /> : <CheckCircle size={15}/>}
-              disabled={finalizar.isPending}
+              disabled={finalizar.isPending || enviadoFinalizar}
               onClick={() => {
+                if (enviadoFinalizar) return;
+                setEnviadoFinalizar(true);
                 finalizar.mutate({ id: req.id }, {
                   onSuccess: () => { estadoModalRef.current = null; setProceso(null); notify('Compra finalizada exitosamente'); },
-                  onError:   (err: any) => notify(`Error: ${err?.response?.data?.message ?? err?.message}`),
+                  onError:   (err: any) => { setEnviadoFinalizar(false); notify(`Error: ${err?.response?.data?.message ?? err?.message}`); },
                 });
               }}
             >
@@ -2258,9 +2265,9 @@ export function Compras() {
   const renderOrdenes = () => {
     if (!ordenesDetalle) return null;
     const req    = requisiciones.find(r => r.id === ordenesDetalle.id) ?? ordenesDetalle;
-    const orden  = req.ordenCompra;
+    const orden  = req.ordenes?.[0];
     const op     = (req as any).ordenPago;
-    const hasOC  = !!orden;
+    const hasOC  = !!req.ordenes?.length;
     const hasOP  = !!op;
     if (!hasOC && !hasOP) return null;
 
@@ -2385,11 +2392,11 @@ export function Compras() {
       const filas = detalles.length > 0
         ? detalles
         : (req.facturas ?? []).map((f: any) => ({
-            fechaOrdenCompra: req.ordenCompra?.fecha,
-            folioOrdenCompra: req.ordenCompra?.folio,
+            fechaOrdenCompra: req.ordenes?.[0]?.fecha,
+            folioOrdenCompra: req.ordenes?.map(o => o.folio).join(', ') || null,
             numeroFactura:    f.numero,
-            proveedor:        req.ordenCompra?.proveedor ?? '—',
-            monto:            f.monto > 0 ? f.monto : (req.ordenCompra?.total ?? 0),
+            proveedor:        req.ordenes?.[0]?.proveedor ?? '—',
+            monto:            f.monto > 0 ? f.monto : (req.ordenes?.reduce((s, o) => s + Number(o.total), 0) ?? 0),
           }));
       const totalGeneral: number =
         op.totalGeneral ?? filas.reduce((s: number, d: any) => s + Number(d.monto ?? 0), 0);
@@ -2693,14 +2700,14 @@ export function Compras() {
                 ) : (
                   <div style={{ color: '#6B7280', fontSize: 13, textAlign: 'center', padding: 24 }}>Sin facturas registradas</div>
                 )}
-                {exp.ordenCompra && (
-                  <div style={{ background: '#F0FDF4', border: '1px solid #BBF7D0', borderRadius: 10, padding: 14, display: 'flex', flexDirection: 'column', gap: 4 }}>
+                {(exp.ordenes ?? []).map(oc => (
+                  <div key={oc.id} style={{ background: '#F0FDF4', border: '1px solid #BBF7D0', borderRadius: 10, padding: 14, display: 'flex', flexDirection: 'column', gap: 4 }}>
                     <div style={{ fontSize: 11, fontWeight: 700, color: '#166534', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 2 }}>Orden de Compra</div>
-                    <div style={{ fontSize: 13, color: '#374151' }}><strong>Folio OC:</strong> {exp.ordenCompra.folio}</div>
-                    <div style={{ fontSize: 13, color: '#374151' }}><strong>Proveedor:</strong> {typeof exp.ordenCompra.proveedor === 'object' && exp.ordenCompra.proveedor !== null ? (exp.ordenCompra.proveedor as any).nombre : String(exp.ordenCompra.proveedor ?? '—')}</div>
-                    <div style={{ fontSize: 13, color: '#374151' }}><strong>Total OC:</strong> ${Number(exp.ordenCompra.total).toLocaleString('es-MX', { minimumFractionDigits: 2 })}</div>
+                    <div style={{ fontSize: 13, color: '#374151' }}><strong>Folio OC:</strong> {oc.folio}</div>
+                    <div style={{ fontSize: 13, color: '#374151' }}><strong>Proveedor:</strong> {typeof oc.proveedor === 'object' && oc.proveedor !== null ? (oc.proveedor as any).nombre : String(oc.proveedor ?? '—')}</div>
+                    <div style={{ fontSize: 13, color: '#374151' }}><strong>Total OC:</strong> ${Number(oc.total).toLocaleString('es-MX', { minimumFractionDigits: 2 })}</div>
                   </div>
-                )}
+                ))}
                 {cotizaciones.length > 0 && (
                   <div>
                     <div style={{ fontSize: 11, fontWeight: 700, color: '#6B7280', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 8 }}>Cotizaciones ({cotizaciones.length})</div>
@@ -3121,9 +3128,9 @@ export function Compras() {
                       </td>
                       <td style={{ padding: '1rem 1rem', verticalAlign: 'middle' }}>
                         <div style={{ display: 'flex', gap: 4, justifyContent: 'flex-end', flexWrap: 'wrap' }}>
-                          {(req.ordenCompra || (req as any).ordenPago) && (
+                          {(req.ordenes?.length || (req as any).ordenPago) && (
                             <button
-                              onClick={() => { setTabOrdenes(req.ordenCompra ? 'compra' : 'pago'); setOrdenesDetalle(req); }}
+                              onClick={() => { setTabOrdenes(req.ordenes?.length ? 'compra' : 'pago'); setOrdenesDetalle(req); }}
                               style={{ display: 'flex', alignItems: 'center', gap: 4, background: '#F0FDF4', color: '#16A34A', border: '1px solid #BBF7D0', borderRadius: 8, padding: '4px 9px', fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap' }}
                             >
                               <FileText size={12}/> Ver órdenes
@@ -3162,6 +3169,7 @@ export function Compras() {
       {renderProceso()}
       {renderDetalle()}
       {renderOrdenes()}
+      {renderExpedienteDetalle()}
       {notif && <Notif msg={notif} onClose={() => setNotif(null)} />}
     </>
   );

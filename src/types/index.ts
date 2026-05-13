@@ -457,7 +457,7 @@ export interface Requisicion {
 
   cotizaciones?: Cotizacion[];
 
-  ordenCompra?: OrdenCompra;
+  ordenes?: OrdenCompra[];
 
   facturas?: {
     id: number;

@@ -1,5 +1,5 @@
 import { Outlet, useNavigate, useLocation } from 'react-router-dom';
-import { LogOut, Search, Bell, HeartPulse, Stethoscope, PackageOpen, ShoppingCart, Banknote, ShieldAlert, FileOutput, ChevronRight, Users, Clock, ClipboardList, LayoutDashboard, Droplets, FlaskConical, UserCog, ClipboardCheck, Wallet, CalendarCheck } from 'lucide-react';
+import { LogOut, Search, Bell, HeartPulse, ShieldCheck, Stethoscope, PackageOpen, ShoppingCart, Banknote, ShieldAlert, FileOutput, ChevronRight, Users, Clock, ClipboardList, LayoutDashboard, Droplets, FlaskConical, UserCog, ClipboardCheck, Wallet, CalendarCheck, Building2 } from 'lucide-react';
 import { useState, useEffect, useCallback } from 'react';
 import { useAuthStore } from '../stores/authStore';
 import { notificacionService, type Notificacion } from '../services/notificacion.service';
@@ -218,6 +218,22 @@ export function Layout() {
             </>
           )}
 
+          {/* Jefatura Administrativa: paso intermedio del flujo de nómina antes de Dirección */}
+          {(['JEFE_ADMINISTRATIVO', 'ADMIN_GENERAL'].includes(usuario?.rol || '')) && (
+            <>
+              <div className="sidebar-section-title">Jefatura Administrativa</div>
+              <div className={getNavItemClass('administracion')} onClick={() => navigate('/administracion')}>
+                <ClipboardCheck size={20} style={{ marginRight: '1rem' }}/> Revisión de Pre-Nóminas
+              </div>
+              <div className={getNavItemClass('nominas')} onClick={() => navigate('/nominas')}>
+                <Banknote size={20} style={{ marginRight: '1rem' }}/> Nóminas y RRHH
+              </div>
+              <div className={getNavItemClass('revision-compras')} onClick={() => navigate('/revision-compras')}>
+                <ShoppingCart size={20} style={{ marginRight: '1rem' }}/> Revisión Adm. de Compras
+              </div>
+            </>
+          )}
+
           {/* Recursos Financieros */}
           {(['RRHH_FINANZAS', 'RECURSOS_FINANCIEROS', 'ADMIN_GENERAL'].includes(usuario?.rol || '')) && (
             <>
@@ -230,24 +246,12 @@ export function Layout() {
               <div className={getNavItemClass('compras')} onClick={() => navigate('/compras')}>
                 <ShoppingCart size={20} style={{ marginRight: '1rem' }}/> Control de Compras
               </div>
+              <div className={getNavItemClass('proveedores')} onClick={() => navigate('/proveedores')}>
+                <Building2 size={20} style={{ marginRight: '1rem' }}/> Catálogo de Proveedores
+              </div>
               <div className={getNavItemClass('pagos')} onClick={() => navigate('/pagos')}>
                 <Wallet size={20} style={{ marginRight: '1rem' }}/> Pagos de Pacientes
               </div>
-            </>
-          )}
-
-          {/* Jefatura Administrativa */}
-          {(['JEFE_ADMINISTRATIVO', 'ADMIN_GENERAL'].includes(usuario?.rol || '')) && (
-            <>
-              <div className="sidebar-section-title">Jefatura Administrativa</div>
-              <div className={getNavItemClass('administracion')} onClick={() => navigate('/administracion')}>
-                <ClipboardCheck size={20} style={{ marginRight: '1rem' }}/> Panel Administrativo
-              </div>
-              {usuario?.rol === 'ADMIN_GENERAL' && (
-                <div className={getNavItemClass('nominas')} onClick={() => navigate('/nominas')}>
-                  <Banknote size={20} style={{ marginRight: '1rem' }}/> Histórico de Nóminas
-                </div>
-              )}
             </>
           )}
 
@@ -263,6 +267,9 @@ export function Layout() {
                   <Banknote size={20} style={{ marginRight: '1rem' }}/> Firma de Nóminas
                 </div>
               )}
+              <div className={getNavItemClass('autorizacion-compras')} onClick={() => navigate('/autorizacion-compras')}>
+                <ShieldCheck size={20} style={{ marginRight: '1rem' }}/> Autorización de Compras
+              </div>
               <div className={getNavItemClass('auditoria')} onClick={() => navigate('/auditoria')}>
                 <ShieldAlert size={20} style={{ marginRight: '1rem' }}/> Auditoría
               </div>

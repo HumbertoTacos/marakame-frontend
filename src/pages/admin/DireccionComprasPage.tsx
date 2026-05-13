@@ -142,6 +142,7 @@ function ModalDetalle({
   const [observaciones, setObs] = useState('');
   const [motivo, setMotivo]     = useState('');
   const [accion, setAccion]     = useState<'autorizar' | 'rechazar' | null>(null);
+  const [enviado, setEnviado]   = useState(false);
 
   const { filasPorProducto, cotsLegacy, usaFlujoPorProducto, subtotal, iva, totalConIva, gruposProv } = calcularResumen(compra);
   const detallesReq = compra.requisicion?.detalles ?? [];
@@ -406,8 +407,12 @@ function ModalDetalle({
             onChange={e => setObs(e.target.value)}
           />
           <div style={{ display: 'flex', gap: 10 }}>
-            <Btn variant="success" icon={autorizando ? <Loader2 size={15} /> : <CheckCircle size={15} />} disabled={autorizando}
-              onClick={() => onAutorizar(observaciones.trim() || undefined)}>
+            <Btn variant="success" icon={autorizando ? <Loader2 size={15} /> : <CheckCircle size={15} />} disabled={autorizando || enviado}
+              onClick={() => {
+                if (enviado) return;
+                setEnviado(true);
+                onAutorizar(observaciones.trim() || undefined);
+              }}>
               {autorizando ? 'Autorizando…' : 'Confirmar autorización'}
             </Btn>
             <Btn variant="ghost" onClick={() => setAccion(null)}>Cancelar</Btn>

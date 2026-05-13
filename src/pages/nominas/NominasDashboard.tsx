@@ -1,12 +1,13 @@
 import React, { useEffect, useState } from 'react';
 import {
   Users, Banknote, FileSignature, CheckCircle,
-  AlertCircle, Calendar, ChevronRight, FileText, UserPlus, X, Briefcase, Trash2, Filter
+  AlertCircle, Calendar, ChevronRight, FileText, UserPlus, X, Briefcase, Trash2, Filter, ClipboardList
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useNominaStore } from '../../stores/nominaStore';
 import { useAuthStore } from '../../stores/authStore';
 import type { Nomina } from '../../types';
+import { NuevaRequisicionModal } from '../../components/common/NuevaRequisicionModal';
 
 const getNominaStatusConfig = (estado: string) => {
   switch (estado) {
@@ -54,6 +55,7 @@ const NominasDashboard: React.FC = () => {
     'COCINA',
   ];
 
+  const [showNuevaRequisicion, setShowNuevaRequisicion] = useState(false);
   const [activeTab, setActiveTab] = useState<'nominas' | 'empleados'>('nominas');
   
   // --- ESTADO PARA EL FILTRO DE NÓMINAS ---
@@ -227,24 +229,34 @@ const NominasDashboard: React.FC = () => {
           <p style={{ color: '#64748b', fontSize: '16px', marginTop: '4px' }}>Gestión de personal, pre-nóminas y control de asistencias.</p>
         </div>
         
-        {puedeCrear && (
-          <div style={{ display: 'flex', gap: '1rem' }}>
-            <button
-              onClick={openCreateModal}
-              style={{ backgroundColor: 'white', color: '#1e293b', border: '1px solid #e2e8f0', padding: '0.75rem 1.5rem', borderRadius: '12px', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}
-            >
-              <UserPlus size={20} color="#3b82f6" />
-              Nuevo Empleado
-            </button>
-            <button
-              onClick={() => navigate('/nominas/nueva')}
-              style={{ backgroundColor: '#3b82f6', color: 'white', border: 'none', padding: '0.75rem 1.5rem', borderRadius: '12px', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', boxShadow: '0 4px 6px -1px rgba(59,130,246,0.3)' }}
-            >
-              <FileText size={20} />
-              Crear Pre-Nómina
-            </button>
-          </div>
-        )}
+        <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
+          <button
+            onClick={() => setShowNuevaRequisicion(true)}
+            style={{ display: 'flex', alignItems: 'center', padding: '0.8rem 1.5rem', backgroundColor: 'white', color: 'var(--text-h)', border: '1px solid #e2e8f0', borderRadius: '16px', cursor: 'pointer', fontWeight: '700', fontSize: '14px', transition: 'all 0.2s ease', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)' }}
+            onMouseEnter={e => e.currentTarget.style.backgroundColor = '#f8fafc'}
+            onMouseLeave={e => e.currentTarget.style.backgroundColor = 'white'}
+          >
+            <ClipboardList size={18} style={{ marginRight: '0.6rem' }} /> Nueva requisición
+          </button>
+          {puedeCrear && (
+            <>
+              <button
+                onClick={openCreateModal}
+                style={{ backgroundColor: 'white', color: '#1e293b', border: '1px solid #e2e8f0', padding: '0.75rem 1.5rem', borderRadius: '12px', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}
+              >
+                <UserPlus size={20} color="#3b82f6" />
+                Nuevo Empleado
+              </button>
+              <button
+                onClick={() => navigate('/nominas/nueva')}
+                style={{ backgroundColor: '#3b82f6', color: 'white', border: 'none', padding: '0.75rem 1.5rem', borderRadius: '12px', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', boxShadow: '0 4px 6px -1px rgba(59,130,246,0.3)' }}
+              >
+                <FileText size={20} />
+                Crear Pre-Nómina
+              </button>
+            </>
+          )}
+        </div>
       </div>
 
       {/* Banner de error si fetchNominas falló */}
@@ -556,6 +568,11 @@ const NominasDashboard: React.FC = () => {
         </div>
       )}
 
+      <NuevaRequisicionModal
+        isOpen={showNuevaRequisicion}
+        onClose={() => setShowNuevaRequisicion(false)}
+        onSuccess={() => {}}
+      />
     </div>
   );
 };

@@ -4,7 +4,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   PackageSearch, ArrowDownRight, ArrowUpRight, Plus, Box, Search, Filter,
   MoreVertical, X, Bell, Eye, Clock, CheckCircle, XCircle,
-  ShoppingCart, FileText, AlertTriangle, ClipboardList
+  ShoppingCart, FileText, AlertTriangle, ClipboardList, Pencil
 } from 'lucide-react';
 import { NuevaRequisicionModal } from '../../components/common/NuevaRequisicionModal';
 import { RequisicionAlmacenModal } from '../../components/almacen/RequisicionAlmacenModal';
@@ -194,6 +194,7 @@ const ESTADO_REQ_STYLES: Record<string, { bg: string; text: string; dot: string 
   PARCIAL:                     { bg: '#FFFBEB', text: '#B45309', dot: '#F59E0B' },
   SIN_EXISTENCIA:              { bg: '#FEF2F2', text: '#B91C1C', dot: '#EF4444' },
   ENVIADA_A_COMPRAS:           { bg: '#EEF2FF', text: '#4338CA', dot: '#6366F1' },
+  FINALIZADA:                  { bg: '#F0FDF4', text: '#15803D', dot: '#16A34A' },
   EN_REVISION_ADMINISTRATIVA:  { bg: '#FEFCE8', text: '#CA8A04', dot: '#EAB308' },
   DEVUELTA_A_COMPRAS:          { bg: '#FFF7ED', text: '#EA580C', dot: '#F97316' },
   // EstadoCompra (CompraRequisicion — legacy en otros contextos)
@@ -245,6 +246,8 @@ const EstadoBadge = ({ badge }: { badge: { bg: string; text: string; dot: string
   </span>
 );
 
+const getNow = () => Date.now();
+
 // ─── COMPONENTE PRINCIPAL ─────────────────────────────────────────────────────
 
 export function Almacen() {
@@ -264,6 +267,12 @@ export function Almacen() {
   const [productoData, setProductoData] = useState({
     nombre: '', categoria: 'MEDICAMENTO', unidad: 'PIEZAS',
     stockMinimo: 5, descripcion: '', ubicacion: ''
+  });
+
+  // Estado para edición de producto
+  const [editandoProducto, setEditandoProducto] = useState<Producto | null>(null);
+  const [editForm, setEditForm] = useState({
+    nombre: '', categoria: '', unidad: '', descripcion: '', stockMinimo: 5, ubicacion: ''
   });
   const [movimientoData, setMovimientoData] = useState({
     productoId: '', tipo: 'ENTRADA', cantidad: 1, observaciones: '',
@@ -411,7 +420,7 @@ export function Almacen() {
         </span>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
           <div style={{ background: '#F9FAFB', borderRadius: 10, padding: 14, fontSize: 13, color: '#374151', display: 'flex', flexDirection: 'column', gap: 5 }}>
-            <div><strong>Área:</strong> {req.areaSolicitante}</div>
+            <div><strong>Área:</strong> {req.requisicion?.areaSolicitante ?? req.areaSolicitante}</div>
             <div><strong>Tipo:</strong> {req.tipo}</div>
             <div><strong>Presupuesto:</strong> ${(req.presupuestoEstimado ?? 0).toLocaleString('es-MX')}</div>
           </div>
@@ -422,11 +431,11 @@ export function Almacen() {
         </div>
         <div style={{ background: '#F9FAFB', borderRadius: 10, padding: 14, fontSize: 13, color: '#374151' }}>
           <div style={{ fontWeight: 600, marginBottom: 4 }}>Descripción</div>
-          <div style={{ lineHeight: 1.6 }}>{req.descripcion}</div>
+          <div style={{ lineHeight: 1.6 }}>{req.requisicion?.descripcion ?? req.descripcion}</div>
         </div>
         <div style={{ background: '#F9FAFB', borderRadius: 10, padding: 14, fontSize: 13, color: '#374151' }}>
           <div style={{ fontWeight: 600, marginBottom: 4 }}>Justificación</div>
-          <div style={{ lineHeight: 1.6 }}>{req.justificacion}</div>
+          <div style={{ lineHeight: 1.6 }}>{req.requisicion?.justificacion ?? req.justificacion}</div>
         </div>
         {req.detalles && req.detalles.length > 0 && (
           <div style={{ border: '1px solid #E8ECF0', borderRadius: 10, overflow: 'hidden' }}>
@@ -442,7 +451,7 @@ export function Almacen() {
               <tbody>
                 {req.detalles.map((d, i) => (
                   <tr key={i} style={{ borderTop: '1px solid #E8ECF0' }}>
-                    <td style={{ padding: '8px 14px', fontWeight: 500 }}>{d.producto}</td>
+                    <td style={{ padding: '8px 14px', fontWeight: 500 }}>{typeof d.producto === 'object' && d.producto !== null ? (d.producto as { nombre: string }).nombre : d.producto}</td>
                     <td style={{ padding: '8px 14px', color: '#6B7280' }}>{d.unidad}</td>
                     <td style={{ padding: '8px 14px', fontWeight: 600 }}>{d.cantidad}</td>
                   </tr>
@@ -501,15 +510,35 @@ export function Almacen() {
     }
   });
 
+  const actualizarProducto = useMutation({
+    mutationFn: ({ id, data }: { id: number; data: Record<string, unknown> }) =>
+      apiClient.put(`/almacen/productos/${id}`, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['productos'] });
+      setEditandoProducto(null);
+      notify('Producto actualizado correctamente');
+    },
+    onError: (err: unknown) => {
+      const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message;
+      notify(msg || 'Error al actualizar producto');
+    }
+  });
+
   const registrarMovimiento = useMutation({
     mutationFn: (data: Record<string, unknown>) => {
       const d = data as Record<string, unknown>;
+      // requisicionId in movimientoData holds CompraRequisicion.id for UI lookup;
+      // the DB FK points to Requisicion, so resolve the parent Requisicion.id here.
+      const compraSeleccionada = d.requisicionId
+        ? requisiciones.find(r => String(r.id) === String(d.requisicionId))
+        : null;
+      const realReqId = compraSeleccionada?.requisicion?.id ?? undefined;
       return apiClient.post('/almacen/movimientos', {
         ...d,
         productoId: parseInt(d.productoId as string, 10),
         cantidad: parseInt(d.cantidad as string, 10),
         importeFactura: d.importeFactura ? parseFloat(d.importeFactura as string) : undefined,
-        requisicionId: d.requisicionId ? parseInt(d.requisicionId as string, 10) : undefined,
+        requisicionId: realReqId,
       });
     },
     onSuccess: () => {
@@ -626,19 +655,38 @@ export function Almacen() {
     setIsSubmittingMultiple(true);
     let ok = 0;
     let fail = 0;
-    for (const det of productosDeRequisicion) {
-      const pid = det.productoMatch ? String(det.productoMatch.id) : null;
+
+    // Resolve product IDs: use existing match or auto-create in catalog
+    const detallesResueltos = await Promise.all(
+      productosDeRequisicion.map(async (det) => {
+        if (det.productoMatch) return { det, pid: String(det.productoMatch.id) };
+        try {
+          const res = await apiClient.post<{ data: { id: number } }>('/almacen/productos', {
+            nombre: det.producto,
+            unidad: det.unidad || 'PIEZAS',
+            categoria: 'OTRO',
+            stockMinimo: 5,
+          });
+          return { det, pid: String(res.data.data.id) };
+        } catch {
+          return { det, pid: null };
+        }
+      })
+    );
+
+    for (const { det, pid } of detallesResueltos) {
       if (!pid) { fail++; continue; }
 
       const edit = recepcionEditada[det.id] ?? { cantidadRecibida: det.cantidad, estado: 'CORRECTO', observaciones: '', lote: '', fechaCaducidad: '' };
-      const estadoDet = edit.estado;
 
       try {
+        // Pass the parent Requisicion.id (FK target), not CompraRequisicion.id
+        const realReqId = requisicionParaEntrada?.requisicion?.id;
         await apiClient.post('/almacen/movimientos', {
           productoId: pid,
           tipo: 'ENTRADA',
           cantidad: edit.cantidadRecibida,
-          requisicionId: movimientoData.requisicionId,
+          requisicionId: realReqId,
           proveedor: movimientoData.proveedor,
           numeroFactura: movimientoData.numeroFactura,
           importeFactura: movimientoData.importeFactura || undefined,
@@ -646,7 +694,7 @@ export function Almacen() {
           empaqueCorrecto: movimientoData.empaqueCorrecto,
           cantidadCorrecta: movimientoData.cantidadCorrecta,
           presentacionCorrecta: movimientoData.presentacionCorrecta,
-          estadoRecepcion: estadoDet === 'CORRECTO' ? 'ACEPTADO' : 'PENDIENTE',
+          estadoRecepcion: edit.estado === 'CORRECTO' ? 'ACEPTADO' : 'PENDIENTE',
           observaciones: [edit.observaciones, edit.lote ? `Lote: ${edit.lote}` : ''].filter(Boolean).join(' | ') || undefined,
         });
         ok++;
@@ -654,27 +702,57 @@ export function Almacen() {
         fail++;
       }
     }
+
     await queryClient.invalidateQueries({ queryKey: ['productos'] });
     await queryClient.invalidateQueries({ queryKey: ['movimientos'] });
     setIsSubmittingMultiple(false);
     setShowModal(null);
     setMovimientoData({ productoId: '', tipo: 'ENTRADA', cantidad: 1, observaciones: '', requisicionId: '', proveedor: '', numeroFactura: '', importeFactura: '', fechaCaducidad: '', empaqueCorrecto: true, cantidadCorrecta: true, presentacionCorrecta: true, estadoRecepcion: 'PENDIENTE', areaSolicitante: '', motivo: '', nombreRecibe: '' });
     setRecepcionEditada({});
-    notify(fail === 0 ? `✅ ${ok} producto${ok !== 1 ? 's' : ''} recibido${ok !== 1 ? 's' : ''} correctamente` : `⚠️ ${ok} recibidos, ${fail} no procesados (sin catálogo)`);
+    notify(fail === 0 ? `✅ ${ok} producto${ok !== 1 ? 's' : ''} recibido${ok !== 1 ? 's' : ''} correctamente` : `⚠️ ${ok} recibidos, ${fail} fallaron`);
   };
 
   const requisicionParaEntrada = movimientoData.requisicionId
     ? requisiciones.find(r => String(r.id) === movimientoData.requisicionId) ?? null
     : null;
 
-  const productosDeRequisicion = (requisicionParaEntrada?.detalles ?? []).map(det => {
-    const productoMatch = productosData?.find(p =>
-      p.nombre.toLowerCase() === det.producto.toLowerCase() ||
-      p.nombre.toLowerCase().includes(det.producto.toLowerCase()) ||
-      det.producto.toLowerCase().includes(p.nombre.toLowerCase())
-    ) ?? null;
-    return { ...det, productoMatch };
+  const productosDeRequisicion = (requisicionParaEntrada?.requisicion?.detalles ?? []).map(det => {
+    const nombre = det.productoNombre ?? '';
+    const unidad = det.unidadLibre ?? '';
+    const cantidad = det.cantidadSolicitada;
+    const productoMatch = nombre.length > 0
+      ? (productosData?.find(p =>
+          p.nombre.toLowerCase() === nombre.toLowerCase() ||
+          p.nombre.toLowerCase().includes(nombre.toLowerCase()) ||
+          nombre.toLowerCase().includes(p.nombre.toLowerCase())
+        ) ?? null)
+      : null;
+    return { ...det, producto: nombre, unidad, cantidad, productoMatch };
   });
+
+  const getProveedorDeRequisicion = (req: Requisicion): string => {
+    if (req.ordenes && req.ordenes.length > 0) {
+      const nombres = req.ordenes.map(o => {
+        const p = o.proveedor as unknown as string | { nombre: string };
+        return typeof p === 'object' && p !== null ? p.nombre : String(p ?? '');
+      }).filter(Boolean);
+      const unique = [...new Set(nombres)];
+      if (unique.length > 0) return unique.join(', ');
+    }
+    return '';
+  };
+
+  const getImporteDeRequisicion = (req: Requisicion): string => {
+    if (req.facturas && req.facturas.length > 0) {
+      const total = req.facturas.reduce((s, f) => s + (f.monto || 0), 0);
+      if (total > 0) return String(total);
+    }
+    if (req.ordenes && req.ordenes.length > 0) {
+      const total = req.ordenes.reduce((s, o) => s + (o.total || 0), 0);
+      if (total > 0) return String(total);
+    }
+    return '';
+  };
 
   // ─── JSX ──────────────────────────────────────────────────────────────────
 
@@ -694,7 +772,7 @@ export function Almacen() {
           </div>
           <div>
             <h1 style={{ fontSize: '24px', fontWeight: '800', color: 'var(--text-h)', margin: 0, letterSpacing: '-0.5px' }}>Control de Suministros</h1>
-            <p style={{ color: '#64748b', margin: 0, fontSize: '14px', fontWeight: '500' }}>Gestión de inventario clínico y administrativo</p>
+            <p style={{ color: '#64748b', margin: 0, fontSize: '14px', fontWeight: '500' }}>Gestión integral institucional</p>
           </div>
         </div>
         <div style={{ display: 'flex', gap: '1rem' }}>
@@ -850,24 +928,34 @@ export function Almacen() {
 
         /* ── INVENTARIO ── */
         : activeTab === 'INVENTARIO' ? (
-          <table style={{ width: '100%', borderCollapse: 'separate', borderSpacing: '0' }}>
+          <table style={{ width: '100%', borderCollapse: 'separate', borderSpacing: '0', tableLayout: 'fixed' }}>
+            <colgroup>
+              <col style={{ width: '110px' }} />
+              <col />
+              <col style={{ width: '140px' }} />
+              <col style={{ width: '130px' }} />
+              <col style={{ width: '120px' }} />
+              <col style={{ width: '150px' }} />
+              <col style={{ width: '110px' }} />
+            </colgroup>
             <thead>
               <tr style={{ backgroundColor: '#f8fafc' }}>
-                <th style={{ padding: '1.25rem 1.5rem', textAlign: 'left', color: '#64748b', fontSize: '12px', fontWeight: '800', textTransform: 'uppercase', letterSpacing: '0.5px', whiteSpace: 'nowrap' }}>Código</th>
-                <th style={{ padding: '1.25rem 1rem', textAlign: 'left', color: '#64748b', fontSize: '12px', fontWeight: '800', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Producto</th>
-                <th style={{ padding: '1.25rem 1rem', textAlign: 'left', color: '#64748b', fontSize: '12px', fontWeight: '800', textTransform: 'uppercase', letterSpacing: '0.5px', whiteSpace: 'nowrap' }}>Categoría</th>
-                <th style={{ padding: '1.25rem 1rem', textAlign: 'left', color: '#64748b', fontSize: '12px', fontWeight: '800', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Ubicación</th>
-                <th style={{ padding: '1.25rem 1rem', textAlign: 'center', color: '#64748b', fontSize: '12px', fontWeight: '800', textTransform: 'uppercase', letterSpacing: '0.5px', whiteSpace: 'nowrap' }}>Stock Act. / Mín</th>
-                <th style={{ padding: '1.25rem 1rem', textAlign: 'center', color: '#64748b', fontSize: '12px', fontWeight: '800', textTransform: 'uppercase', letterSpacing: '0.5px', whiteSpace: 'nowrap' }}>Próx. Caducidad</th>
-                <th style={{ padding: '1.25rem 1.5rem', textAlign: 'center', color: '#64748b', fontSize: '12px', fontWeight: '800', textTransform: 'uppercase', letterSpacing: '0.5px', whiteSpace: 'nowrap' }}>Estado</th>
+                <th style={{ padding: '0.875rem 1.25rem', textAlign: 'left', color: '#64748b', fontSize: '11px', fontWeight: '800', textTransform: 'uppercase', letterSpacing: '0.5px', whiteSpace: 'nowrap', borderBottom: '1px solid #e2e8f0' }}>Código</th>
+                <th style={{ padding: '0.875rem 1.25rem', textAlign: 'left', color: '#64748b', fontSize: '11px', fontWeight: '800', textTransform: 'uppercase', letterSpacing: '0.5px', borderBottom: '1px solid #e2e8f0' }}>Producto</th>
+                <th style={{ padding: '0.875rem 1.25rem', textAlign: 'left', color: '#64748b', fontSize: '11px', fontWeight: '800', textTransform: 'uppercase', letterSpacing: '0.5px', whiteSpace: 'nowrap', borderBottom: '1px solid #e2e8f0' }}>Categoría</th>
+                <th style={{ padding: '0.875rem 1.25rem', textAlign: 'left', color: '#64748b', fontSize: '11px', fontWeight: '800', textTransform: 'uppercase', letterSpacing: '0.5px', borderBottom: '1px solid #e2e8f0' }}>Ubicación</th>
+                <th style={{ padding: '0.875rem 1.25rem', textAlign: 'center', color: '#64748b', fontSize: '11px', fontWeight: '800', textTransform: 'uppercase', letterSpacing: '0.5px', whiteSpace: 'nowrap', borderBottom: '1px solid #e2e8f0' }}>Stock / Mín</th>
+                <th style={{ padding: '0.875rem 1.25rem', textAlign: 'center', color: '#64748b', fontSize: '11px', fontWeight: '800', textTransform: 'uppercase', letterSpacing: '0.5px', whiteSpace: 'nowrap', borderBottom: '1px solid #e2e8f0' }}>Próx. Caducidad</th>
+                <th style={{ padding: '0.875rem 1.25rem', textAlign: 'center', color: '#64748b', fontSize: '11px', fontWeight: '800', textTransform: 'uppercase', letterSpacing: '0.5px', whiteSpace: 'nowrap', borderBottom: '1px solid #e2e8f0' }}>Estado</th>
               </tr>
             </thead>
             <tbody>
               {isLoadingProductos ? (
                 <tr><td colSpan={7} style={{ padding: '4rem', textAlign: 'center', color: '#94a3b8' }}>Procesando base de datos...</td></tr>
               ) : productosData?.map((prod) => {
-                const proximaCaducidad = (prod as any).proximaCaducidad as string | null | undefined;
-                const lotes: { fechaCaducidad: string }[] = (prod as any).lotes ?? [];
+                const prodExt = prod as Producto & { proximaCaducidad?: string | null; lotes?: { fechaCaducidad: string }[] };
+                const proximaCaducidad = prodExt.proximaCaducidad;
+                const lotes: { fechaCaducidad: string }[] = prodExt.lotes ?? [];
                 const caducidadMostrar = proximaCaducidad
                   ? new Date(proximaCaducidad).toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: 'numeric' })
                   : lotes.length > 1 ? 'Múltiples'
@@ -876,60 +964,88 @@ export function Almacen() {
                 const caducidadProxima = caducidadMostrar && caducidadMostrar !== 'Múltiples'
                   ? (proximaCaducidad ? new Date(proximaCaducidad) : lotes.length === 1 ? new Date(lotes[0].fechaCaducidad) : null)
                   : null;
-                const diasParaCaducidad = caducidadProxima ? Math.ceil((caducidadProxima.getTime() - Date.now()) / 86400000) : null;
+                const diasParaCaducidad = caducidadProxima ? Math.ceil((caducidadProxima.getTime() - getNow()) / 86400000) : null;
+                const tdBase: React.CSSProperties = { padding: '1rem 1.25rem', verticalAlign: 'middle', borderBottom: '1px solid #f1f5f9' };
                 return (
-                  <tr key={prod.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
-                    <td style={{ padding: '1.5rem 1.5rem' }}>
-                      <span style={{ fontFamily: 'monospace', background: '#f1f5f9', padding: '0.3rem 0.6rem', borderRadius: '6px', fontSize: '13px', fontWeight: '700', color: '#475569' }}>{prod.codigo}</span>
+                  <tr key={prod.id} style={{ transition: 'background 0.15s' }}
+                    onMouseEnter={e => (e.currentTarget.style.background = '#fafbfc')}
+                    onMouseLeave={e => (e.currentTarget.style.background = '')}>
+                    <td style={tdBase}>
+                      <span style={{ fontFamily: 'monospace', background: '#f1f5f9', padding: '0.25rem 0.55rem', borderRadius: '6px', fontSize: '12px', fontWeight: '700', color: '#475569', whiteSpace: 'nowrap' }}>{prod.codigo}</span>
                     </td>
-                    <td style={{ padding: '1.5rem 1rem' }}>
-                      <div style={{ fontWeight: '800', color: 'var(--text-h)', fontSize: '15px' }}>{prod.nombre}</div>
-                      {prod.descripcion && <div style={{ fontSize: '12px', color: '#94a3b8', marginTop: '0.2rem' }}>{prod.descripcion}</div>}
+                    <td style={{ ...tdBase, overflow: 'hidden' }}>
+                      <div style={{ fontWeight: '700', color: 'var(--text-h)', fontSize: '14px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{prod.nombre}</div>
+                      {prod.descripcion && <div style={{ fontSize: '11px', color: '#94a3b8', marginTop: '2px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{prod.descripcion}</div>}
                     </td>
-                    <td style={{ padding: '1.5rem 1rem' }}>
-                      <span style={{ fontSize: '13px', fontWeight: '600', color: '#64748b', background: '#f8fafc', padding: '0.4rem 0.8rem', borderRadius: '10px' }}>{prod.categoria}</span>
+                    <td style={tdBase}>
+                      <span style={{ fontSize: '12px', fontWeight: '600', color: '#64748b', background: '#f1f5f9', padding: '0.3rem 0.7rem', borderRadius: '8px', whiteSpace: 'nowrap', display: 'inline-block', maxWidth: '100%', overflow: 'hidden', textOverflow: 'ellipsis' }}>{prod.categoria}</span>
                     </td>
-                    <td style={{ padding: '1.5rem 1rem' }}>
+                    <td style={tdBase}>
                       {prod.ubicacion ? (
-                        <span style={{ fontSize: '13px', color: '#374151', background: '#F0FDF4', padding: '0.3rem 0.7rem', borderRadius: '8px', fontWeight: '500' }}>{prod.ubicacion}</span>
+                        <span style={{ fontSize: '12px', color: '#374151', background: '#F0FDF4', padding: '0.3rem 0.7rem', borderRadius: '8px', fontWeight: '500', display: 'inline-block', maxWidth: '100%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{prod.ubicacion}</span>
                       ) : (
                         <span style={{ fontSize: '12px', color: '#94a3b8' }}>—</span>
                       )}
                     </td>
-                    <td style={{ padding: '1.5rem 1rem', textAlign: 'center' }}>
-                      <div style={{ fontWeight: '800', color: 'var(--text-h)', fontSize: '18px' }}>{prod.stockActual}</div>
-                      <div style={{ fontSize: '11px', color: '#94a3b8', textTransform: 'uppercase', fontWeight: '700' }}>{prod.unidad || 'UDS'}</div>
-                      <div style={{ fontSize: '11px', color: prod.stockActual <= prod.stockMinimo ? '#DC2626' : '#94a3b8', marginTop: 1 }}>mín: {prod.stockMinimo}</div>
+                    <td style={{ ...tdBase, textAlign: 'center' }}>
+                      <div style={{ display: 'inline-flex', flexDirection: 'column', alignItems: 'center', gap: '1px' }}>
+                        <span style={{ fontWeight: '800', color: 'var(--text-h)', fontSize: '17px', lineHeight: 1 }}>{prod.stockActual}</span>
+                        <span style={{ fontSize: '10px', color: '#94a3b8', textTransform: 'uppercase', fontWeight: '700', letterSpacing: '0.3px' }}>{prod.unidad || 'UDS'}</span>
+                        <span style={{ fontSize: '10px', color: prod.stockActual <= prod.stockMinimo ? '#DC2626' : '#94a3b8', fontWeight: '600' }}>mín {prod.stockMinimo}</span>
+                      </div>
                     </td>
-                    <td style={{ padding: '1.5rem 1rem', textAlign: 'center' }}>
+                    <td style={{ ...tdBase, textAlign: 'center' }}>
                       {caducidadMostrar ? (
-                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3 }}>
-                          <span style={{ fontSize: 12, fontWeight: 700, color: diasParaCaducidad !== null && diasParaCaducidad <= 30 ? '#DC2626' : diasParaCaducidad !== null && diasParaCaducidad <= 90 ? '#CA8A04' : '#374151' }}>
+                        <div style={{ display: 'inline-flex', flexDirection: 'column', alignItems: 'center', gap: '3px' }}>
+                          <span style={{ fontSize: '12px', fontWeight: '700', color: diasParaCaducidad !== null && diasParaCaducidad <= 30 ? '#DC2626' : diasParaCaducidad !== null && diasParaCaducidad <= 90 ? '#CA8A04' : '#374151', whiteSpace: 'nowrap' }}>
                             {caducidadMostrar}
                           </span>
                           {diasParaCaducidad !== null && diasParaCaducidad <= 90 && (
-                            <span style={{ fontSize: 10, fontWeight: 700, color: 'white', background: diasParaCaducidad <= 30 ? '#DC2626' : '#CA8A04', borderRadius: 5, padding: '1px 6px' }}>
+                            <span style={{ fontSize: '10px', fontWeight: '700', color: 'white', background: diasParaCaducidad <= 30 ? '#DC2626' : '#CA8A04', borderRadius: '4px', padding: '1px 6px', whiteSpace: 'nowrap' }}>
                               {diasParaCaducidad <= 0 ? 'VENCIDO' : `${diasParaCaducidad}d`}
                             </span>
                           )}
                           {caducidadMostrar === 'Múltiples' && (
-                            <span style={{ fontSize: 10, color: '#6366F1' }}>ver kardex</span>
+                            <span style={{ fontSize: '10px', color: '#6366F1' }}>ver kardex</span>
                           )}
                         </div>
                       ) : (
-                        <span style={{ fontSize: 12, color: '#94a3b8' }}>—</span>
+                        <span style={{ fontSize: '12px', color: '#94a3b8' }}>—</span>
                       )}
                     </td>
-                    <td style={{ padding: '1.5rem 1.5rem', textAlign: 'center' }}>
-                      <span style={{
-                        padding: '0.5rem 1rem', borderRadius: '12px', fontSize: '11px', fontWeight: '800',
-                        backgroundColor: prod.estadoStock === 'NORMAL' ? '#dcfce7' : prod.estadoStock === 'BAJO' ? '#fef3c7' : '#fee2e2',
-                        color: prod.estadoStock === 'NORMAL' ? '#166534' : prod.estadoStock === 'BAJO' ? '#92400e' : '#991b1b',
-                        display: 'inline-flex', alignItems: 'center', gap: '0.4rem'
-                      }}>
-                        <div style={{ width: '6px', height: '6px', borderRadius: '50%', backgroundColor: 'currentColor' }}></div>
-                        {prod.estadoStock}
-                      </span>
+                    <td style={{ ...tdBase, textAlign: 'center' }}>
+                      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 }}>
+                        {(() => {
+                          const estado = prod.stockActual <= 0 ? 'CRITICO' : prod.stockActual <= prod.stockMinimo ? 'BAJO' : 'NORMAL';
+                          const bg    = estado === 'NORMAL' ? '#dcfce7' : estado === 'BAJO' ? '#fef3c7' : '#fee2e2';
+                          const color = estado === 'NORMAL' ? '#166534' : estado === 'BAJO' ? '#92400e' : '#991b1b';
+                          const label = estado === 'NORMAL' ? 'Normal' : estado === 'BAJO' ? 'Bajo' : 'Crítico';
+                          return (
+                            <span style={{ padding: '0.4rem 0.85rem', borderRadius: '10px', fontSize: '11px', fontWeight: '800', backgroundColor: bg, color, display: 'inline-flex', alignItems: 'center', gap: '0.35rem', whiteSpace: 'nowrap' }}>
+                              <div style={{ width: '5px', height: '5px', borderRadius: '50%', backgroundColor: 'currentColor', flexShrink: 0 }} />
+                              {label}
+                            </span>
+                          );
+                        })()}
+                        {puedeOperar && (
+                          <button
+                            onClick={() => {
+                              setEditandoProducto(prod);
+                              setEditForm({
+                                nombre:     prod.nombre,
+                                categoria:  prod.categoria,
+                                unidad:     prod.unidad || 'PIEZAS',
+                                descripcion: prod.descripcion || '',
+                                stockMinimo: prod.stockMinimo,
+                                ubicacion:  prod.ubicacion || '',
+                              });
+                            }}
+                            style={{ display: 'inline-flex', alignItems: 'center', gap: 3, padding: '3px 8px', borderRadius: 6, border: '1px solid #e2e8f0', background: 'white', color: '#64748b', fontSize: 11, fontWeight: 600, cursor: 'pointer' }}
+                          >
+                            <Pencil size={11} /> Editar
+                          </button>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 );
@@ -1196,12 +1312,22 @@ export function Almacen() {
                     {/* Requisición asociada */}
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
                       <span style={{ fontSize: 12, fontWeight: 600, color: '#1D4ED8' }}>Requisición / Orden de compra asociada (opcional)</span>
-                      <select value={movimientoData.requisicionId} onChange={e => setMovimientoData({ ...movimientoData, requisicionId: e.target.value })} style={{ padding: '0.75rem', borderRadius: 10, border: '1px solid #BFDBFE', outline: 'none', fontSize: 14, background: 'white' }}>
+                      <select value={movimientoData.requisicionId} onChange={e => {
+                        const reqId = e.target.value;
+                        const req = reqId ? requisiciones.find(r => String(r.id) === reqId) : null;
+                        setMovimientoData({
+                          ...movimientoData,
+                          requisicionId: reqId,
+                          proveedor:      req ? getProveedorDeRequisicion(req) : '',
+                          importeFactura: req ? getImporteDeRequisicion(req)   : '',
+                          numeroFactura:  req?.facturas?.[0]?.numero ?? '',
+                        });
+                      }} style={{ padding: '0.75rem', borderRadius: 10, border: '1px solid #BFDBFE', outline: 'none', fontSize: 14, background: 'white' }}>
                         <option value="">Sin requisición asociada</option>
                         {requisiciones
                           .filter(r => ['AUTORIZADA', 'NEGOCIACION_COMPLETADA', 'ORDEN_GENERADA', 'FACTURAS_RECIBIDAS', 'ORDEN_PAGO_GENERADA', 'PAGO_GENERADO', 'FINALIZADO'].includes(r.estado))
                           .map(r => (
-                            <option key={r.id} value={r.id}>{r.folio} — {r.areaSolicitante} — {r.descripcion.slice(0, 40)}</option>
+                            <option key={r.id} value={r.id}>{r.folio} — {r.requisicion?.areaSolicitante ?? r.areaSolicitante ?? ''} — {(r.requisicion?.descripcion ?? r.descripcion ?? '').slice(0, 40)}</option>
                           ))
                         }
                       </select>
@@ -1480,6 +1606,98 @@ export function Almacen() {
 
       {renderCreate()}
       {renderRevision()}
+
+      {/* ── Modal Editar Producto ── */}
+      {editandoProducto && (
+        <Modal title={`Editar producto — ${editandoProducto.codigo}`} onClose={() => setEditandoProducto(null)} width={520}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+              <label style={{ fontSize: 12, fontWeight: 600, color: '#374151' }}>Nombre</label>
+              <input
+                type="text"
+                value={editForm.nombre}
+                onChange={e => setEditForm(f => ({ ...f, nombre: e.target.value }))}
+                style={{ padding: '0.75rem', borderRadius: 10, border: '1px solid #e2e8f0', outline: 'none', fontSize: 14 }}
+              />
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                <label style={{ fontSize: 12, fontWeight: 600, color: '#374151' }}>Categoría</label>
+                <select value={editForm.categoria} onChange={e => setEditForm(f => ({ ...f, categoria: e.target.value }))} style={{ padding: '0.75rem', borderRadius: 10, border: '1px solid #e2e8f0', outline: 'none', fontSize: 14, background: 'white' }}>
+                  <option value="MEDICAMENTO">Medicamento</option>
+                  <option value="INSUMO_MEDICO">Insumo Médico</option>
+                  <option value="ALIMENTO">Alimento</option>
+                  <option value="LIMPIEZA">Limpieza</option>
+                  <option value="PAPELERIA">Papelería</option>
+                  <option value="MOBILIARIO">Mobiliario</option>
+                  <option value="OTRO">Otro</option>
+                </select>
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                <label style={{ fontSize: 12, fontWeight: 600, color: '#374151' }}>Unidad</label>
+                <select value={editForm.unidad} onChange={e => setEditForm(f => ({ ...f, unidad: e.target.value }))} style={{ padding: '0.75rem', borderRadius: 10, border: '1px solid #e2e8f0', outline: 'none', fontSize: 14, background: 'white' }}>
+                  <option value="PIEZAS">Piezas</option>
+                  <option value="CAJAS">Cajas</option>
+                  <option value="LITROS">Litros</option>
+                  <option value="ML">Mililitros (ml)</option>
+                  <option value="KG">Kilogramos (kg)</option>
+                  <option value="GRAMOS">Gramos</option>
+                  <option value="BOLSAS">Bolsas</option>
+                  <option value="PAQUETES">Paquetes</option>
+                  <option value="FRASCOS">Frascos</option>
+                  <option value="AMPOLLAS">Ampollas</option>
+                  <option value="ROLLOS">Rollos</option>
+                  <option value="METROS">Metros</option>
+                </select>
+              </div>
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+              <label style={{ fontSize: 12, fontWeight: 600, color: '#374151' }}>Descripción</label>
+              <textarea
+                value={editForm.descripcion}
+                onChange={e => setEditForm(f => ({ ...f, descripcion: e.target.value }))}
+                rows={2}
+                style={{ padding: '0.75rem', borderRadius: 10, border: '1px solid #e2e8f0', outline: 'none', fontSize: 14, resize: 'vertical', fontFamily: 'inherit' }}
+              />
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr', gap: 12 }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                <label style={{ fontSize: 12, fontWeight: 600, color: '#374151' }}>Stock mínimo</label>
+                <input
+                  type="number"
+                  min={0}
+                  value={editForm.stockMinimo}
+                  onChange={e => setEditForm(f => ({ ...f, stockMinimo: parseInt(e.target.value) || 0 }))}
+                  style={{ padding: '0.75rem', borderRadius: 10, border: '1px solid #e2e8f0', outline: 'none', fontSize: 14 }}
+                />
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                <label style={{ fontSize: 12, fontWeight: 600, color: '#374151' }}>Ubicación en almacén</label>
+                <input
+                  type="text"
+                  value={editForm.ubicacion}
+                  onChange={e => setEditForm(f => ({ ...f, ubicacion: e.target.value }))}
+                  placeholder="Ej: Estante A-2, Refrigerador..."
+                  style={{ padding: '0.75rem', borderRadius: 10, border: '1px solid #e2e8f0', outline: 'none', fontSize: 14 }}
+                />
+              </div>
+            </div>
+            <div style={{ display: 'flex', gap: 8, paddingTop: 4, borderTop: '1px solid #f1f5f9', marginTop: 4 }}>
+              <button
+                onClick={() => actualizarProducto.mutate({ id: editandoProducto.id, data: { nombre: editForm.nombre, categoria: editForm.categoria, unidad: editForm.unidad, descripcion: editForm.descripcion || null, stockMinimo: editForm.stockMinimo, ubicacion: editForm.ubicacion || null } })}
+                disabled={actualizarProducto.isPending || !editForm.nombre.trim()}
+                style={{ flex: 1, padding: '0.75rem', borderRadius: 10, border: 'none', background: actualizarProducto.isPending || !editForm.nombre.trim() ? '#e2e8f0' : '#1E3A5F', color: actualizarProducto.isPending || !editForm.nombre.trim() ? '#94a3b8' : 'white', fontWeight: 700, fontSize: 14, cursor: actualizarProducto.isPending || !editForm.nombre.trim() ? 'not-allowed' : 'pointer' }}
+              >
+                {actualizarProducto.isPending ? 'Guardando...' : 'Guardar cambios'}
+              </button>
+              <button onClick={() => setEditandoProducto(null)} style={{ padding: '0.75rem 1.25rem', borderRadius: 10, border: '1px solid #e2e8f0', background: 'white', color: '#374151', fontWeight: 600, fontSize: 14, cursor: 'pointer' }}>
+                Cancelar
+              </button>
+            </div>
+          </div>
+        </Modal>
+      )}
+
       {notif && <Notif msg={notif} onClose={() => setNotif(null)} />}
       <NuevaRequisicionModal
         isOpen={showNuevaRequisicion}
