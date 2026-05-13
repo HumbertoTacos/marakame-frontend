@@ -1,27 +1,7 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 
-type Rol =
-  | 'ADMIN_GENERAL'
-  | 'AREA_MEDICA'
-  | 'NUTRICION'
-  | 'PSICOLOGIA'
-  | 'RRHH_FINANZAS'           // legacy combinado
-  | 'RECURSOS_HUMANOS'
-  | 'RECURSOS_FINANCIEROS'
-  | 'JEFE_ADMINISTRATIVO'
-  | 'ADMISIONES'
-  | 'ALMACEN'
-  | 'ENFERMERIA'
-  | 'JEFE_MEDICO';
-
-interface Usuario {
-  id: number;
-  nombre: string;
-  apellidos: string;
-  correo: string;
-  rol: Rol;
-}
+import type { Usuario } from '../types';
 
 interface AuthState {
   usuario: Usuario | null;

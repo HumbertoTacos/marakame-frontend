@@ -4,6 +4,7 @@
 
 export type Rol =
   | 'ADMIN_GENERAL'
+  | 'DIRECCION'
   | 'AREA_MEDICA'
   | 'ENFERMERIA'
   | 'NUTRICION'
@@ -271,6 +272,7 @@ export interface Usuario {
   apellidos: string;
   correo: string;
   rol: Rol;
+  esJefe?: boolean;
   activo: boolean;
 }
 

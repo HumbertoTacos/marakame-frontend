@@ -129,7 +129,7 @@ export function Layout() {
               >
                 <CalendarCheck size={20} style={{ marginRight: '1rem' }}/>
                 {/* CONDICIONAL DEL TÍTULO SEGÚN EL ROL */}
-                {usuario?.rol === 'ADMIN_GENERAL' || usuario?.rol === 'JEFE_MEDICO' || usuario?.rol === 'JEFE_ADMINISTRATIVO'
+                {usuario?.rol === 'ADMIN_GENERAL' || usuario?.rol === 'DIRECCION' || usuario?.rol === 'JEFE_MEDICO' || usuario?.rol === 'JEFE_ADMINISTRATIVO'
                   ? 'Reporte de Asistencias'
                   : 'Pasar Asistencia'}
               </div>
@@ -294,7 +294,7 @@ export function Layout() {
           )}
 
           {/* Gerencial */}
-          {usuario?.rol === 'ADMIN_GENERAL' && (
+          {(usuario?.rol === 'ADMIN_GENERAL' || usuario?.rol === 'DIRECCION') && (
             <>
               <div style={{ fontSize: '11px', color: '#64748b', textTransform: 'uppercase', letterSpacing: '1.5px', margin: '2rem 0 1rem 0', fontWeight: '700' }}>Dirección</div>
               <div style={navItemStyle('directora')} onClick={() => navigate('/directora')}
@@ -320,13 +320,17 @@ export function Layout() {
           )}
 
           {/* Opciones Generales (Para Todos) */}
-          <div style={{ fontSize: '11px', color: '#64748b', textTransform: 'uppercase', letterSpacing: '1.5px', margin: '2rem 0 1rem 0', fontWeight: '700' }}>Sistema</div>
-          <div style={navItemStyle('bitacora')} onClick={() => navigate('/bitacora')}
-               onMouseEnter={(e) => { if (!location.pathname.includes('bitacora')) { e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.05)'; e.currentTarget.style.color = '#e2e8f0'; } }}
-               onMouseLeave={(e) => { if (!location.pathname.includes('bitacora')) { e.currentTarget.style.backgroundColor = 'transparent'; e.currentTarget.style.color = '#94a3b8'; } }}
-          >
-            <ShieldAlert size={20} style={{ marginRight: '1rem' }}/> Bitácora {usuario?.rol !== 'ADMIN_GENERAL' ? 'Departamental' : ''}
-          </div>
+          {(usuario?.rol === 'ADMIN_GENERAL' || usuario?.rol === 'DIRECCION' || usuario?.esJefe) && (
+            <>
+              <div style={{ fontSize: '11px', color: '#64748b', textTransform: 'uppercase', letterSpacing: '1.5px', margin: '2rem 0 1rem 0', fontWeight: '700' }}>Sistema</div>
+              <div style={navItemStyle('bitacora')} onClick={() => navigate('/bitacora')}
+                   onMouseEnter={(e) => { if (!location.pathname.includes('bitacora')) { e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.05)'; e.currentTarget.style.color = '#e2e8f0'; } }}
+                   onMouseLeave={(e) => { if (!location.pathname.includes('bitacora')) { e.currentTarget.style.backgroundColor = 'transparent'; e.currentTarget.style.color = '#94a3b8'; } }}
+              >
+                <ShieldAlert size={20} style={{ marginRight: '1rem' }}/> Bitácora {(usuario?.rol !== 'ADMIN_GENERAL' && usuario?.rol !== 'DIRECCION') ? 'Departamental' : ''}
+              </div>
+            </>
+          )}
         </div>
       </aside>
 

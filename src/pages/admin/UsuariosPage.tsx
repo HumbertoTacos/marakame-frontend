@@ -1,10 +1,11 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { UserPlus, Pencil, Power, KeyRound, Search, X, Check, Shield } from 'lucide-react';
+import { useAuthStore } from '../../stores/authStore';
 import apiClient from '../../services/api';
 
 type Rol =
-  | 'ADMIN_GENERAL' | 'AREA_MEDICA' | 'ENFERMERIA'
+  | 'ADMIN_GENERAL' | 'DIRECCION' | 'AREA_MEDICA' | 'ENFERMERIA'
   | 'NUTRICION' | 'PSICOLOGIA' | 'RRHH_FINANZAS'
   | 'RECURSOS_HUMANOS' | 'RECURSOS_FINANCIEROS' | 'JEFE_ADMINISTRATIVO'
   | 'ADMISIONES' | 'ALMACEN' | 'JEFE_MEDICO';
@@ -15,6 +16,7 @@ interface UsuarioItem {
   apellidos: string;
   correo: string;
   rol: Rol;
+  esJefe: boolean;
   activo: boolean;
   ultimoAcceso: string | null;
   createdAt: string;
@@ -25,17 +27,19 @@ interface FormData {
   apellidos: string;
   correo: string;
   rol: Rol;
+  esJefe: boolean;
   password: string;
 }
 
 const ROLES: Rol[] = [
-  'ADMIN_GENERAL', 'AREA_MEDICA', 'ENFERMERIA', 'NUTRICION',
+  'ADMIN_GENERAL', 'DIRECCION', 'AREA_MEDICA', 'ENFERMERIA', 'NUTRICION',
   'PSICOLOGIA', 'RRHH_FINANZAS', 'RECURSOS_HUMANOS', 'RECURSOS_FINANCIEROS',
   'JEFE_ADMINISTRATIVO', 'ADMISIONES', 'ALMACEN', 'JEFE_MEDICO',
 ];
 
 const ROL_LABELS: Record<Rol, string> = {
   ADMIN_GENERAL:        'Admin General',
+  DIRECCION:            'Dirección',
   AREA_MEDICA:          'Área Médica',
   ENFERMERIA:           'Enfermería',
   NUTRICION:            'Nutrición',
@@ -51,6 +55,7 @@ const ROL_LABELS: Record<Rol, string> = {
 
 const ROL_COLORS: Record<Rol, string> = {
   ADMIN_GENERAL:        '#6366f1',
+  DIRECCION:            '#4f46e5',
   AREA_MEDICA:          '#0891b2',
   ENFERMERIA:           '#0d9488',
   NUTRICION:             '#d97706',
@@ -64,9 +69,11 @@ const ROL_COLORS: Record<Rol, string> = {
   JEFE_MEDICO:          '#0e7490',
 };
 
-const EMPTY_FORM: FormData = { nombre: '', apellidos: '', correo: '', rol: 'ADMISIONES', password: '' };
+const EMPTY_FORM: FormData = { nombre: '', apellidos: '', correo: '', rol: 'ADMISIONES', esJefe: false, password: '' };
 
 export default function UsuariosPage() {
+  const { usuario: currentUser } = useAuthStore();
+  const isAdminOrDirector = currentUser?.rol === 'ADMIN_GENERAL' || currentUser?.rol === 'DIRECCION';
   const qc = useQueryClient();
   const [busqueda, setBusqueda] = useState('');
   const [modal, setModal] = useState<'crear' | 'editar' | 'reset' | null>(null);
@@ -119,7 +126,7 @@ export default function UsuariosPage() {
 
   function abrirEditar(u: UsuarioItem) {
     setSelected(u);
-    setForm({ nombre: u.nombre, apellidos: u.apellidos, correo: u.correo, rol: u.rol, password: '' });
+    setForm({ nombre: u.nombre, apellidos: u.apellidos, correo: u.correo, rol: u.rol, esJefe: u.esJefe || false, password: '' });
     setError('');
     setModal('editar');
   }
@@ -166,17 +173,19 @@ export default function UsuariosPage() {
             Administra las cuentas del personal del sistema
           </p>
         </div>
-        <button
-          onClick={abrirCrear}
-          style={{
-            display: 'flex', alignItems: 'center', gap: '0.5rem',
-            backgroundColor: '#3b82f6', color: 'white', border: 'none',
-            padding: '0.75rem 1.5rem', borderRadius: '12px', fontWeight: '700',
-            fontSize: '14px', cursor: 'pointer',
-          }}
-        >
-          <UserPlus size={18} /> Nuevo Usuario
-        </button>
+        {isAdminOrDirector && (
+          <button
+            onClick={abrirCrear}
+            style={{
+              display: 'flex', alignItems: 'center', gap: '0.5rem',
+              backgroundColor: '#3b82f6', color: 'white', border: 'none',
+              padding: '0.75rem 1.5rem', borderRadius: '12px', fontWeight: '700',
+              fontSize: '14px', cursor: 'pointer',
+            }}
+          >
+            <UserPlus size={18} /> Nuevo Usuario
+          </button>
+        )}
       </div>
 
       {/* Buscador */}
@@ -202,7 +211,7 @@ export default function UsuariosPage() {
           <table style={{ width: '100%', borderCollapse: 'collapse' }}>
             <thead>
               <tr style={{ backgroundColor: '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
-                {['Usuario', 'Correo', 'Rol', 'Último acceso', 'Estado', 'Acciones'].map(h => (
+                {['Usuario', 'Correo', 'Rol', 'Último acceso', 'Estado', isAdminOrDirector ? 'Acciones' : ''].filter(h => h !== '').map(h => (
                   <th key={h} style={{ padding: '0.875rem 1.25rem', textAlign: 'left', fontSize: '12px', fontWeight: '700', color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
                     {h}
                   </th>
@@ -231,11 +240,15 @@ export default function UsuariosPage() {
                   <td style={{ padding: '1rem 1.25rem', fontSize: '13px', color: '#475569' }}>{u.correo}</td>
                   <td style={{ padding: '1rem 1.25rem' }}>
                     <span style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '0.25rem',
                       backgroundColor: `${ROL_COLORS[u.rol]}18`,
                       color: ROL_COLORS[u.rol],
                       padding: '0.3rem 0.75rem', borderRadius: '100px',
                       fontSize: '12px', fontWeight: '700',
                     }}>
+                      {u.esJefe && <Shield size={12} />}
                       {ROL_LABELS[u.rol]}
                     </span>
                   </td>
@@ -283,15 +296,17 @@ export default function UsuariosPage() {
                       {u.activo ? <><Check size={12} /> Activo</> : <><X size={12} /> Inactivo</>}
                     </span>
                   </td>
-                  <td style={{ padding: '1rem 1.25rem' }}>
-                    <div style={{ display: 'flex', gap: '0.5rem' }}>
-                      <IconBtn title="Editar" color="#3b82f6" onClick={() => abrirEditar(u)}><Pencil size={14} /></IconBtn>
-                      <IconBtn title="Reset contraseña" color="#f59e0b" onClick={() => abrirReset(u)}><KeyRound size={14} /></IconBtn>
-                      <IconBtn title={u.activo ? 'Desactivar' : 'Activar'} color={u.activo ? '#ef4444' : '#22c55e'} onClick={() => toggle.mutate(u.id)}>
-                        <Power size={14} />
-                      </IconBtn>
-                    </div>
-                  </td>
+                  {isAdminOrDirector && (
+                    <td style={{ padding: '1rem 1.25rem' }}>
+                      <div style={{ display: 'flex', gap: '0.5rem' }}>
+                        <IconBtn title="Editar" color="#3b82f6" onClick={() => abrirEditar(u)}><Pencil size={14} /></IconBtn>
+                        <IconBtn title="Reset contraseña" color="#f59e0b" onClick={() => abrirReset(u)}><KeyRound size={14} /></IconBtn>
+                        <IconBtn title={u.activo ? 'Desactivar' : 'Activar'} color={u.activo ? '#ef4444' : '#22c55e'} onClick={() => toggle.mutate(u.id)}>
+                          <Power size={14} />
+                        </IconBtn>
+                      </div>
+                    </td>
+                  )}
                 </tr>
               ))}
               {filtrados.length === 0 && (
@@ -330,6 +345,18 @@ export default function UsuariosPage() {
               >
                 {ROLES.map(r => <option key={r} value={r}>{ROL_LABELS[r]}</option>)}
               </select>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginTop: '0.5rem' }}>
+              <input
+                type="checkbox"
+                id="esJefe"
+                checked={form.esJefe}
+                onChange={e => setForm(f => ({ ...f, esJefe: e.target.checked }))}
+                style={{ width: '16px', height: '16px', cursor: 'pointer' }}
+              />
+              <label htmlFor="esJefe" style={{ fontSize: '14px', fontWeight: '600', color: '#334155', cursor: 'pointer' }}>
+                Conceder privilegios de Supervisor / Jefatura (Acceso a Bitácora)
+              </label>
             </div>
             {modal === 'crear' && (
               <Field label="Contraseña inicial" type="password" value={form.password} onChange={v => setForm(f => ({ ...f, password: v }))} required minLength={6} />

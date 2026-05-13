@@ -196,19 +196,19 @@ function App() {
             } />
 
             <Route path="exportaciones" element={
-              <ProtectedRoute allowedRoles={['ADMIN_GENERAL']}>
+              <ProtectedRoute allowedRoles={['ADMIN_GENERAL', 'DIRECCION']}>
                 <Reportes />
               </ProtectedRoute>
             } />
 
             <Route path="usuarios" element={
-              <ProtectedRoute allowedRoles={['ADMIN_GENERAL']}>
+              <ProtectedRoute allowedRoles={['ADMIN_GENERAL', 'DIRECCION']}>
                 <UsuariosPage />
               </ProtectedRoute>
             } />
 
             <Route path="directora" element={
-              <ProtectedRoute allowedRoles={['ADMIN_GENERAL']}>
+              <ProtectedRoute allowedRoles={['ADMIN_GENERAL', 'DIRECCION']}>
                 <DashboardDirectora />
               </ProtectedRoute>
             } />
