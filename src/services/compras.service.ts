@@ -5,12 +5,18 @@ import { EstadoCompra } from '../types';
 interface ApiResponse<T> {
     success: boolean;
     data: T;
+    meta?: { total: number; page: number; limit: number; totalPages: number };
+}
+
+interface ApiResponse<T> {
+    success: boolean;
+    data: T;
 }
 
 // GET
 export const getRequisiciones = async () => {
     const res = await api.get<ApiResponse<Requisicion[]>>(
-        '/compras/requisiciones'
+        '/compras'
     );
     return res.data.data;
 };
@@ -81,59 +87,123 @@ export const addCotizacion = async (
     return res.data.data;
 };
 
-// ORDEN 
-export const generarOrden = async (
+// ORDEN
+export const generarOrden = async (id: number) => {
+    const res = await api.post<ApiResponse<OrdenCompra>>(`/compras/${id}/orden`);
+    return res.data.data;
+};
+
+// ORDEN DE PAGO
+export const generarOrdenPago = async (id: number) => {
+    const res = await api.post(`/compras/${id}/orden-pago`);
+    return res.data.data;
+};
+
+// COTIZACIÓN CON CATÁLOGO (nuevo flujo desde Almacén)
+export const registrarCotizacionCatalogo = async (
     id: number,
     data: {
-        proveedor: string;
-        total: number;
+        proveedorId: number;
+        precio: number;
+        tiempoEntrega?: string;
+        formaPago?: string;
     }
-    ) => {
-    const res = await api.post<ApiResponse<OrdenCompra>>(
-        `/compras/requisiciones/${id}/orden`,
+) => {
+    const res = await api.post<ApiResponse<Cotizacion>>(
+        `/compras/${id}/cotizaciones`,
         data
     );
     return res.data.data;
 };
 
-// ORDEN DE PAGO
-export const generarOrdenPago = async (
-    id: number
-) => {
+// COMPRAS EN REVISIÓN DE DIRECCIÓN GENERAL
+export const getComprasRevisionDireccion = async (): Promise<Requisicion[]> => {
+    const res = await api.get<ApiResponse<Requisicion[]>>('/compras', {
+        params: { estado: 'EN_REVISION_DIRECCION', limit: 100 }
+    });
+    return res.data.data;
+};
 
-    const res = await api.post(
-        `/compras/requisiciones/${id}/orden-pago`
-    );
+// AUTORIZAR COMPRA (Dirección General)
+export const autorizarCompraDireccion = async (id: number, observaciones?: string): Promise<void> => {
+    await api.patch(`/compras/${id}/autorizar-direccion`, { observaciones });
+};
 
+// RECHAZAR COMPRA (Dirección General)
+export const rechazarCompraDireccion = async (id: number, motivoRechazo: string): Promise<void> => {
+    await api.patch(`/compras/${id}/rechazar-direccion`, { motivoRechazo });
+};
+
+// ELIMINAR COTIZACIÓN
+export const eliminarCotizacion = async (compraId: number, cotizacionId: number): Promise<void> => {
+    await api.delete(`/compras/${compraId}/cotizaciones/${cotizacionId}`);
+};
+
+// ENVIAR A REVISIÓN ADMINISTRATIVA
+export const enviarARevisionAdministrativa = async (id: number, observaciones?: string): Promise<void> => {
+    await api.patch(`/compras/${id}/enviar-administracion`, { observaciones });
+};
+
+// APROBAR ADMINISTRACIÓN
+export const aprobarCompraAdministracion = async (id: number, observaciones?: string): Promise<void> => {
+    await api.patch(`/compras/${id}/aprobar-administracion`, { observaciones });
+};
+
+// DEVOLVER A COMPRAS
+export const devolverCompraACompras = async (
+    id: number,
+    data: { motivoRechazo: string; observaciones?: string }
+): Promise<void> => {
+    await api.patch(`/compras/${id}/devolver-compras`, data);
+};
+
+// GET COMPRAS PARA REVISIÓN ADMINISTRATIVA
+export const getComprasRevisionAdmin = async (): Promise<Requisicion[]> => {
+    const res = await api.get<ApiResponse<Requisicion[]>>('/compras', {
+        params: { estado: 'EN_REVISION_ADMINISTRACION', limit: 100 }
+    });
     return res.data.data;
 };
 
 // FACTURA
-export const subirFactura = async (
-    id: number,
-    file: File
-) => {
-
+export const subirFactura = async (id: number, file: File, monto: number, numero: string) => {
     const form = new FormData();
-
-    form.append(
-        'factura',
-        file
-    );
-
-    const res = await api.post<{
-        success: boolean;
-        url: string;
-    }>(
-        `/compras/requisiciones/${id}/factura`,
+    form.append('factura', file);
+    form.append('monto', String(monto));
+    form.append('numero', numero);
+    const res = await api.post<{ success: boolean; url: string }>(
+        `/compras/${id}/factura-upload`,
         form,
-        {
-            headers: {
-                'Content-Type':
-                    'multipart/form-data'
-            }
-        }
+        { headers: { 'Content-Type': 'multipart/form-data' } }
     );
-
     return res.data;
+};
+
+// COTIZACIONES BULK POR PRODUCTO
+export const registrarCotizacionesBulk = async (
+  id: number,
+  items: {
+    requisicionDetalleId: number;
+    proveedorId: number;
+    precioUnitario: number;
+    tiempoEntrega?: string;
+    formaPago?: string;
+  }[]
+): Promise<void> => {
+  await api.post(`/compras/${id}/cotizaciones-bulk`, { items });
+};
+
+// GENERAR EXPEDIENTE
+export const generarExpedienteCompra = async (id: number, observaciones?: string): Promise<void> => {
+    await api.patch(`/compras/${id}/generar-expediente`, { observaciones });
+};
+
+// ENVIAR A FINANZAS
+export const enviarAFinanzasCompra = async (id: number, observaciones?: string): Promise<void> => {
+    await api.patch(`/compras/${id}/enviar-finanzas`, { observaciones });
+};
+
+// FINALIZAR COMPRA
+export const finalizarCompraService = async (id: number, observaciones?: string): Promise<void> => {
+    await api.patch(`/compras/${id}/finalizar`, { observaciones });
 };

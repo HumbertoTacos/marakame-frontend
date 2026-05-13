@@ -39,6 +39,11 @@ const DetalleNomina = lazy(() => import('./pages/nominas/DetalleNomina').then(m 
 
 const UsuariosPage = lazy(() => import('./pages/admin/UsuariosPage'));
 const DashboardDirectora = lazy(() => import('./pages/admin/DashboardDirectora'));
+const DireccionComprasPage = lazy(() => import('./pages/admin/DireccionComprasPage'));
+//const PagosPacientePage = lazy(() => import('./pages/operativos/PagosPacientePage'));
+const ProveedoresPage = lazy(() => import('./pages/operativos/ProveedoresPage'));
+const RevisionAdministrativaCompras = lazy(() => import('./pages/operativos/RevisionAdministrativaCompras'));
+
 // Loader Premium para Suspense
 const PageLoader = () => (
   <div style={{
@@ -135,6 +140,49 @@ function App() {
             } />
 
             {/* Módulo de Nóminas Protegido */}
+
+            <Route path="pagos" element={
+              <ProtectedRoute allowedRoles={['RRHH_FINANZAS', 'RECURSOS_FINANCIEROS', 'ADMIN_GENERAL', 'ADMISIONES']}>
+                <PagosPacientePage />
+              </ProtectedRoute>
+            } />
+
+            {/* Dashboard de Recursos Financieros */}
+            <Route path="finanzas" element={
+              <ProtectedRoute allowedRoles={['RECURSOS_FINANCIEROS', 'RRHH_FINANZAS', 'ADMIN_GENERAL']}>
+                <DashboardFinanzas />
+              </ProtectedRoute>
+            } />
+
+            {/* Catálogo de Proveedores */}
+            <Route path="proveedores" element={
+              <ProtectedRoute allowedRoles={['RRHH_FINANZAS', 'RECURSOS_FINANCIEROS', 'JEFE_ADMINISTRATIVO', 'ADMIN_GENERAL']}>
+                <ProveedoresPage />
+              </ProtectedRoute>
+            } />
+
+            {/* Dashboard de Jefatura Administrativa */}
+            <Route path="administracion" element={
+              <ProtectedRoute allowedRoles={['JEFE_ADMINISTRATIVO', 'ADMIN_GENERAL']}>
+                <DashboardAdministracion />
+              </ProtectedRoute>
+            } />
+
+            {/* Revisión Administrativa de Compras */}
+            <Route path="revision-compras" element={
+              <ProtectedRoute allowedRoles={['JEFE_ADMINISTRATIVO', 'ADMIN_GENERAL']}>
+                <RevisionAdministrativaCompras />
+              </ProtectedRoute>
+            } />
+
+            {/* NUEVO: Módulo de Asistencias (Para todos los Jefes de Departamento) */}
+            <Route path="asistencias" element={
+              <ProtectedRoute allowedRoles={['ADMIN_GENERAL', 'RRHH_FINANZAS', 'RECURSOS_HUMANOS', 'JEFE_ADMINISTRATIVO', 'JEFE_MEDICO', 'AREA_MEDICA', 'ADMISIONES', 'ALMACEN', 'PSICOLOGIA', 'NUTRICION', 'ENFERMERIA']}>
+                <ControlAsistencias />
+              </ProtectedRoute>
+            } />
+
+            {/* Módulo de Nóminas: RH crea, Finanzas/Jefatura/Dirección firman en orden */}
             <Route path="nominas" element={
               <ProtectedRoute allowedRoles={['RRHH_FINANZAS', 'ADMIN_GENERAL']}>
                 <Outlet />
@@ -167,6 +215,12 @@ function App() {
             <Route path="directora" element={
               <ProtectedRoute allowedRoles={['ADMIN_GENERAL']}>
                 <DashboardDirectora />
+              </ProtectedRoute>
+            } />
+
+            <Route path="autorizacion-compras" element={
+              <ProtectedRoute allowedRoles={['ADMIN_GENERAL']}>
+                <DireccionComprasPage />
               </ProtectedRoute>
             } />
 
