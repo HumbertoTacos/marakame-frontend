@@ -1,6 +1,8 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { UserPlus, Pencil, Power, KeyRound, Search, X, Check, Shield } from 'lucide-react';
+import { differenceInMinutes, formatDistanceToNow } from 'date-fns';
+import { es } from 'date-fns/locale';
 import { useAuthStore } from '../../stores/authStore';
 import apiClient from '../../services/api';
 
@@ -321,33 +323,23 @@ export default function UsuariosPage() {
                       {(() => {
                         if (!u.ultimoAcceso) return 'Nunca';
                         const date = new Date(u.ultimoAcceso);
-                        const now = new Date();
-                        const diffMs = now.getTime() - date.getTime();
-                        const diffMins = Math.floor(diffMs / 60000);
+                        const mins = differenceInMinutes(new Date(), date);
 
-                        if (diffMins < 5) {
+                        if (mins < 6) {
                           return (
                             <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', color: '#16a34a', fontWeight: '600' }}>
-                              <div style={{ width: '6px', height: '6px', borderRadius: '50%', backgroundColor: '#16a34a', boxShadow: '0 0 8px #16a34a' }}></div>
+                              <div style={{ 
+                                width: '6px', height: '6px', borderRadius: '50%', 
+                                backgroundColor: '#16a34a', 
+                                boxShadow: '0 0 8px #16a34a',
+                                animation: 'pulse 2s infinite'
+                              }}></div>
                               En línea
                             </div>
                           );
                         }
 
-                        if (diffMins < 60) return `Hace ${diffMins} min`;
-                        
-                        const isToday = date.toDateString() === now.toDateString();
-                        if (isToday) {
-                          return `Hoy, ${date.toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' })}`;
-                        }
-
-                        const yesterday = new Date(now);
-                        yesterday.setDate(now.getDate() - 1);
-                        if (date.toDateString() === yesterday.toDateString()) {
-                          return `Ayer, ${date.toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' })}`;
-                        }
-
-                        return date.toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: 'numeric' });
+                        return `Hace ${formatDistanceToNow(date, { locale: es })}`;
                       })()}
                     </td>
                     <td style={{ padding: '1rem 1.25rem' }}>

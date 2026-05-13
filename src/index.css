@@ -3,18 +3,26 @@
 :root {
   --text: #475569;
   --text-h: #0f172a;
+  --text-muted: #64748b;
+  --text-light: #94a3b8;
   --bg: #f8fafc;
   --border: rgba(226, 232, 240, 0.8);
   --primary: #dc2626;
   --primary-hover: #b91c1c;
+  --primary-light: #fecaca;
   --primary-bg: rgba(220, 38, 38, 0.1);
   --glass-bg: rgba(255, 255, 255, 0.7);
   --glass-border: rgba(255, 255, 255, 0.3);
+  --white: #ffffff;
   --shadow: 0 4px 6px -1px rgb(0 0 0 / 0.05), 0 2px 4px -2px rgb(0 0 0 / 0.05);
   --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.05), 0 4px 6px -4px rgb(0 0 0 / 0.05);
   --radius-xl: 1.5rem;
   --radius-lg: 1rem;
   --radius-md: 0.75rem;
+  --radius-full: 9999px;
+
+  --sidebar-width: 280px;
+  --header-height: 80px;
 
   --sans: 'Inter', system-ui, -apple-system, sans-serif;
   --heading: 'Outfit', system-ui, -apple-system, sans-serif;
@@ -58,26 +66,350 @@ p {
 
 button {
   font-family: var(--sans);
+  outline: none;
 }
 
 input, textarea, select {
   font-family: var(--sans);
+  outline: none;
 }
 
-/* Estilos de Scrollbar Modernos */
-::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
+/* Accessibilidad: Focus Visible */
+:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
 }
-::-webkit-scrollbar-track {
+
+/* Layout Classes */
+.layout-container {
+  display: flex;
+  height: 100vh;
+  background: radial-gradient(at top left, #f8fafc 0%, #f1f5f9 100%);
+  overflow: hidden;
+}
+
+.main-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* Sidebar Styles */
+.sidebar {
+  width: var(--sidebar-width);
+  background-color: var(--white);
+  color: var(--text-h);
+  display: flex;
+  flex-direction: column;
+  box-shadow: 4px 0 24px rgba(0,0,0,0.04);
+  border-right: 1px solid #f1f5f9;
+  z-index: 20;
+}
+
+.sidebar-logo {
+  padding: 1.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.sidebar-content {
+  padding: 0 1.5rem 1.5rem;
+  flex: 1;
+  overflow-y: auto;
+}
+
+.sidebar-section-title {
+  font-size: 11px;
+  color: var(--text-light);
+  text-transform: uppercase;
+  letter-spacing: 1.5px;
+  margin: 1.5rem 0 1rem 0;
+  font-weight: 700;
+}
+
+.nav-item {
+  display: flex;
+  align-items: center;
+  padding: 0.875rem 1.25rem;
+  color: var(--text);
+  background: transparent;
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  margin-bottom: 0.5rem;
+  font-weight: 500;
+  transition: all 0.25s ease;
+  border: none;
+  width: 100%;
+  text-align: left;
+}
+
+.nav-item:hover {
+  background-color: #f1f5f9;
+  color: var(--text-h);
+}
+
+.nav-item.active {
+  color: var(--white);
+  background: linear-gradient(135deg, var(--primary) 0%, #991b1b 100%);
+  font-weight: 600;
+  box-shadow: 0 4px 12px rgba(220, 38, 38, 0.25);
+  transform: translateY(-1px);
+}
+
+.nav-item.active:hover {
+  background: linear-gradient(135deg, var(--primary) 0%, #991b1b 100%);
+  color: var(--white);
+}
+
+/* Header Styles */
+.main-header {
+  height: var(--header-height);
+  background: linear-gradient(90deg, var(--primary) 0%, #991b1b 100%);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 2.5rem;
+  z-index: 10;
+  box-shadow: 0 4px 20px rgba(153, 27, 27, 0.15);
+  width: 100%;
+}
+
+.breadcrumb {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: var(--primary-light);
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.breadcrumb-current {
+  color: var(--white);
+  font-weight: 600;
+  text-transform: capitalize;
+}
+
+.header-controls {
+  display: flex;
+  align-items: center;
+  gap: 2rem;
+}
+
+/* Search Bar */
+.search-container {
+  position: relative;
+  width: 280px;
+}
+
+.search-icon {
+  position: absolute;
+  top: 50%;
+  left: 1rem;
+  transform: translateY(-50%);
+  pointer-events: none;
+}
+
+.search-input {
+  width: 100%;
+  padding: 0.6rem 1rem 0.6rem 2.8rem;
+  background-color: rgba(255,255,255,0.15);
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: var(--radius-full);
+  font-size: 14px;
+  transition: all 0.3s ease;
+  color: var(--white);
+}
+
+.search-input::placeholder {
+  color: var(--primary-light);
+}
+
+.search-input:focus {
+  background-color: var(--white);
+  border-color: var(--primary);
+  color: var(--text-h);
+  box-shadow: 0 0 0 4px rgba(220, 38, 38, 0.15);
+}
+
+/* Notifications */
+.icon-btn-pill {
+  background: rgba(255,255,255,0.15);
+  border: none;
+  cursor: pointer;
+  position: relative;
+  padding: 0.6rem;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+  color: var(--white);
+}
+
+.icon-btn-pill:hover {
+  background-color: rgba(255,255,255,0.25);
+}
+
+.notification-badge {
+  position: absolute;
+  top: -2px;
+  right: -2px;
+  background-color: #ef4444;
+  color: white;
+  font-size: 10px;
+  height: 18px;
+  width: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  font-weight: bold;
+  border: 2px solid white;
+}
+
+.notification-dropdown {
+  position: absolute;
+  top: calc(100% + 10px);
+  right: 0;
+  width: 340px;
+  background-color: var(--white);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lg);
+  border: 1px solid #f1f5f9;
+  overflow: hidden;
+  z-index: 50;
+  transform-origin: top right;
+  animation: fadeIn 0.2s ease-out;
+}
+
+.dropdown-header {
+  padding: 1.25rem;
+  background-color: var(--white);
+  border-bottom: 1px solid #f1f5f9;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.notification-item {
+  padding: 1.25rem;
+  border-bottom: 1px solid #f8fafc;
+  background-color: var(--white);
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+}
+
+.notification-item:hover {
+  background-color: #f8fafc;
+}
+
+.notification-item.unread {
+  background-color: #f0f9ff;
+}
+
+.notification-item.unread:hover {
+  background-color: #e0f2fe;
+}
+
+/* User Profile */
+.user-profile-trigger {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  cursor: pointer;
+  padding: 0.25rem;
+  border-radius: 50px;
+  transition: background-color 0.2s ease;
+}
+
+.user-info {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+}
+
+.user-name {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--white);
+}
+
+.user-role {
+  font-size: 12px;
+  color: var(--primary-light);
+  font-weight: 500;
+}
+
+.user-avatar {
+  width: 44px;
+  height: 44px;
+  background: linear-gradient(135deg, var(--white), #f1f5f9);
+  color: var(--primary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  font-weight: 700;
+  font-size: 16px;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
+}
+
+.logout-btn {
+  border: none;
+  background: rgba(255,255,255,0.15);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  color: var(--white);
+  margin-left: 0.25rem;
+  padding: 0.6rem;
+  border-radius: 50%;
+  transition: all 0.2s ease;
+}
+
+.logout-btn:hover {
+  color: #ef4444;
+  background: rgba(255, 255, 255, 0.25);
+  box-shadow: 0 4px 8px rgba(239, 68, 68, 0.15);
+}
+
+/* Custom Scrollbar */
+.custom-scrollbar::-webkit-scrollbar {
+  width: 4px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-track {
   background: transparent;
 }
-::-webkit-scrollbar-thumb {
-  background-color: #cbd5e1;
-  border: 1px solid #e2e8f0;
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background-color: rgba(0, 0, 0, 0.1);
+  border-radius: 10px;
 }
 
-/* Custom DatePicker Styles */
+.custom-scrollbar:hover::-webkit-scrollbar-thumb {
+  background-color: rgba(0, 0, 0, 0.2);
+}
+
+/* Scrollbar para Aside */
+aside .custom-scrollbar::-webkit-scrollbar-thumb {
+  background-color: rgba(0, 0, 0, 0.05);
+}
+
+/* Common Animations */
+@keyframes fadeIn {
+  from { opacity: 0; transform: scale(0.95) translateY(-10px); }
+  to { opacity: 1; transform: scale(1) translateY(0); }
+}
+
+.animate-fade-in {
+  animation: fadeIn 0.4s ease-out forwards;
+}
+
+/* DatePicker (existing styles kept for safety) */
 .marakame-datepicker {
   width: 100% !important;
   padding: 0.75rem !important;
@@ -108,90 +440,4 @@ input, textarea, select {
   overflow: hidden !important;
   background-color: white !important;
   z-index: 9999 !important;
-}
-
-.react-datepicker-popper {
-  z-index: 9999 !important;
-}
-
-.react-datepicker__header {
-  background-color: #f8fafc !important;
-  border-bottom: 1px solid #f1f5f9 !important;
-  padding-top: 8px !important;
-}
-
-.react-datepicker__day-name {
-  color: #64748b !important;
-  font-weight: 600 !important;
-  width: 2rem !important;
-  line-height: 2rem !important;
-}
-
-.react-datepicker__day {
-  width: 2rem !important;
-  line-height: 2rem !important;
-  border-radius: 6px !important;
-  color: #334155 !important;
-  transition: all 0.2s !important;
-}
-
-.react-datepicker__day:hover {
-  background-color: #fef2f2 !important;
-  color: #dc2626 !important;
-}
-
-.react-datepicker__day--selected, 
-.react-datepicker__day--keyboard-selected {
-  background-color: #dc2626 !important;
-  color: white !important;
-  font-weight: 700 !important;
-}
-
-.react-datepicker__day--today {
-  border: 1px solid #dc2626 !important;
-  color: #dc2626 !important;
-}
-
-.react-datepicker__triangle {
-  display: none !important;
-}
-::-webkit-scrollbar-thumb:hover {
-  background-color: #94a3b8;
-}
-
-/* Animaciones Reutilizables */
-@keyframes fadeIn {
-  from { opacity: 0; }
-  to { opacity: 1; }
-}
-
-.animate-fade-in {
-  animation: fadeIn 0.4s ease-out forwards;
-}
-
-.hover-card {
-  transition: all 0.2s ease;
-}
-
-.hover-card:hover {
-  background-color: #f1f5f9;
-  transform: translateY(-2px);
-  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.05);
-}
-
-.custom-scrollbar::-webkit-scrollbar {
-  width: 4px;
-}
-
-.custom-scrollbar::-webkit-scrollbar-track {
-  background: transparent;
-}
-
-.custom-scrollbar::-webkit-scrollbar-thumb {
-  background-color: rgba(255, 255, 255, 0.1);
-  border-radius: 10px;
-}
-
-.custom-scrollbar::-webkit-scrollbar-thumb:hover {
-  background-color: rgba(255, 255, 255, 0.2);
 }
