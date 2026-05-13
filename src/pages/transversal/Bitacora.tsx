@@ -13,10 +13,13 @@ export function Bitacora() {
   const [fechaInicio, setFechaInicio] = useState<Date | null>(null);
   const [fechaFin, setFechaFin] = useState<Date | null>(null);
   const [selectedLog, setSelectedLog] = useState<RegistroBitacora | null>(null);
+  const [paginaActual, setPaginaActual] = useState(1);
+  const registrosPorPagina = 12;
   
   const { data: logs, isLoading } = useQuery<RegistroBitacora[]>({
     queryKey: ['bitacora', modulo, busqueda, accion, fechaInicio, fechaFin],
     queryFn: () => {
+      setPaginaActual(1); // Resetear a la primera página cuando cambian los filtros
       const params = new URLSearchParams();
       if (modulo) params.append('modulo', modulo);
       if (busqueda) params.append('busqueda', busqueda);
@@ -104,6 +107,11 @@ export function Bitacora() {
       </div>
     );
   };
+
+  const indiceUltimo = paginaActual * registrosPorPagina;
+  const indicePrimero = indiceUltimo - registrosPorPagina;
+  const logsPaginados = logs?.slice(indicePrimero, indiceUltimo) || [];
+  const totalPaginas = Math.ceil((logs?.length || 0) / registrosPorPagina);
 
   return (
     <div style={{ maxWidth: '1400px', margin: '0 auto', padding: '1.5rem' }}>
@@ -235,16 +243,15 @@ export function Bitacora() {
                 <th style={{ padding: '1.25rem 1.5rem', textAlign: 'left', color: '#64748b', fontWeight: '700', textTransform: 'uppercase', fontSize: '11px', borderBottom: '1px solid #e2e8f0' }}>Acción</th>
                 <th style={{ padding: '1.25rem 1.5rem', textAlign: 'left', color: '#64748b', fontWeight: '700', textTransform: 'uppercase', fontSize: '11px', borderBottom: '1px solid #e2e8f0' }}>Módulo</th>
                 <th style={{ padding: '1.25rem 1.5rem', textAlign: 'left', color: '#64748b', fontWeight: '700', textTransform: 'uppercase', fontSize: '11px', borderBottom: '1px solid #e2e8f0' }}>Detalles</th>
-                <th style={{ padding: '1.25rem 1.5rem', textAlign: 'center', color: '#64748b', fontWeight: '700', textTransform: 'uppercase', fontSize: '11px', borderBottom: '1px solid #e2e8f0' }}>IP</th>
               </tr>
             </thead>
           <tbody>
             {isLoading ? (
               <tr><td colSpan={6} style={{ padding: '2rem', textAlign: 'center' }}>Inspeccionando registros de la bitácora...</td></tr>
-            ) : (!logs || logs.length === 0) ? (
-              <tr><td colSpan={6} style={{ padding: '2rem', textAlign: 'center' }}>No hay registros en la bitácora transversal.</td></tr>
+            ) : (!logsPaginados || logsPaginados.length === 0) ? (
+              <tr><td colSpan={5} style={{ padding: '2rem', textAlign: 'center' }}>No hay registros en la bitácora transversal.</td></tr>
             ) : (
-              logs?.map((log: RegistroBitacora) => (
+              logsPaginados.map((log: RegistroBitacora) => (
                 <tr key={log.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
                   <td style={{ padding: '1.25rem 1.5rem', color: '#64748b' }}>
                     <div style={{ display: 'flex', alignItems: 'center', fontWeight: '500' }}>
@@ -280,15 +287,94 @@ export function Bitacora() {
                       <Eye size={16} /> Ver Detalles
                     </button>
                   </td>
-                  <td style={{ padding: '1.25rem 1.5rem', textAlign: 'center', color: '#64748b', fontFamily: 'monospace', fontWeight: '600' }}>
-                    <Server size={14} style={{ display: 'inline', marginRight: '0.5rem', verticalAlign: 'middle', color: '#94a3b8' }} />
-                    {log.ip}
-                  </td>
                 </tr>
               ))
             )}
           </tbody>
         </table>
+      </div>
+
+      {/* Controles de Paginación */}
+      <div style={{ 
+        display: 'flex', 
+        justifyContent: 'space-between', 
+        alignItems: 'center', 
+        padding: '1.25rem 1.5rem', 
+        borderTop: '1px solid #f1f5f9',
+        backgroundColor: '#f8fafc'
+      }}>
+        <div style={{ fontSize: '13px', color: '#64748b', fontWeight: '600' }}>
+          Mostrando <span style={{ color: '#0f172a' }}>{logsPaginados.length}</span> de <span style={{ color: '#0f172a' }}>{logs?.length || 0}</span> registros
+        </div>
+        <div style={{ display: 'flex', gap: '0.5rem' }}>
+          <button
+            disabled={paginaActual === 1}
+            onClick={() => setPaginaActual(p => p - 1)}
+            style={{
+              padding: '0.5rem 1rem',
+              borderRadius: '8px',
+              border: '1px solid #e2e8f0',
+              backgroundColor: paginaActual === 1 ? '#f1f5f9' : 'white',
+              color: paginaActual === 1 ? '#94a3b8' : '#475569',
+              cursor: paginaActual === 1 ? 'not-allowed' : 'pointer',
+              fontSize: '13px',
+              fontWeight: '700'
+            }}
+          >
+            Anterior
+          </button>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.25rem', padding: '0 0.5rem' }}>
+            {Array.from({ length: Math.min(5, totalPaginas) }, (_, i) => {
+              let pageNum = i + 1;
+              if (totalPaginas > 5 && paginaActual > 3) {
+                pageNum = paginaActual - 3 + i + 1;
+                if (pageNum > totalPaginas) pageNum = totalPaginas - (4 - i);
+              }
+              if (pageNum <= 0) return null;
+              if (pageNum > totalPaginas) return null;
+
+              return (
+                <button
+                  key={pageNum}
+                  onClick={() => setPaginaActual(pageNum)}
+                  style={{
+                    width: '32px',
+                    height: '32px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    borderRadius: '8px',
+                    border: '1px solid',
+                    borderColor: paginaActual === pageNum ? '#dc2626' : '#e2e8f0',
+                    backgroundColor: paginaActual === pageNum ? '#dc2626' : 'white',
+                    color: paginaActual === pageNum ? 'white' : '#475569',
+                    fontSize: '13px',
+                    fontWeight: '700',
+                    cursor: 'pointer'
+                  }}
+                >
+                  {pageNum}
+                </button>
+              );
+            })}
+          </div>
+          <button
+            disabled={paginaActual === totalPaginas || totalPaginas === 0}
+            onClick={() => setPaginaActual(p => p + 1)}
+            style={{
+              padding: '0.5rem 1rem',
+              borderRadius: '8px',
+              border: '1px solid #e2e8f0',
+              backgroundColor: (paginaActual === totalPaginas || totalPaginas === 0) ? '#f1f5f9' : 'white',
+              color: (paginaActual === totalPaginas || totalPaginas === 0) ? '#94a3b8' : '#475569',
+              cursor: (paginaActual === totalPaginas || totalPaginas === 0) ? 'not-allowed' : 'pointer',
+              fontSize: '13px',
+              fontWeight: '700'
+            }}
+          >
+            Siguiente
+          </button>
+        </div>
       </div>
       </div>
 

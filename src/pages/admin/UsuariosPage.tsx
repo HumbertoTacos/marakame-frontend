@@ -81,6 +81,8 @@ export default function UsuariosPage() {
   const { usuario: currentUser } = useAuthStore();
   const isAdminOrDirector = currentUser?.rol === 'ADMIN_GENERAL' || currentUser?.rol === 'DIRECCION_GENERAL' || (currentUser?.rol as string) === 'DIRECCION';
   const qc = useQueryClient();
+  const [paginaActual, setPaginaActual] = useState(1);
+  const usuariosPorPagina = 10;
   const [busqueda, setBusqueda] = useState('');
   const [filtroRol, setFiltroRol] = useState<Rol | ''>('');
   const [filtroEstado, setFiltroEstado] = useState<'activos' | 'inactivos' | ''>('');
@@ -128,6 +130,11 @@ export default function UsuariosPage() {
     const matchesEstado = filtroEstado === 'activos' ? u.activo : filtroEstado === 'inactivos' ? !u.activo : true;
     return matchesBusqueda && matchesRol && matchesEstado;
   });
+
+  const indiceUltimo = paginaActual * usuariosPorPagina;
+  const indicePrimero = indiceUltimo - usuariosPorPagina;
+  const usuariosPaginados = filtrados.slice(indicePrimero, indiceUltimo);
+  const totalPaginas = Math.ceil(filtrados.length / usuariosPorPagina);
 
   function abrirCrear() {
     setForm(EMPTY_FORM);
@@ -249,7 +256,7 @@ export default function UsuariosPage() {
         </div>
 
         <button
-          onClick={() => { setBusqueda(''); setFiltroRol(''); setFiltroEstado(''); }}
+          onClick={() => { setBusqueda(''); setFiltroRol(''); setFiltroEstado(''); setPaginaActual(1); }}
           style={{
             padding: '0.65rem', backgroundColor: '#f8fafc', color: '#64748b',
             border: '1px solid #e2e8f0', borderRadius: '10px', fontSize: '13px',
@@ -277,8 +284,8 @@ export default function UsuariosPage() {
                 </tr>
               </thead>
               <tbody>
-                {filtrados.map((u, i) => (
-                  <tr key={u.id} style={{ borderBottom: i < filtrados.length - 1 ? '1px solid #f1f5f9' : 'none', opacity: u.activo ? 1 : 0.55 }}>
+                {usuariosPaginados.map((u, i) => (
+                  <tr key={u.id} style={{ borderBottom: i < usuariosPaginados.length - 1 ? '1px solid #f1f5f9' : 'none', opacity: u.activo ? 1 : 0.55 }}>
                     <td style={{ padding: '1rem 1.25rem' }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
                         <div style={{
@@ -367,7 +374,7 @@ export default function UsuariosPage() {
                     )}
                   </tr>
                 ))}
-                {filtrados.length === 0 && (
+                {usuariosPaginados.length === 0 && (
                   <tr>
                     <td colSpan={6} style={{ padding: '3rem', textAlign: 'center', color: '#94a3b8', fontSize: '14px' }}>
                       No se encontraron usuarios
@@ -377,6 +384,47 @@ export default function UsuariosPage() {
               </tbody>
             </table>
           </div>
+
+          {/* Controles de Paginación */}
+          {totalPaginas > 1 && (
+            <div style={{ 
+              display: 'flex', 
+              justifyContent: 'space-between', 
+              alignItems: 'center', 
+              padding: '1rem 1.25rem', 
+              backgroundColor: '#f8fafc',
+              borderTop: '1px solid #f1f5f9'
+            }}>
+              <div style={{ fontSize: '12px', color: '#64748b', fontWeight: '600' }}>
+                Mostrando <span style={{ color: '#0f172a' }}>{usuariosPaginados.length}</span> de <span style={{ color: '#0f172a' }}>{filtrados.length}</span> usuarios
+              </div>
+              <div style={{ display: 'flex', gap: '0.4rem' }}>
+                <button
+                  disabled={paginaActual === 1}
+                  onClick={() => setPaginaActual(p => p - 1)}
+                  style={paginationBtnStyle(paginaActual === 1)}
+                >
+                  Anterior
+                </button>
+                {Array.from({ length: totalPaginas }, (_, i) => i + 1).map(n => (
+                  <button
+                    key={n}
+                    onClick={() => setPaginaActual(n)}
+                    style={paginationNumStyle(paginaActual === n)}
+                  >
+                    {n}
+                  </button>
+                ))}
+                <button
+                  disabled={paginaActual === totalPaginas}
+                  onClick={() => setPaginaActual(p => p + 1)}
+                  style={paginationBtnStyle(paginaActual === totalPaginas)}
+                >
+                  Siguiente
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       )}
 
@@ -548,3 +596,27 @@ const filterInputStyle: React.CSSProperties = {
   borderRadius: '10px', fontSize: '13px', outline: 'none', backgroundColor: 'white',
   boxSizing: 'border-box', color: '#334155'
 };
+
+const paginationBtnStyle = (disabled: boolean): React.CSSProperties => ({
+  padding: '0.4rem 0.8rem',
+  borderRadius: '8px',
+  border: '1px solid #e2e8f0',
+  backgroundColor: disabled ? '#f8fafc' : 'white',
+  color: disabled ? '#cbd5e1' : '#475569',
+  fontSize: '12px',
+  fontWeight: '700',
+  cursor: disabled ? 'not-allowed' : 'pointer'
+});
+
+const paginationNumStyle = (active: boolean): React.CSSProperties => ({
+  width: '32px',
+  height: '32px',
+  borderRadius: '8px',
+  border: '1px solid',
+  borderColor: active ? '#3b82f6' : '#e2e8f0',
+  backgroundColor: active ? '#3b82f6' : 'white',
+  color: active ? 'white' : '#475569',
+  fontSize: '12px',
+  fontWeight: '700',
+  cursor: 'pointer'
+});
