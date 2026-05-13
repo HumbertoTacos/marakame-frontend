@@ -57,8 +57,22 @@ export function Login() {
   };
 
   return (
-    <div style={{ height: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: '#f3f4f6' }}>
-      <div style={{ width: '100%', maxWidth: '400px', padding: '2rem', backgroundColor: 'white', borderRadius: '8px', boxShadow: '0 4px 6px rgba(0,0,0,0.1)' }}>
+    <div style={{ 
+      height: '100vh', 
+      display: 'flex', 
+      alignItems: 'center', 
+      justifyContent: 'center', 
+      background: 'linear-gradient(135deg, #4c0519 0%, #7f1d1d 100%)',
+      fontFamily: "'Inter', sans-serif"
+    }}>
+      <div style={{ 
+        width: '100%', 
+        maxWidth: '420px', 
+        padding: '3rem 2.5rem', 
+        backgroundColor: 'white', 
+        borderRadius: '24px', 
+        boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.5)',
+      }}>
         <div style={{ textAlign: 'center', marginBottom: '2rem' }}>
           <img src={marakameLogo} alt="Marakame" style={{ width: '100%', maxWidth: '260px', objectFit: 'contain', marginBottom: '1rem' }} />
           <p style={{ color: '#718096' }}>Ingresa tus credenciales</p>
@@ -91,8 +105,23 @@ export function Login() {
               required 
             />
           </div>
-          <button type="submit" style={{ width: '100%', padding: '0.75rem', backgroundColor: '#3182ce', color: 'white', border: 'none', borderRadius: '4px', fontWeight: 'bold', cursor: 'pointer' }}>
-            Acceder
+          <button 
+            type="submit" 
+            style={{ 
+              width: '100%', 
+              padding: '1rem', 
+              backgroundColor: '#7f1d1d', 
+              color: 'white', 
+              border: 'none', 
+              borderRadius: '12px', 
+              fontWeight: '700', 
+              fontSize: '16px',
+              cursor: 'pointer',
+              boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)',
+              transition: 'all 0.2s'
+            }}
+          >
+            Acceder al Sistema
           </button>
         </form>
       </div>

@@ -82,6 +82,8 @@ export default function UsuariosPage() {
   const isAdminOrDirector = currentUser?.rol === 'ADMIN_GENERAL' || currentUser?.rol === 'DIRECCION_GENERAL' || (currentUser?.rol as string) === 'DIRECCION';
   const qc = useQueryClient();
   const [busqueda, setBusqueda] = useState('');
+  const [filtroRol, setFiltroRol] = useState<Rol | ''>('');
+  const [filtroEstado, setFiltroEstado] = useState<'activos' | 'inactivos' | ''>('');
   const [modal, setModal] = useState<'crear' | 'editar' | 'reset' | null>(null);
   const [selected, setSelected] = useState<UsuarioItem | null>(null);
   const [form, setForm] = useState<FormData>(EMPTY_FORM);
@@ -120,9 +122,12 @@ export default function UsuariosPage() {
     onError: (e: any) => setError(e.response?.data?.message ?? 'Error al resetear contraseña'),
   });
 
-  const filtrados = usuarios.filter(u =>
-    `${u.nombre} ${u.apellidos} ${u.correo}`.toLowerCase().includes(busqueda.toLowerCase())
-  );
+  const filtrados = usuarios.filter(u => {
+    const matchesBusqueda = `${u.nombre} ${u.apellidos} ${u.correo}`.toLowerCase().includes(busqueda.toLowerCase());
+    const matchesRol = filtroRol ? u.rol === filtroRol : true;
+    const matchesEstado = filtroEstado === 'activos' ? u.activo : filtroEstado === 'inactivos' ? !u.activo : true;
+    return matchesBusqueda && matchesRol && matchesEstado;
+  });
 
   function abrirCrear() {
     setForm(EMPTY_FORM);
@@ -194,136 +199,184 @@ export default function UsuariosPage() {
         )}
       </div>
 
-      {/* Buscador */}
-      <div style={{ position: 'relative', marginBottom: '1.5rem', maxWidth: '380px' }}>
-        <Search size={16} color="#94a3b8" style={{ position: 'absolute', top: '50%', left: '1rem', transform: 'translateY(-50%)' }} />
-        <input
-          placeholder="Buscar por nombre o correo..."
-          value={busqueda}
-          onChange={e => setBusqueda(e.target.value)}
+      {/* Panel de Filtros Extenso */}
+      <div style={{ 
+        backgroundColor: 'white', 
+        borderRadius: '20px', 
+        padding: '1.5rem', 
+        marginBottom: '1.5rem',
+        border: '1px solid #e2e8f0',
+        display: 'grid',
+        gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+        gap: '1rem',
+        alignItems: 'flex-end',
+        boxShadow: '0 1px 3px rgba(0,0,0,0.05)'
+      }}>
+        <div style={{ position: 'relative' }}>
+          <label style={filterLabelStyle}>Búsqueda rápida</label>
+          <Search size={14} color="#94a3b8" style={{ position: 'absolute', bottom: '0.75rem', left: '0.75rem' }} />
+          <input
+            placeholder="Nombre, correo..."
+            value={busqueda}
+            onChange={e => setBusqueda(e.target.value)}
+            style={{ ...filterInputStyle, paddingLeft: '2.25rem' }}
+          />
+        </div>
+
+        <div>
+          <label style={filterLabelStyle}>Filtrar por Rol</label>
+          <select 
+            value={filtroRol} 
+            onChange={e => setFiltroRol(e.target.value as Rol | '')}
+            style={filterInputStyle}
+          >
+            <option value="">Todos los roles</option>
+            {ROLES.map(r => <option key={r} value={r}>{ROL_LABELS[r]}</option>)}
+          </select>
+        </div>
+
+        <div>
+          <label style={filterLabelStyle}>Estado de Cuenta</label>
+          <select 
+            value={filtroEstado} 
+            onChange={e => setFiltroEstado(e.target.value as any)}
+            style={filterInputStyle}
+          >
+            <option value="">Todos los estados</option>
+            <option value="activos">Solo activos</option>
+            <option value="inactivos">Solo inactivos</option>
+          </select>
+        </div>
+
+        <button
+          onClick={() => { setBusqueda(''); setFiltroRol(''); setFiltroEstado(''); }}
           style={{
-            width: '100%', padding: '0.65rem 1rem 0.65rem 2.75rem',
-            border: '1px solid #e2e8f0', borderRadius: '10px',
-            fontSize: '14px', outline: 'none', boxSizing: 'border-box',
+            padding: '0.65rem', backgroundColor: '#f8fafc', color: '#64748b',
+            border: '1px solid #e2e8f0', borderRadius: '10px', fontSize: '13px',
+            fontWeight: '700', cursor: 'pointer'
           }}
-        />
+        >
+          Limpiar Filtros
+        </button>
       </div>
 
       {/* Tabla */}
       {isLoading ? (
         <p style={{ color: '#64748b' }}>Cargando usuarios...</p>
       ) : (
-        <div style={{ backgroundColor: 'white', borderRadius: '16px', border: '1px solid #e2e8f0', overflow: 'hidden', boxShadow: '0 1px 4px rgba(0,0,0,0.06)' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-            <thead>
-              <tr style={{ backgroundColor: '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
-                {['Usuario', 'Correo', 'Rol', 'Último acceso', 'Estado', isAdminOrDirector ? 'Acciones' : ''].filter(h => h !== '').map(h => (
-                  <th key={h} style={{ padding: '0.875rem 1.25rem', textAlign: 'left', fontSize: '12px', fontWeight: '700', color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-                    {h}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {filtrados.map((u, i) => (
-                <tr key={u.id} style={{ borderBottom: i < filtrados.length - 1 ? '1px solid #f1f5f9' : 'none', opacity: u.activo ? 1 : 0.55 }}>
-                  <td style={{ padding: '1rem 1.25rem' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                      <div style={{
-                        width: '36px', height: '36px', borderRadius: '50%',
-                        background: `linear-gradient(135deg, ${ROL_COLORS[u.rol]}, ${ROL_COLORS[u.rol]}aa)`,
-                        display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        color: 'white', fontWeight: '700', fontSize: '14px', flexShrink: 0,
-                      }}>
-                        {u.nombre[0]}{u.apellidos[0]}
-                      </div>
-                      <div>
-                        <p style={{ margin: 0, fontWeight: '700', fontSize: '14px', color: '#0f172a' }}>{u.nombre} {u.apellidos}</p>
-                        <p style={{ margin: 0, fontSize: '12px', color: '#94a3b8' }}>#{u.id}</p>
-                      </div>
-                    </div>
-                  </td>
-                  <td style={{ padding: '1rem 1.25rem', fontSize: '13px', color: '#475569' }}>{u.correo}</td>
-                  <td style={{ padding: '1rem 1.25rem' }}>
-                    <span style={{
-                      display: 'inline-flex',
-                      alignItems: 'center',
-                      gap: '0.25rem',
-                      backgroundColor: `${ROL_COLORS[u.rol]}18`,
-                      color: ROL_COLORS[u.rol],
-                      padding: '0.3rem 0.75rem', borderRadius: '100px',
-                      fontSize: '12px', fontWeight: '700',
-                    }}>
-                      {u.esJefe && <Shield size={12} />}
-                      {ROL_LABELS[u.rol]}
-                    </span>
-                  </td>
-                  <td style={{ padding: '1rem 1.25rem', fontSize: '13px', color: '#64748b' }}>
-                    {(() => {
-                      if (!u.ultimoAcceso) return 'Nunca';
-                      const date = new Date(u.ultimoAcceso);
-                      const now = new Date();
-                      const diffMs = now.getTime() - date.getTime();
-                      const diffMins = Math.floor(diffMs / 60000);
-
-                      if (diffMins < 5) {
-                        return (
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', color: '#16a34a', fontWeight: '600' }}>
-                            <div style={{ width: '6px', height: '6px', borderRadius: '50%', backgroundColor: '#16a34a', boxShadow: '0 0 8px #16a34a' }}></div>
-                            En línea
-                          </div>
-                        );
-                      }
-
-                      if (diffMins < 60) return `Hace ${diffMins} min`;
-                      
-                      const isToday = date.toDateString() === now.toDateString();
-                      if (isToday) {
-                        return `Hoy, ${date.toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' })}`;
-                      }
-
-                      const yesterday = new Date(now);
-                      yesterday.setDate(now.getDate() - 1);
-                      if (date.toDateString() === yesterday.toDateString()) {
-                        return `Ayer, ${date.toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' })}`;
-                      }
-
-                      return date.toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: 'numeric' });
-                    })()}
-                  </td>
-                  <td style={{ padding: '1rem 1.25rem' }}>
-                    <span style={{
-                      display: 'inline-flex', alignItems: 'center', gap: '0.35rem',
-                      backgroundColor: u.activo ? '#dcfce7' : '#fee2e2',
-                      color: u.activo ? '#16a34a' : '#dc2626',
-                      padding: '0.3rem 0.75rem', borderRadius: '100px',
-                      fontSize: '12px', fontWeight: '700',
-                    }}>
-                      {u.activo ? <><Check size={12} /> Activo</> : <><X size={12} /> Inactivo</>}
-                    </span>
-                  </td>
-                  {isAdminOrDirector && (
+        <div style={{ backgroundColor: 'white', borderRadius: '20px', border: '1px solid #e2e8f0', overflow: 'hidden', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)' }}>
+          <div style={{ maxHeight: '600px', overflowY: 'auto' }}>
+            <table style={{ width: '100%', borderCollapse: 'separate', borderSpacing: 0 }}>
+              <thead style={{ position: 'sticky', top: 0, zIndex: 10, backgroundColor: '#f8fafc' }}>
+                <tr style={{ borderBottom: '1px solid #e2e8f0' }}>
+                  {['Usuario', 'Correo', 'Rol', 'Último acceso', 'Estado', isAdminOrDirector ? 'Acciones' : ''].filter(h => h !== '').map(h => (
+                    <th key={h} style={{ padding: '1rem 1.25rem', textAlign: 'left', fontSize: '11px', fontWeight: '800', color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em', borderBottom: '1px solid #e2e8f0' }}>
+                      {h}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {filtrados.map((u, i) => (
+                  <tr key={u.id} style={{ borderBottom: i < filtrados.length - 1 ? '1px solid #f1f5f9' : 'none', opacity: u.activo ? 1 : 0.55 }}>
                     <td style={{ padding: '1rem 1.25rem' }}>
-                      <div style={{ display: 'flex', gap: '0.5rem' }}>
-                        <IconBtn title="Editar" color="#3b82f6" onClick={() => abrirEditar(u)}><Pencil size={14} /></IconBtn>
-                        <IconBtn title="Reset contraseña" color="#f59e0b" onClick={() => abrirReset(u)}><KeyRound size={14} /></IconBtn>
-                        <IconBtn title={u.activo ? 'Desactivar' : 'Activar'} color={u.activo ? '#ef4444' : '#22c55e'} onClick={() => toggle.mutate(u.id)}>
-                          <Power size={14} />
-                        </IconBtn>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                        <div style={{
+                          width: '36px', height: '36px', borderRadius: '50%',
+                          background: `linear-gradient(135deg, ${ROL_COLORS[u.rol]}, ${ROL_COLORS[u.rol]}aa)`,
+                          display: 'flex', alignItems: 'center', justifyContent: 'center',
+                          color: 'white', fontWeight: '700', fontSize: '14px', flexShrink: 0,
+                        }}>
+                          {u.nombre[0]}{u.apellidos[0]}
+                        </div>
+                        <div>
+                          <p style={{ margin: 0, fontWeight: '700', fontSize: '14px', color: '#0f172a' }}>{u.nombre} {u.apellidos}</p>
+                          <p style={{ margin: 0, fontSize: '12px', color: '#94a3b8' }}>#{u.id}</p>
+                        </div>
                       </div>
                     </td>
-                  )}
-                </tr>
-              ))}
-              {filtrados.length === 0 && (
-                <tr>
-                  <td colSpan={6} style={{ padding: '3rem', textAlign: 'center', color: '#94a3b8', fontSize: '14px' }}>
-                    No se encontraron usuarios
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
+                    <td style={{ padding: '1rem 1.25rem', fontSize: '13px', color: '#475569' }}>{u.correo}</td>
+                    <td style={{ padding: '1rem 1.25rem' }}>
+                      <span style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '0.25rem',
+                        backgroundColor: `${ROL_COLORS[u.rol]}18`,
+                        color: ROL_COLORS[u.rol],
+                        padding: '0.3rem 0.75rem', borderRadius: '100px',
+                        fontSize: '12px', fontWeight: '700',
+                      }}>
+                        {u.esJefe && <Shield size={12} />}
+                        {ROL_LABELS[u.rol]}
+                      </span>
+                    </td>
+                    <td style={{ padding: '1rem 1.25rem', fontSize: '13px', color: '#64748b' }}>
+                      {(() => {
+                        if (!u.ultimoAcceso) return 'Nunca';
+                        const date = new Date(u.ultimoAcceso);
+                        const now = new Date();
+                        const diffMs = now.getTime() - date.getTime();
+                        const diffMins = Math.floor(diffMs / 60000);
+
+                        if (diffMins < 5) {
+                          return (
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', color: '#16a34a', fontWeight: '600' }}>
+                              <div style={{ width: '6px', height: '6px', borderRadius: '50%', backgroundColor: '#16a34a', boxShadow: '0 0 8px #16a34a' }}></div>
+                              En línea
+                            </div>
+                          );
+                        }
+
+                        if (diffMins < 60) return `Hace ${diffMins} min`;
+                        
+                        const isToday = date.toDateString() === now.toDateString();
+                        if (isToday) {
+                          return `Hoy, ${date.toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' })}`;
+                        }
+
+                        const yesterday = new Date(now);
+                        yesterday.setDate(now.getDate() - 1);
+                        if (date.toDateString() === yesterday.toDateString()) {
+                          return `Ayer, ${date.toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' })}`;
+                        }
+
+                        return date.toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: 'numeric' });
+                      })()}
+                    </td>
+                    <td style={{ padding: '1rem 1.25rem' }}>
+                      <span style={{
+                        display: 'inline-flex', alignItems: 'center', gap: '0.35rem',
+                        backgroundColor: u.activo ? '#dcfce7' : '#fee2e2',
+                        color: u.activo ? '#16a34a' : '#dc2626',
+                        padding: '0.3rem 0.75rem', borderRadius: '100px',
+                        fontSize: '12px', fontWeight: '700',
+                      }}>
+                        {u.activo ? <><Check size={12} /> Activo</> : <><X size={12} /> Inactivo</>}
+                      </span>
+                    </td>
+                    {isAdminOrDirector && (
+                      <td style={{ padding: '1rem 1.25rem' }}>
+                        <div style={{ display: 'flex', gap: '0.5rem' }}>
+                          <IconBtn title="Editar" color="#3b82f6" onClick={() => abrirEditar(u)}><Pencil size={14} /></IconBtn>
+                          <IconBtn title="Reset contraseña" color="#f59e0b" onClick={() => abrirReset(u)}><KeyRound size={14} /></IconBtn>
+                          <IconBtn title={u.activo ? 'Desactivar' : 'Activar'} color={u.activo ? '#ef4444' : '#22c55e'} onClick={() => toggle.mutate(u.id)}>
+                            <Power size={14} />
+                          </IconBtn>
+                        </div>
+                      </td>
+                    )}
+                  </tr>
+                ))}
+                {filtrados.length === 0 && (
+                  <tr>
+                    <td colSpan={6} style={{ padding: '3rem', textAlign: 'center', color: '#94a3b8', fontSize: '14px' }}>
+                      No se encontraron usuarios
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
         </div>
       )}
 
@@ -483,4 +536,15 @@ const cancelBtnStyle: React.CSSProperties = {
 const submitBtnStyle: React.CSSProperties = {
   padding: '0.7rem 1.5rem', border: 'none', borderRadius: '10px',
   backgroundColor: '#3b82f6', color: 'white', fontSize: '14px', fontWeight: '700', cursor: 'pointer',
+};
+
+const filterLabelStyle: React.CSSProperties = {
+  display: 'block', fontSize: '11px', fontWeight: '800', color: '#64748b',
+  marginBottom: '0.4rem', textTransform: 'uppercase', letterSpacing: '0.05em'
+};
+
+const filterInputStyle: React.CSSProperties = {
+  width: '100%', padding: '0.65rem 0.85rem', border: '1px solid #cbd5e1',
+  borderRadius: '10px', fontSize: '13px', outline: 'none', backgroundColor: 'white',
+  boxSizing: 'border-box', color: '#334155'
 };
