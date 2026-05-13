@@ -129,26 +129,28 @@ export default function DashboardDirectora() {
 
       {/* ── Cabecera ejecutiva ── */}
       <div style={{
-        background: 'linear-gradient(135deg, #0f172a 0%, #1e293b 60%, #0f3460 100%)',
+        backgroundColor: '#ffffff',
         borderRadius: '24px', padding: '2.5rem 3rem', marginBottom: '2.5rem',
-        position: 'relative', overflow: 'hidden', color: 'white',
+        position: 'relative', overflow: 'hidden', color: '#0f172a',
+        boxShadow: '0 4px 20px rgba(0, 0, 0, 0.04)',
+        border: '1px solid #f1f5f9',
       }}>
         {/* Círculos decorativos */}
-        <div style={{ position: 'absolute', top: '-60px', right: '-60px', width: '260px', height: '260px', background: 'radial-gradient(circle, rgba(99,102,241,0.2) 0%, transparent 70%)', borderRadius: '50%' }} />
-        <div style={{ position: 'absolute', bottom: '-40px', left: '40%', width: '180px', height: '180px', background: 'radial-gradient(circle, rgba(59,130,246,0.15) 0%, transparent 70%)', borderRadius: '50%' }} />
+        <div style={{ position: 'absolute', top: '-60px', right: '-60px', width: '260px', height: '260px', background: 'radial-gradient(circle, #fef2f2 0%, transparent 70%)', borderRadius: '50%' }} />
+        <div style={{ position: 'absolute', bottom: '-40px', left: '40%', width: '180px', height: '180px', background: 'radial-gradient(circle, #fef2f2 0%, transparent 70%)', borderRadius: '50%' }} />
 
         <div style={{ position: 'relative', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '1.5rem' }}>
           <div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '0.75rem' }}>
-              <div style={{ backgroundColor: 'rgba(99,102,241,0.25)', padding: '0.85rem', borderRadius: '16px', border: '1px solid rgba(99,102,241,0.4)' }}>
-                <Building2 size={28} color="#a5b4fc" />
+              <div style={{ backgroundColor: '#fef2f2', padding: '0.85rem', borderRadius: '16px', border: '1px solid #fee2e2' }}>
+                <Building2 size={28} color="#dc2626" />
               </div>
               <div>
-                <p style={{ margin: 0, fontSize: '12px', color: '#94a3b8', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '1.5px' }}>Panel Ejecutivo</p>
-                <h1 style={{ margin: 0, fontSize: '28px', fontWeight: '900', letterSpacing: '-0.5px' }}>Instituto Marakame</h1>
+                <p style={{ margin: 0, fontSize: '12px', color: '#dc2626', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '1.5px' }}>Panel Ejecutivo</p>
+                <h1 style={{ margin: 0, fontSize: '28px', fontWeight: '900', letterSpacing: '-0.5px', color: '#0f172a' }}>Instituto Marakame</h1>
               </div>
             </div>
-            <p style={{ margin: 0, color: '#94a3b8', fontSize: '14px', fontWeight: '500' }}>
+            <p style={{ margin: 0, color: '#64748b', fontSize: '14px', fontWeight: '500' }}>
               Resumen operativo del centro de rehabilitación
             </p>
           </div>
@@ -158,7 +160,7 @@ export default function DashboardDirectora() {
             <button
               onClick={() => refetch()}
               disabled={isFetching}
-              style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', backgroundColor: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.12)', color: '#94a3b8', padding: '0.5rem 1rem', borderRadius: '10px', cursor: 'pointer', fontSize: '12px', fontWeight: '600' }}
+              style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', backgroundColor: '#f8fafc', border: '1px solid #e2e8f0', color: '#64748b', padding: '0.5rem 1rem', borderRadius: '10px', cursor: 'pointer', fontSize: '12px', fontWeight: '600' }}
             >
               <RefreshCw size={13} style={{ animation: isFetching ? 'spin 1s linear infinite' : 'none' }} />
               {dataUpdatedAt ? `Actualizado ${new Date(dataUpdatedAt).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' })}` : 'Actualizar'}
@@ -178,14 +180,14 @@ export default function DashboardDirectora() {
         {data && (
           <div style={{ marginTop: '2rem', position: 'relative' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
-              <span style={{ fontSize: '12px', fontWeight: '700', color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '1px' }}>
+              <span style={{ fontSize: '12px', fontWeight: '700', color: '#64748b', textTransform: 'uppercase', letterSpacing: '1px' }}>
                 Ocupación General — {data.kpis.internados} / {data.kpis.capacidadTotal} camas
               </span>
               <span style={{ fontSize: '22px', fontWeight: '900', color: data.kpis.ocupacionPct > 90 ? '#fca5a5' : data.kpis.ocupacionPct > 70 ? '#fde68a' : '#86efac' }}>
                 {data.kpis.ocupacionPct}%
               </span>
             </div>
-            <div style={{ height: '8px', backgroundColor: 'rgba(255,255,255,0.1)', borderRadius: '100px', overflow: 'hidden' }}>
+            <div style={{ height: '8px', backgroundColor: '#f1f5f9', borderRadius: '100px', overflow: 'hidden' }}>
               <div style={{
                 height: '100%', borderRadius: '100px',
                 width: `${Math.min(data.kpis.ocupacionPct, 100)}%`,
@@ -207,7 +209,7 @@ export default function DashboardDirectora() {
         <>
           {/* ── SECCIÓN 1: KPIs clínicos ── */}
           <div style={{ marginBottom: '2.5rem' }}>
-            <SectionTitle color="#3b82f6"><Stethoscope size={14} /> Estado Clínico del Centro</SectionTitle>
+            <SectionTitle color="#dc2626"><Stethoscope size={14} /> Estado Clínico del Centro</SectionTitle>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))', gap: '1.25rem' }}>
               <KpiCard
                 label="Pacientes Internados"
@@ -262,7 +264,7 @@ export default function DashboardDirectora() {
 
             {/* Pipeline de admisión */}
             <div style={{ backgroundColor: 'white', borderRadius: '20px', padding: '1.75rem', border: '1px solid #f1f5f9', boxShadow: '0 2px 12px rgba(0,0,0,0.05)' }}>
-              <SectionTitle color="#8b5cf6"><Users size={14} /> Pipeline de Admisión</SectionTitle>
+              <SectionTitle color="#dc2626"><Users size={14} /> Pipeline de Admisión</SectionTitle>
               {[
                 { label: 'Primer Contacto / Prospecto', value: data.kpis.prospectos,         color: '#8b5cf6', pct: data.kpis.prospectos },
                 { label: 'En Valoración Diagnóstica',   value: data.kpis.enValoracion,       color: '#f59e0b', pct: data.kpis.enValoracion },
@@ -286,7 +288,7 @@ export default function DashboardDirectora() {
 
             {/* Ocupación por área */}
             <div style={{ backgroundColor: 'white', borderRadius: '20px', padding: '1.75rem', border: '1px solid #f1f5f9', boxShadow: '0 2px 12px rgba(0,0,0,0.05)' }}>
-              <SectionTitle color="#0891b2"><BedDouble size={14} /> Ocupación por Área</SectionTitle>
+              <SectionTitle color="#dc2626"><BedDouble size={14} /> Ocupación por Área</SectionTitle>
               {Object.entries(data.ocupacionAreas).length === 0 ? (
                 <p style={{ color: '#94a3b8', fontSize: '14px', textAlign: 'center', padding: '2rem 0' }}>Sin datos de áreas registradas</p>
               ) : (
@@ -319,7 +321,7 @@ export default function DashboardDirectora() {
 
             {/* Indicadores financieros */}
             <div style={{ backgroundColor: 'white', borderRadius: '20px', padding: '1.75rem', border: '1px solid #f1f5f9', boxShadow: '0 2px 12px rgba(0,0,0,0.05)' }}>
-              <SectionTitle color="#16a34a"><DollarSign size={14} /> Indicadores Financieros</SectionTitle>
+              <SectionTitle color="#dc2626"><DollarSign size={14} /> Indicadores Financieros</SectionTitle>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
                 {[
                   { label: 'Cobros del mes',     value: fmt(data.finanzas.cobrosMes),      color: '#16a34a', icon: TrendingUp },
@@ -365,10 +367,10 @@ export default function DashboardDirectora() {
             {/* Personal activo por área */}
             <div style={{ backgroundColor: 'white', borderRadius: '20px', padding: '1.75rem', border: '1px solid #f1f5f9', boxShadow: '0 2px 12px rgba(0,0,0,0.05)' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem' }}>
-                <SectionTitle color="#6366f1"><BarChart3 size={14} /> Personal Activo</SectionTitle>
+                <SectionTitle color="#dc2626"><BarChart3 size={14} /> Personal Activo</SectionTitle>
                 <button
                   onClick={() => navigate('/usuarios')}
-                  style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', fontSize: '12px', fontWeight: '700', color: '#6366f1', background: '#eef2ff', border: 'none', padding: '0.4rem 0.85rem', borderRadius: '8px', cursor: 'pointer' }}
+                  style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', fontSize: '12px', fontWeight: '700', color: '#dc2626', background: '#fef2f2', border: 'none', padding: '0.4rem 0.85rem', borderRadius: '8px', cursor: 'pointer' }}
                 >
                   Gestionar <ArrowUpRight size={12} />
                 </button>

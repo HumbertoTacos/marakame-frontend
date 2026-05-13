@@ -5,9 +5,9 @@
   --text-h: #0f172a;
   --bg: #f8fafc;
   --border: rgba(226, 232, 240, 0.8);
-  --primary: #3b82f6;
-  --primary-hover: #2563eb;
-  --primary-bg: rgba(59, 130, 246, 0.1);
+  --primary: #dc2626;
+  --primary-hover: #b91c1c;
+  --primary-bg: rgba(220, 38, 38, 0.1);
   --glass-bg: rgba(255, 255, 255, 0.7);
   --glass-border: rgba(255, 255, 255, 0.3);
   --shadow: 0 4px 6px -1px rgb(0 0 0 / 0.05), 0 2px 4px -2px rgb(0 0 0 / 0.05);
@@ -91,8 +91,8 @@ input, textarea, select {
 }
 
 .marakame-datepicker:focus {
-  border-color: #3b82f6 !important;
-  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1) !important;
+  border-color: #dc2626 !important;
+  box-shadow: 0 0 0 3px rgba(220, 38, 38, 0.1) !important;
 }
 
 .react-datepicker-wrapper {
@@ -131,20 +131,20 @@ input, textarea, select {
 }
 
 .react-datepicker__day:hover {
-  background-color: #eff6ff !important;
-  color: #3b82f6 !important;
+  background-color: #fef2f2 !important;
+  color: #dc2626 !important;
 }
 
 .react-datepicker__day--selected, 
 .react-datepicker__day--keyboard-selected {
-  background-color: #3b82f6 !important;
+  background-color: #dc2626 !important;
   color: white !important;
   font-weight: 700 !important;
 }
 
 .react-datepicker__day--today {
-  border: 1px solid #3b82f6 !important;
-  color: #3b82f6 !important;
+  border: 1px solid #dc2626 !important;
+  color: #dc2626 !important;
 }
 
 .react-datepicker__triangle {

@@ -239,7 +239,7 @@ const NuevaSolicitudModal = ({ isOpen, onClose, nombreUsuario }: {
             disabled={enviando || !tipo || !contenido.trim()}
             style={{
               padding: '0.7rem 1.6rem', borderRadius: '12px', border: 'none',
-              background: enviando || !tipo || !contenido.trim() ? '#e2e8f0' : 'linear-gradient(135deg,#3b82f6,#1d4ed8)',
+              background: enviando || !tipo || !contenido.trim() ? '#e2e8f0' : 'linear-gradient(135deg, #dc2626, #991b1b)',
               color: enviando || !tipo || !contenido.trim() ? '#94a3b8' : 'white',
               fontWeight: '800', cursor: enviando || !tipo || !contenido.trim() ? 'not-allowed' : 'pointer',
               fontSize: '14px', display: 'flex', alignItems: 'center', gap: '0.5rem',
@@ -302,39 +302,41 @@ export function DashboardMedico() {
         alignItems: 'center',
         marginBottom: '2.5rem',
         padding: '2rem 2.5rem',
-        background: 'linear-gradient(135deg, #1e293b 0%, #0f172a 100%)',
+        backgroundColor: '#ffffff',
         borderRadius: '24px',
-        color: 'white',
-        boxShadow: '0 20px 25px -5px rgba(0,0,0,0.12)',
+        color: '#0f172a',
+        boxShadow: '0 4px 20px rgba(0, 0, 0, 0.04)',
+        border: '1px solid #f1f5f9',
         position: 'relative',
         overflow: 'hidden',
       }}>
         <div style={{
           position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
-          background: 'url("https://www.transparenttextures.com/patterns/cubes.png")',
-          opacity: 0.04,
+          background: 'radial-gradient(circle, #fef2f2 0%, transparent 70%)',
+          opacity: 0.5,
         }} />
 
         <div style={{ position: 'relative', zIndex: 1, display: 'flex', alignItems: 'center', width: '100%' }}>
           <div style={{
-            backgroundColor: '#3b82f6',
+            backgroundColor: '#fef2f2',
             padding: '1rem',
             borderRadius: '16px',
+            border: '1px solid #fee2e2',
             marginRight: '1.25rem',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
           }}>
-            <HeartPulse size={36} color="white" />
+            <HeartPulse size={36} color="#dc2626" />
           </div>
 
           <div>
-            <h1 style={{ fontSize: '26px', fontWeight: '900', color: '#fff', margin: 0, letterSpacing: '-0.5px' }}>
+            <h1 style={{ fontSize: '26px', fontWeight: '900', color: '#0f172a', margin: 0, letterSpacing: '-0.5px' }}>
               Dashboard Médico
             </h1>
-            <p style={{ color: '#94a3b8', margin: 0, marginTop: '0.25rem', fontSize: '14px', fontWeight: '500' }}>
+            <p style={{ color: '#64748b', margin: 0, marginTop: '0.25rem', fontSize: '14px', fontWeight: '500' }}>
               Bienvenido,{' '}
-              <span style={{ color: '#60a5fa', fontWeight: '700' }}>{usuario?.nombre}</span>
+              <span style={{ color: '#dc2626', fontWeight: '700' }}>{usuario?.nombre}</span>
               {' '}— Vista clínica general
             </p>
           </div>
@@ -345,10 +347,11 @@ export function DashboardMedico() {
               style={{
                 display: 'flex', alignItems: 'center', gap: '0.5rem',
                 padding: '0.6rem 1.2rem', borderRadius: '14px',
-                background: 'rgba(96,165,250,0.15)',
-                border: '1px solid rgba(96,165,250,0.3)',
-                color: '#93c5fd', fontWeight: '700', fontSize: '13px',
+                background: '#fef2f2',
+                border: '1px solid #fee2e2',
+                color: '#dc2626', fontWeight: '700', fontSize: '13px',
                 cursor: 'pointer', whiteSpace: 'nowrap',
+                boxShadow: '0 2px 8px rgba(220, 38, 38, 0.08)'
               }}
             >
               <Send size={14} /> Nueva Solicitud a Jefatura
@@ -360,14 +363,14 @@ export function DashboardMedico() {
               </div>
               <div style={{
                 fontSize: '13px',
-                background: 'rgba(96,165,250,0.15)',
-                color: '#60a5fa',
+                background: '#fef2f2',
+                color: '#dc2626',
                 padding: '0.35rem 1rem',
                 borderRadius: '100px',
                 display: 'inline-block',
                 marginTop: '0.4rem',
                 fontWeight: '700',
-                border: '1px solid rgba(96,165,250,0.25)',
+                border: '1px solid #fee2e2',
               }}>
                 {usuario?.rol?.replace('_', ' ') ?? 'MÉDICO'}
               </div>

@@ -84,14 +84,14 @@ export function Layout() {
       display: 'flex',
       alignItems: 'center',
       padding: '0.875rem 1.25rem',
-      color: isActive ? '#ffffff' : '#94a3b8',
-      backgroundColor: isActive ? 'var(--primary)' : 'transparent',
+      color: isActive ? '#ffffff' : '#475569',
+      background: isActive ? 'linear-gradient(135deg, #dc2626 0%, #991b1b 100%)' : 'transparent',
       borderRadius: '12px',
       cursor: 'pointer',
       marginBottom: '0.5rem',
       fontWeight: isActive ? '600' as const : '500' as const,
       transition: 'all 0.25s ease',
-      boxShadow: isActive ? '0 4px 12px rgba(59, 130, 246, 0.3)' : 'none',
+      boxShadow: isActive ? '0 4px 12px rgba(220, 38, 38, 0.25)' : 'none',
       transform: isActive ? 'translateY(-1px)' : 'translateY(0)',
     };
   };
@@ -101,11 +101,12 @@ export function Layout() {
       {/* Navigation Sidebar */}
       <aside style={{ 
         width: '280px', 
-        background: 'linear-gradient(180deg, #0f172a 0%, #1e293b 100%)', 
-        color: 'white', 
+        backgroundColor: '#ffffff', 
+        color: '#0f172a', 
         display: 'flex', 
         flexDirection: 'column',
-        boxShadow: '4px 0 24px rgba(0,0,0,0.1)',
+        boxShadow: '4px 0 24px rgba(0,0,0,0.04)',
+        borderRight: '1px solid #f1f5f9',
         zIndex: 20
       }}>
         <div
@@ -122,10 +123,10 @@ export function Layout() {
           {/* ========================================================= */}
           {(['ADMIN_GENERAL', 'RRHH_FINANZAS', 'RECURSOS_HUMANOS', 'JEFE_ADMINISTRATIVO', 'JEFE_MEDICO', 'AREA_MEDICA', 'ADMISIONES', 'ALMACEN', 'PSICOLOGIA', 'NUTRICION', 'ENFERMERIA'].includes(usuario?.rol || '')) && (
             <>
-              <div style={{ fontSize: '11px', color: '#64748b', textTransform: 'uppercase', letterSpacing: '1.5px', margin: '1rem 0 1rem 0', fontWeight: '700' }}>Operación Diaria</div>
+              <div style={{ fontSize: '11px', color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '1.5px', margin: '1rem 0 1rem 0', fontWeight: '700' }}>Operación Diaria</div>
               <div style={navItemStyle('asistencias')} onClick={() => navigate('/asistencias')}
-                   onMouseEnter={(e) => { if (!location.pathname.includes('asistencias')) { e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.05)'; e.currentTarget.style.color = '#e2e8f0'; } }}
-                   onMouseLeave={(e) => { if (!location.pathname.includes('asistencias')) { e.currentTarget.style.backgroundColor = 'transparent'; e.currentTarget.style.color = '#94a3b8'; } }}
+                   onMouseEnter={(e) => { if (!location.pathname.includes('asistencias')) { e.currentTarget.style.backgroundColor = '#f1f5f9'; e.currentTarget.style.color = '#0f172a'; } }}
+                   onMouseLeave={(e) => { if (!location.pathname.includes('asistencias')) { e.currentTarget.style.backgroundColor = 'transparent'; e.currentTarget.style.color = '#475569'; } }}
               >
                 <CalendarCheck size={20} style={{ marginRight: '1rem' }}/>
                 {/* CONDICIONAL DEL TÍTULO SEGÚN EL ROL */}
@@ -139,29 +140,29 @@ export function Layout() {
           {/* Módulo de Admisiones */}
           {(usuario?.rol === 'ADMISIONES' || usuario?.rol === 'ADMIN_GENERAL') && (
             <>
-              <div style={{ fontSize: '11px', color: '#64748b', textTransform: 'uppercase', letterSpacing: '1.5px', margin: '2rem 0 1rem 0', fontWeight: '700' }}>Admisiones</div>
+              <div style={{ fontSize: '11px', color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '1.5px', margin: '2rem 0 1rem 0', fontWeight: '700' }}>Admisiones</div>
               <div style={navItemStyle('admisiones/dashboard')} onClick={() => navigate('/admisiones/dashboard')}
-                   onMouseEnter={(e) => { if (!location.pathname.includes('admisiones/dashboard')) { e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.05)'; e.currentTarget.style.color = '#e2e8f0'; } }}
-                   onMouseLeave={(e) => { if (!location.pathname.includes('admisiones/dashboard')) { e.currentTarget.style.backgroundColor = 'transparent'; e.currentTarget.style.color = '#94a3b8'; } }}
+                   onMouseEnter={(e) => { if (!location.pathname.includes('admisiones/dashboard')) { e.currentTarget.style.backgroundColor = '#f1f5f9'; e.currentTarget.style.color = '#0f172a'; } }}
+                   onMouseLeave={(e) => { if (!location.pathname.includes('admisiones/dashboard')) { e.currentTarget.style.backgroundColor = 'transparent'; e.currentTarget.style.color = '#475569'; } }}
               >
                 <Users size={20} style={{ marginRight: '1rem' }}/> Dashboard Admisión
               </div>
               <div style={navItemStyle('admisiones/primer-contacto')} onClick={() => navigate('/admisiones/primer-contacto')}
-                   onMouseEnter={(e) => { if (!location.pathname.includes('admisiones/primer-contacto')) { e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.05)'; e.currentTarget.style.color = '#e2e8f0'; } }}
-                   onMouseLeave={(e) => { if (!location.pathname.includes('admisiones/primer-contacto')) { e.currentTarget.style.backgroundColor = 'transparent'; e.currentTarget.style.color = '#94a3b8'; } }}
+                   onMouseEnter={(e) => { if (!location.pathname.includes('admisiones/primer-contacto')) { e.currentTarget.style.backgroundColor = '#f1f5f9'; e.currentTarget.style.color = '#0f172a'; } }}
+                   onMouseLeave={(e) => { if (!location.pathname.includes('admisiones/primer-contacto')) { e.currentTarget.style.backgroundColor = 'transparent'; e.currentTarget.style.color = '#475569'; } }}
               >
                 <ClipboardList size={20} style={{ marginRight: '1rem' }}/> Primer Contacto
               </div>
               <div style={navItemStyle('admisiones/seguimiento')} onClick={() => navigate('/admisiones/seguimiento')}
-                   onMouseEnter={(e) => { if (!location.pathname.includes('admisiones/seguimiento')) { e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.05)'; e.currentTarget.style.color = '#e2e8f0'; } }}
-                   onMouseLeave={(e) => { if (!location.pathname.includes('admisiones/seguimiento')) { e.currentTarget.style.backgroundColor = 'transparent'; e.currentTarget.style.color = '#94a3b8'; } }}
+                   onMouseEnter={(e) => { if (!location.pathname.includes('admisiones/seguimiento')) { e.currentTarget.style.backgroundColor = '#f1f5f9'; e.currentTarget.style.color = '#0f172a'; } }}
+                   onMouseLeave={(e) => { if (!location.pathname.includes('admisiones/seguimiento')) { e.currentTarget.style.backgroundColor = 'transparent'; e.currentTarget.style.color = '#475569'; } }}
               >
                 <Clock size={20} style={{ marginRight: '1rem' }}/> Seguimiento de Prospectos
               </div>
 
               <div style={navItemStyle('admisiones/areas')} onClick={() => navigate('/admisiones/areas')}
-                   onMouseEnter={(e) => { if (!location.pathname.includes('admisiones/areas')) { e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.05)'; e.currentTarget.style.color = '#e2e8f0'; } }}
-                   onMouseLeave={(e) => { if (!location.pathname.includes('admisiones/areas')) { e.currentTarget.style.backgroundColor = 'transparent'; e.currentTarget.style.color = '#94a3b8'; } }}
+                   onMouseEnter={(e) => { if (!location.pathname.includes('admisiones/areas')) { e.currentTarget.style.backgroundColor = '#f1f5f9'; e.currentTarget.style.color = '#0f172a'; } }}
+                   onMouseLeave={(e) => { if (!location.pathname.includes('admisiones/areas')) { e.currentTarget.style.backgroundColor = 'transparent'; e.currentTarget.style.color = '#475569'; } }}
               >
                 <PackageOpen size={20} style={{ marginRight: '1rem' }}/> Mapa de Áreas
               </div>
@@ -171,28 +172,28 @@ export function Layout() {
           {/* Módulo Médico — visible para médico, jefe médico, staff clínico y admin */}
           {(['AREA_MEDICA', 'JEFE_MEDICO', 'ENFERMERIA', 'PSICOLOGIA', 'NUTRICION', 'ADMIN_GENERAL'].includes(usuario?.rol || '')) && (
             <>
-              <div style={{ fontSize: '11px', color: '#64748b', textTransform: 'uppercase', letterSpacing: '1.5px', margin: '2rem 0 1rem 0', fontWeight: '700' }}>Área Médica</div>
+              <div style={{ fontSize: '11px', color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '1.5px', margin: '2rem 0 1rem 0', fontWeight: '700' }}>Área Médica</div>
               <div style={navItemStyle('medico/dashboard')} onClick={() => navigate('/medico/dashboard')}
-                   onMouseEnter={(e) => { if (!location.pathname.includes('medico/dashboard')) { e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.05)'; e.currentTarget.style.color = '#e2e8f0'; } }}
-                   onMouseLeave={(e) => { if (!location.pathname.includes('medico/dashboard')) { e.currentTarget.style.backgroundColor = 'transparent'; e.currentTarget.style.color = '#94a3b8'; } }}
+                   onMouseEnter={(e) => { if (!location.pathname.includes('medico/dashboard')) { e.currentTarget.style.backgroundColor = '#f1f5f9'; e.currentTarget.style.color = '#0f172a'; } }}
+                   onMouseLeave={(e) => { if (!location.pathname.includes('medico/dashboard')) { e.currentTarget.style.backgroundColor = 'transparent'; e.currentTarget.style.color = '#475569'; } }}
               >
                 <LayoutDashboard size={20} style={{ marginRight: '1rem' }}/> Inicio
               </div>
               <div style={navItemStyle('medica/pacientes')} onClick={() => navigate('/medica/pacientes')}
-                   onMouseEnter={(e) => { if (!location.pathname.includes('medica/pacientes')) { e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.05)'; e.currentTarget.style.color = '#e2e8f0'; } }}
-                   onMouseLeave={(e) => { if (!location.pathname.includes('medica/pacientes')) { e.currentTarget.style.backgroundColor = 'transparent'; e.currentTarget.style.color = '#94a3b8'; } }}
+                   onMouseEnter={(e) => { if (!location.pathname.includes('medica/pacientes')) { e.currentTarget.style.backgroundColor = '#f1f5f9'; e.currentTarget.style.color = '#0f172a'; } }}
+                   onMouseLeave={(e) => { if (!location.pathname.includes('medica/pacientes')) { e.currentTarget.style.backgroundColor = 'transparent'; e.currentTarget.style.color = '#475569'; } }}
               >
                 <Stethoscope size={20} style={{ marginRight: '1rem' }}/> Pacientes
               </div>
               <div style={navItemStyle('medica/desintoxicacion')} onClick={() => navigate('/medica/desintoxicacion')}
-                   onMouseEnter={(e) => { if (!location.pathname.includes('medica/desintoxicacion')) { e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.05)'; e.currentTarget.style.color = '#e2e8f0'; } }}
-                   onMouseLeave={(e) => { if (!location.pathname.includes('medica/desintoxicacion')) { e.currentTarget.style.backgroundColor = 'transparent'; e.currentTarget.style.color = '#94a3b8'; } }}
+                   onMouseEnter={(e) => { if (!location.pathname.includes('medica/desintoxicacion')) { e.currentTarget.style.backgroundColor = '#f1f5f9'; e.currentTarget.style.color = '#0f172a'; } }}
+                   onMouseLeave={(e) => { if (!location.pathname.includes('medica/desintoxicacion')) { e.currentTarget.style.backgroundColor = 'transparent'; e.currentTarget.style.color = '#475569'; } }}
               >
                 <Droplets size={20} style={{ marginRight: '1rem' }}/> Desintoxicación
               </div>
               <div style={navItemStyle('medica/laboratorio')} onClick={() => navigate('/medica/laboratorio')}
-                   onMouseEnter={(e) => { if (!location.pathname.includes('medica/laboratorio')) { e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.05)'; e.currentTarget.style.color = '#e2e8f0'; } }}
-                   onMouseLeave={(e) => { if (!location.pathname.includes('medica/laboratorio')) { e.currentTarget.style.backgroundColor = 'transparent'; e.currentTarget.style.color = '#94a3b8'; } }}
+                   onMouseEnter={(e) => { if (!location.pathname.includes('medica/laboratorio')) { e.currentTarget.style.backgroundColor = '#f1f5f9'; e.currentTarget.style.color = '#0f172a'; } }}
+                   onMouseLeave={(e) => { if (!location.pathname.includes('medica/laboratorio')) { e.currentTarget.style.backgroundColor = 'transparent'; e.currentTarget.style.color = '#475569'; } }}
               >
                 <FlaskConical size={20} style={{ marginRight: '1rem' }}/> Laboratorio
               </div>
@@ -202,16 +203,16 @@ export function Layout() {
           {/* Jefatura — visible solo para jefe médico y admin */}
           {(['JEFE_MEDICO', 'ADMIN_GENERAL'].includes(usuario?.rol || '')) && (
             <>
-              <div style={{ fontSize: '11px', color: '#64748b', textTransform: 'uppercase', letterSpacing: '1.5px', margin: '2rem 0 1rem 0', fontWeight: '700' }}>Jefatura</div>
+              <div style={{ fontSize: '11px', color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '1.5px', margin: '2rem 0 1rem 0', fontWeight: '700' }}>Jefatura</div>
               <div style={navItemStyle('jefatura/personal')} onClick={() => navigate('/jefatura/personal')}
-                   onMouseEnter={(e) => { if (!location.pathname.includes('jefatura/personal')) { e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.05)'; e.currentTarget.style.color = '#e2e8f0'; } }}
-                   onMouseLeave={(e) => { if (!location.pathname.includes('jefatura/personal')) { e.currentTarget.style.backgroundColor = 'transparent'; e.currentTarget.style.color = '#94a3b8'; } }}
+                   onMouseEnter={(e) => { if (!location.pathname.includes('jefatura/personal')) { e.currentTarget.style.backgroundColor = '#f1f5f9'; e.currentTarget.style.color = '#0f172a'; } }}
+                   onMouseLeave={(e) => { if (!location.pathname.includes('jefatura/personal')) { e.currentTarget.style.backgroundColor = 'transparent'; e.currentTarget.style.color = '#475569'; } }}
               >
                 <UserCog size={20} style={{ marginRight: '1rem' }}/> Personal
               </div>
               <div style={navItemStyle('jefatura/solicitudes')} onClick={() => navigate('/jefatura/solicitudes')}
-                   onMouseEnter={(e) => { if (!location.pathname.includes('jefatura/solicitudes')) { e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.05)'; e.currentTarget.style.color = '#e2e8f0'; } }}
-                   onMouseLeave={(e) => { if (!location.pathname.includes('jefatura/solicitudes')) { e.currentTarget.style.backgroundColor = 'transparent'; e.currentTarget.style.color = '#94a3b8'; } }}
+                   onMouseEnter={(e) => { if (!location.pathname.includes('jefatura/solicitudes')) { e.currentTarget.style.backgroundColor = '#f1f5f9'; e.currentTarget.style.color = '#0f172a'; } }}
+                   onMouseLeave={(e) => { if (!location.pathname.includes('jefatura/solicitudes')) { e.currentTarget.style.backgroundColor = 'transparent'; e.currentTarget.style.color = '#475569'; } }}
               >
                 <ClipboardCheck size={20} style={{ marginRight: '1rem' }}/> Solicitudes
               </div>
@@ -221,10 +222,10 @@ export function Layout() {
           {/* Módulo Operativo - Almacén */}
           {(usuario?.rol === 'ALMACEN' || usuario?.rol === 'ADMIN_GENERAL') && (
             <>
-              <div style={{ fontSize: '11px', color: '#64748b', textTransform: 'uppercase', letterSpacing: '1.5px', margin: '2rem 0 1rem 0', fontWeight: '700' }}>Logística</div>
+              <div style={{ fontSize: '11px', color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '1.5px', margin: '2rem 0 1rem 0', fontWeight: '700' }}>Logística</div>
               <div style={navItemStyle('almacen')} onClick={() => navigate('/almacen')}
-                   onMouseEnter={(e) => { if (!location.pathname.includes('almacen')) { e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.05)'; e.currentTarget.style.color = '#e2e8f0'; } }}
-                   onMouseLeave={(e) => { if (!location.pathname.includes('almacen')) { e.currentTarget.style.backgroundColor = 'transparent'; e.currentTarget.style.color = '#94a3b8'; } }}
+                   onMouseEnter={(e) => { if (!location.pathname.includes('almacen')) { e.currentTarget.style.backgroundColor = '#f1f5f9'; e.currentTarget.style.color = '#0f172a'; } }}
+                   onMouseLeave={(e) => { if (!location.pathname.includes('almacen')) { e.currentTarget.style.backgroundColor = 'transparent'; e.currentTarget.style.color = '#475569'; } }}
               >
                 <PackageOpen size={20} style={{ marginRight: '1rem' }}/> Almacén General
               </div>
@@ -234,10 +235,10 @@ export function Layout() {
           {/* Recursos Humanos: gestiona empleados, sube prenómina y cierra el ciclo */}
           {(['RRHH_FINANZAS', 'RECURSOS_HUMANOS', 'ADMIN_GENERAL'].includes(usuario?.rol || '')) && (
             <>
-              <div style={{ fontSize: '11px', color: '#64748b', textTransform: 'uppercase', letterSpacing: '1.5px', margin: '2rem 0 1rem 0', fontWeight: '700' }}>Recursos Humanos</div>
+              <div style={{ fontSize: '11px', color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '1.5px', margin: '2rem 0 1rem 0', fontWeight: '700' }}>Recursos Humanos</div>
               <div style={navItemStyle('nominas')} onClick={() => navigate('/nominas')}
-                  onMouseEnter={(e) => { if (!location.pathname.includes('nominas')) { e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.05)'; e.currentTarget.style.color = '#e2e8f0'; } }}
-                  onMouseLeave={(e) => { if (!location.pathname.includes('nominas')) { e.currentTarget.style.backgroundColor = 'transparent'; e.currentTarget.style.color = '#94a3b8'; } }}
+                  onMouseEnter={(e) => { if (!location.pathname.includes('nominas')) { e.currentTarget.style.backgroundColor = '#f1f5f9'; e.currentTarget.style.color = '#0f172a'; } }}
+                  onMouseLeave={(e) => { if (!location.pathname.includes('nominas')) { e.currentTarget.style.backgroundColor = 'transparent'; e.currentTarget.style.color = '#475569'; } }}
               >
                 <Banknote size={20} style={{ marginRight: '1rem' }}/> Nóminas y Personal
               </div>
@@ -247,27 +248,27 @@ export function Layout() {
           {/* Recursos Financieros: solicitud de subsidio + compras + pagos */}
           {(['RRHH_FINANZAS', 'RECURSOS_FINANCIEROS', 'ADMIN_GENERAL'].includes(usuario?.rol || '')) && (
             <>
-              <div style={{ fontSize: '11px', color: '#64748b', textTransform: 'uppercase', letterSpacing: '1.5px', margin: '2rem 0 1rem 0', fontWeight: '700' }}>Recursos Financieros</div>
+              <div style={{ fontSize: '11px', color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '1.5px', margin: '2rem 0 1rem 0', fontWeight: '700' }}>Recursos Financieros</div>
 
               {(['RECURSOS_FINANCIEROS', 'ADMIN_GENERAL'].includes(usuario?.rol || '')) && (
                 <div style={navItemStyle('finanzas')} onClick={() => navigate('/finanzas')}
-                    onMouseEnter={(e) => { if (!location.pathname.includes('finanzas')) { e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.05)'; e.currentTarget.style.color = '#e2e8f0'; } }}
-                    onMouseLeave={(e) => { if (!location.pathname.includes('finanzas')) { e.currentTarget.style.backgroundColor = 'transparent'; e.currentTarget.style.color = '#94a3b8'; } }}
+                    onMouseEnter={(e) => { if (!location.pathname.includes('finanzas')) { e.currentTarget.style.backgroundColor = '#f1f5f9'; e.currentTarget.style.color = '#0f172a'; } }}
+                    onMouseLeave={(e) => { if (!location.pathname.includes('finanzas')) { e.currentTarget.style.backgroundColor = 'transparent'; e.currentTarget.style.color = '#475569'; } }}
                 >
                   <Banknote size={20} style={{ marginRight: '1rem' }}/> Panel de Finanzas
                 </div>
               )}
 
               <div style={navItemStyle('compras')} onClick={() => navigate('/compras')}
-                  onMouseEnter={(e) => { if (!location.pathname.includes('compras')) { e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.05)'; e.currentTarget.style.color = '#e2e8f0'; } }}
-                  onMouseLeave={(e) => { if (!location.pathname.includes('compras')) { e.currentTarget.style.backgroundColor = 'transparent'; e.currentTarget.style.color = '#94a3b8'; } }}
+                  onMouseEnter={(e) => { if (!location.pathname.includes('compras')) { e.currentTarget.style.backgroundColor = '#f1f5f9'; e.currentTarget.style.color = '#0f172a'; } }}
+                  onMouseLeave={(e) => { if (!location.pathname.includes('compras')) { e.currentTarget.style.backgroundColor = 'transparent'; e.currentTarget.style.color = '#475569'; } }}
               >
                 <ShoppingCart size={20} style={{ marginRight: '1rem' }}/> Control de Compras
               </div>
 
               <div style={navItemStyle('pagos')} onClick={() => navigate('/pagos')}
-                  onMouseEnter={(e) => { if (!location.pathname.includes('pagos')) { e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.05)'; e.currentTarget.style.color = '#e2e8f0'; } }}
-                  onMouseLeave={(e) => { if (!location.pathname.includes('pagos')) { e.currentTarget.style.backgroundColor = 'transparent'; e.currentTarget.style.color = '#94a3b8'; } }}
+                   onMouseEnter={(e) => { if (!location.pathname.includes('pagos')) { e.currentTarget.style.backgroundColor = '#f1f5f9'; e.currentTarget.style.color = '#0f172a'; } }}
+                   onMouseLeave={(e) => { if (!location.pathname.includes('pagos')) { e.currentTarget.style.backgroundColor = 'transparent'; e.currentTarget.style.color = '#475569'; } }}
               >
                 <Wallet size={20} style={{ marginRight: '1rem' }}/> Pagos de Pacientes
               </div>
@@ -277,16 +278,16 @@ export function Layout() {
           {/* Jefatura Administrativa: paso intermedio del flujo de nómina antes de Dirección */}
           {(['JEFE_ADMINISTRATIVO', 'ADMIN_GENERAL'].includes(usuario?.rol || '')) && (
             <>
-              <div style={{ fontSize: '11px', color: '#64748b', textTransform: 'uppercase', letterSpacing: '1.5px', margin: '2rem 0 1rem 0', fontWeight: '700' }}>Jefatura Administrativa</div>
+              <div style={{ fontSize: '11px', color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '1.5px', margin: '2rem 0 1rem 0', fontWeight: '700' }}>Jefatura Administrativa</div>
               <div style={navItemStyle('administracion')} onClick={() => navigate('/administracion')}
-                  onMouseEnter={(e) => { if (!location.pathname.includes('administracion')) { e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.05)'; e.currentTarget.style.color = '#e2e8f0'; } }}
-                  onMouseLeave={(e) => { if (!location.pathname.includes('administracion')) { e.currentTarget.style.backgroundColor = 'transparent'; e.currentTarget.style.color = '#94a3b8'; } }}
+                  onMouseEnter={(e) => { if (!location.pathname.includes('administracion')) { e.currentTarget.style.backgroundColor = '#f1f5f9'; e.currentTarget.style.color = '#0f172a'; } }}
+                  onMouseLeave={(e) => { if (!location.pathname.includes('administracion')) { e.currentTarget.style.backgroundColor = 'transparent'; e.currentTarget.style.color = '#475569'; } }}
               >
                 <ClipboardCheck size={20} style={{ marginRight: '1rem' }}/> Revisión de Pre-Nóminas
               </div>
               <div style={navItemStyle('nominas')} onClick={() => navigate('/nominas')}
-                  onMouseEnter={(e) => { if (!location.pathname.includes('nominas')) { e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.05)'; e.currentTarget.style.color = '#e2e8f0'; } }}
-                  onMouseLeave={(e) => { if (!location.pathname.includes('nominas')) { e.currentTarget.style.backgroundColor = 'transparent'; e.currentTarget.style.color = '#94a3b8'; } }}
+                  onMouseEnter={(e) => { if (!location.pathname.includes('nominas')) { e.currentTarget.style.backgroundColor = '#f1f5f9'; e.currentTarget.style.color = '#0f172a'; } }}
+                  onMouseLeave={(e) => { if (!location.pathname.includes('nominas')) { e.currentTarget.style.backgroundColor = 'transparent'; e.currentTarget.style.color = '#475569'; } }}
               >
                 <Banknote size={20} style={{ marginRight: '1rem' }}/> Histórico de Nóminas
               </div>
@@ -296,23 +297,23 @@ export function Layout() {
           {/* Gerencial */}
           {(usuario?.rol === 'ADMIN_GENERAL' || usuario?.rol === 'DIRECCION') && (
             <>
-              <div style={{ fontSize: '11px', color: '#64748b', textTransform: 'uppercase', letterSpacing: '1.5px', margin: '2rem 0 1rem 0', fontWeight: '700' }}>Dirección</div>
+              <div style={{ fontSize: '11px', color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '1.5px', margin: '2rem 0 1rem 0', fontWeight: '700' }}>Dirección</div>
               <div style={navItemStyle('directora')} onClick={() => navigate('/directora')}
-                   onMouseEnter={(e) => { if (!location.pathname.includes('directora')) { e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.05)'; e.currentTarget.style.color = '#e2e8f0'; } }}
-                   onMouseLeave={(e) => { if (!location.pathname.includes('directora')) { e.currentTarget.style.backgroundColor = 'transparent'; e.currentTarget.style.color = '#94a3b8'; } }}
+                   onMouseEnter={(e) => { if (!location.pathname.includes('directora')) { e.currentTarget.style.backgroundColor = '#f1f5f9'; e.currentTarget.style.color = '#0f172a'; } }}
+                   onMouseLeave={(e) => { if (!location.pathname.includes('directora')) { e.currentTarget.style.backgroundColor = 'transparent'; e.currentTarget.style.color = '#475569'; } }}
               >
                 <LayoutDashboard size={20} style={{ marginRight: '1rem' }}/> Panel Ejecutivo
               </div>
 
               <div style={navItemStyle('exportaciones')} onClick={() => navigate('/exportaciones')}
-                   onMouseEnter={(e) => { if (!location.pathname.includes('exportaciones')) { e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.05)'; e.currentTarget.style.color = '#e2e8f0'; } }}
-                   onMouseLeave={(e) => { if (!location.pathname.includes('exportaciones')) { e.currentTarget.style.backgroundColor = 'transparent'; e.currentTarget.style.color = '#94a3b8'; } }}
+                   onMouseEnter={(e) => { if (!location.pathname.includes('exportaciones')) { e.currentTarget.style.backgroundColor = '#f1f5f9'; e.currentTarget.style.color = '#0f172a'; } }}
+                   onMouseLeave={(e) => { if (!location.pathname.includes('exportaciones')) { e.currentTarget.style.backgroundColor = 'transparent'; e.currentTarget.style.color = '#475569'; } }}
               >
                 <FileOutput size={20} style={{ marginRight: '1rem' }}/> Exportar Datos
               </div>
               <div style={navItemStyle('usuarios')} onClick={() => navigate('/usuarios')}
-                   onMouseEnter={(e) => { if (!location.pathname.includes('usuarios')) { e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.05)'; e.currentTarget.style.color = '#e2e8f0'; } }}
-                   onMouseLeave={(e) => { if (!location.pathname.includes('usuarios')) { e.currentTarget.style.backgroundColor = 'transparent'; e.currentTarget.style.color = '#94a3b8'; } }}
+                   onMouseEnter={(e) => { if (!location.pathname.includes('usuarios')) { e.currentTarget.style.backgroundColor = '#f1f5f9'; e.currentTarget.style.color = '#0f172a'; } }}
+                   onMouseLeave={(e) => { if (!location.pathname.includes('usuarios')) { e.currentTarget.style.backgroundColor = 'transparent'; e.currentTarget.style.color = '#475569'; } }}
               >
                 <UserCog size={20} style={{ marginRight: '1rem' }}/> Gestión de Usuarios
               </div>
@@ -322,10 +323,10 @@ export function Layout() {
           {/* Opciones Generales (Para Todos) */}
           {(usuario?.rol === 'ADMIN_GENERAL' || usuario?.rol === 'DIRECCION' || usuario?.esJefe) && (
             <>
-              <div style={{ fontSize: '11px', color: '#64748b', textTransform: 'uppercase', letterSpacing: '1.5px', margin: '2rem 0 1rem 0', fontWeight: '700' }}>Sistema</div>
+              <div style={{ fontSize: '11px', color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '1.5px', margin: '2rem 0 1rem 0', fontWeight: '700' }}>Sistema</div>
               <div style={navItemStyle('bitacora')} onClick={() => navigate('/bitacora')}
-                   onMouseEnter={(e) => { if (!location.pathname.includes('bitacora')) { e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.05)'; e.currentTarget.style.color = '#e2e8f0'; } }}
-                   onMouseLeave={(e) => { if (!location.pathname.includes('bitacora')) { e.currentTarget.style.backgroundColor = 'transparent'; e.currentTarget.style.color = '#94a3b8'; } }}
+                   onMouseEnter={(e) => { if (!location.pathname.includes('bitacora')) { e.currentTarget.style.backgroundColor = '#f1f5f9'; e.currentTarget.style.color = '#0f172a'; } }}
+                   onMouseLeave={(e) => { if (!location.pathname.includes('bitacora')) { e.currentTarget.style.backgroundColor = 'transparent'; e.currentTarget.style.color = '#475569'; } }}
               >
                 <ShieldAlert size={20} style={{ marginRight: '1rem' }}/> Bitácora {(usuario?.rol !== 'ADMIN_GENERAL' && usuario?.rol !== 'DIRECCION') ? 'Departamental' : ''}
               </div>
@@ -340,23 +341,22 @@ export function Layout() {
         {/* Top Header Premium */}
         <header style={{ 
           height: '80px', 
-          backgroundColor: 'white',
-          borderBottom: '1px solid var(--glass-border)', 
+          background: 'linear-gradient(90deg, #dc2626 0%, #991b1b 100%)',
           display: 'flex', 
           alignItems: 'center', 
           justifyContent: 'space-between',
           padding: '0 2.5rem', 
           zIndex: 10,
-          boxShadow: '0 4px 30px rgba(0, 0, 0, 0.03)',
+          boxShadow: '0 4px 20px rgba(153, 27, 27, 0.15)',
           width: '100%', 
           boxSizing: 'border-box'
         }}>
           
           {/* Breadcrumb / Title area */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#64748b', fontSize: '14px', fontWeight: '500' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#fecaca', fontSize: '14px', fontWeight: '500' }}>
             <span>Portal</span>
             <ChevronRight size={16} />
-            <span style={{ color: '#0f172a', fontWeight: '600', textTransform: 'capitalize' }}>
+            <span style={{ color: '#ffffff', fontWeight: '600', textTransform: 'capitalize' }}>
               {location.pathname.split('/')[1] || 'Dashboard'}
             </span>
           </div>
@@ -366,7 +366,7 @@ export function Layout() {
             
             {/* Buscador Global Mini */}
             <div style={{ position: 'relative', width: '280px' }}>
-              <Search size={16} color="#94a3b8" style={{ position: 'absolute', top: '50%', left: '1rem', transform: 'translateY(-50%)' }} />
+              <Search size={16} color="#fecaca" style={{ position: 'absolute', top: '50%', left: '1rem', transform: 'translateY(-50%)' }} />
               <input 
                 type="text" 
                 placeholder="Buscar..."
@@ -375,13 +375,13 @@ export function Layout() {
                 style={{ 
                   width: '100%', 
                   padding: '0.6rem 1rem 0.6rem 2.8rem', 
-                  backgroundColor: '#f1f5f9', 
-                  border: '1px solid transparent', 
+                  backgroundColor: 'rgba(255,255,255,0.15)', 
+                  border: '1px solid rgba(255,255,255,0.1)', 
                   borderRadius: '100px', 
                   fontSize: '14px', 
                   outline: 'none', 
                   transition: 'all 0.3s ease',
-                  color: '#334155',
+                  color: '#ffffff',
                   boxSizing: 'border-box'
                 }}
                 onFocus={(e) => {
@@ -402,8 +402,8 @@ export function Layout() {
               <button 
                 onClick={() => setShowNotifications(!showNotifications)}
                 style={{ 
-                  background: '#f1f5f9', 
-                  border: '1px solid transparent', 
+                  background: 'rgba(255,255,255,0.15)', 
+                  border: 'none', 
                   cursor: 'pointer', 
                   position: 'relative', 
                   padding: '0.6rem',
@@ -413,10 +413,10 @@ export function Layout() {
                   justifyContent: 'center',
                   transition: 'all 0.2s ease'
                 }}
-                onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#e2e8f0'}
-                onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#f1f5f9'}
+                onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.25)'}
+                onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.15)'}
               >
-                <Bell size={20} color="#475569" />
+                <Bell size={20} color="#ffffff" />
                 {unreadCount > 0 && (
                   <span style={{ 
                     position: 'absolute', 
@@ -492,15 +492,15 @@ export function Layout() {
             </div>
 
             {/* Separador */}
-            <div style={{ height: '32px', width: '1px', backgroundColor: '#e2e8f0' }}></div>
+            <div style={{ height: '32px', width: '1px', backgroundColor: 'rgba(255,255,255,0.2)' }}></div>
 
             {/* Perfil */}
             <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', cursor: 'pointer', padding: '0.25rem', borderRadius: '50px', transition: 'background-color 0.2s ease' }}>
               <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
-                <span style={{ fontSize: '14px', fontWeight: '600', color: '#0f172a' }}>{usuario?.nombre || 'Usuario'}</span>
-                <span style={{ fontSize: '12px', color: '#64748b', fontWeight: '500' }}>{usuario?.rol?.replace('_', ' ') || 'Admin'}</span>
+                <span style={{ fontSize: '14px', fontWeight: '600', color: '#ffffff' }}>{usuario?.nombre || 'Usuario'}</span>
+                <span style={{ fontSize: '12px', color: '#fecaca', fontWeight: '500' }}>{usuario?.rol?.replace('_', ' ') || 'Admin'}</span>
               </div>
-              <div style={{ width: '44px', height: '44px', background: 'linear-gradient(135deg, var(--primary), #60a5fa)', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: '50%', fontWeight: '700', fontSize: '16px', boxShadow: '0 4px 10px rgba(59, 130, 246, 0.2)' }}>
+              <div style={{ width: '44px', height: '44px', background: 'linear-gradient(135deg, #ffffff, #f1f5f9)', color: '#dc2626', display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: '50%', fontWeight: '700', fontSize: '16px', boxShadow: '0 4px 10px rgba(0, 0, 0, 0.1)' }}>
                 {usuario?.nombre?.[0] || 'U'}{usuario?.apellidos?.[0] || ''}
               </div>
               <button 
@@ -508,11 +508,11 @@ export function Layout() {
                 title="Cerrar Sesión"
                 style={{ 
                   border: 'none', 
-                  background: 'white', 
+                  background: 'rgba(255,255,255,0.15)', 
                   cursor: 'pointer', 
                   display: 'flex', 
                   alignItems: 'center', 
-                  color: '#94a3b8', 
+                  color: '#ffffff', 
                   marginLeft: '0.25rem', 
                   padding: '0.6rem',
                   borderRadius: '50%',
