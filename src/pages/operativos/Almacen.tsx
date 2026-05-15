@@ -3,8 +3,8 @@ import { createPortal } from 'react-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   PackageSearch, ArrowDownRight, ArrowUpRight, Plus, Box, Search, Filter,
-  MoreVertical, X, Bell, Eye, Clock, CheckCircle, XCircle,
-  ShoppingCart, FileText, AlertTriangle, ClipboardList, Pencil
+  MoreVertical, X, Bell, Eye, Clock, CheckCircle, CheckCircle2, XCircle,
+  ShoppingCart, FileText, AlertTriangle, AlertOctagon, ClipboardList, Pencil, Download, MapPin
 } from 'lucide-react';
 import { NuevaRequisicionModal } from '../../components/common/NuevaRequisicionModal';
 import { RequisicionAlmacenModal } from '../../components/almacen/RequisicionAlmacenModal';
@@ -18,6 +18,7 @@ import { useAuthStore } from '../../stores/authStore';
 // ─── TIPOS EXTENDIDOS ─────────────────────────────────────────────────────────
 
 interface MovimientoExtendido extends Movimiento {
+  requisicionId?: number;
   proveedor?: string;
   numeroFactura?: string;
   importeFactura?: number;
@@ -252,7 +253,7 @@ const getNow = () => Date.now();
 
 export function Almacen() {
   const queryClient = useQueryClient();
-  const [activeTab, setActiveTab] = useState<'INVENTARIO' | 'KARDEX' | 'REQUISICIONES' | 'CONTRA_RECIBOS'>('INVENTARIO');
+  const [activeTab, setActiveTab] = useState<'INVENTARIO' | 'REQUISICIONES' | 'KARDEX'>('INVENTARIO');
   const [showModal, setShowModal] = useState<string | null>(null);
   const [showCreate, setShowCreate] = useState(false);
   const [showNuevaRequisicion, setShowNuevaRequisicion] = useState(false);
@@ -262,6 +263,11 @@ export function Almacen() {
   const [reqSeleccionada, setReqSeleccionada] = useState<Requisicion | null>(null);
   const [reqAlmacenDetalle, setReqAlmacenDetalle] = useState<RequisicionDept | null>(null);
   const [busquedaReq, setBusquedaReq] = useState('');
+  const [busquedaInventario, setBusquedaInventario] = useState('');
+  const [showFinalizadas, setShowFinalizadas] = useState(false);
+  const [filtroStock, setFiltroStock] = useState<'' | 'NORMAL' | 'BAJO' | 'CRITICO'>('');
+  const [showFilterMenu, setShowFilterMenu] = useState(false);
+  const [showMoreMenu, setShowMoreMenu] = useState(false);
 
   // States para nuevos registros
   const [productoData, setProductoData] = useState({
@@ -279,7 +285,7 @@ export function Almacen() {
     requisicionId: '',
     // Entradas
     proveedor: '', numeroFactura: '', importeFactura: '',
-    fechaCaducidad: '', empaqueCorrecto: true, cantidadCorrecta: true, presentacionCorrecta: true,
+    fechaCaducidad: '', empaqueCorrecto: false, cantidadCorrecta: false, presentacionCorrecta: false,
     estadoRecepcion: 'PENDIENTE',
     // Salidas
     areaSolicitante: '', motivo: '', nombreRecibe: '',
@@ -310,25 +316,21 @@ export function Almacen() {
   const { data: movimientosData, isLoading: isLoadingMovimientos } = useQuery<MovimientoExtendido[]>({
     queryKey: ['movimientos'],
     queryFn: () => apiClient.get('/almacen/movimientos').then(res => res.data.data),
-    enabled: activeTab === 'KARDEX'
+    staleTime: 30_000,
   });
 
-  const { data: contraRecibosData, isLoading: isLoadingCR } = useQuery<ContraReciboData[]>({
-    queryKey: ['contra-recibos'],
-    queryFn: () => apiClient.get('/contra-recibos').then(res => res.data.data),
-    enabled: activeTab === 'CONTRA_RECIBOS'
-  });
 
   const { data: requisicionesDept = [], isLoading: isLoadingReqs } = useQuery<RequisicionDept[]>({
     queryKey: ['requisiciones'],
     queryFn: () => fetchRequisicionesDept(),
-    enabled: activeTab === 'REQUISICIONES',
+    staleTime: 30_000,
   });
 
   const { createReq, requisiciones } = useCompras();
   const { usuario } = useAuthStore();
   const rol = usuario?.rol ?? '';
-  const puedeOperar = puedeHacer(rol, 'operar');
+  const puedeOperar   = puedeHacer(rol, 'operar');
+  const puedeFinanzas = rol === 'RRHH_FINANZAS' || rol === 'ADMIN_GENERAL';
 
   const notify = (msg: string) => { setNotif(msg); setTimeout(() => setNotif(null), 3500); };
   const agregarDetalle = () => setDetalles([...detalles, { producto: '', unidad: '', cantidad: 1 }]);
@@ -527,12 +529,17 @@ export function Almacen() {
   const registrarMovimiento = useMutation({
     mutationFn: (data: Record<string, unknown>) => {
       const d = data as Record<string, unknown>;
-      // requisicionId in movimientoData holds CompraRequisicion.id for UI lookup;
-      // the DB FK points to Requisicion, so resolve the parent Requisicion.id here.
-      const compraSeleccionada = d.requisicionId
-        ? requisiciones.find(r => String(r.id) === String(d.requisicionId))
-        : null;
-      const realReqId = compraSeleccionada?.requisicion?.id ?? undefined;
+      const reqIdRaw = String(d.requisicionId ?? '');
+      let realReqId: number | undefined;
+      if (String(d.tipo) === 'ENTRADA') {
+        const compraSeleccionada = reqIdRaw ? requisiciones.find(r => String(r.id) === reqIdRaw) : null;
+        realReqId = compraSeleccionada?.requisicion?.id ?? undefined;
+      } else if (reqIdRaw.startsWith('c:')) {
+        const compraSeleccionada = requisiciones.find(r => String(r.id) === reqIdRaw.slice(2));
+        realReqId = compraSeleccionada?.requisicion?.id ?? undefined;
+      } else if (reqIdRaw) {
+        realReqId = parseInt(reqIdRaw, 10);
+      }
       return apiClient.post('/almacen/movimientos', {
         ...d,
         productoId: parseInt(d.productoId as string, 10),
@@ -549,7 +556,7 @@ export function Almacen() {
         productoId: '', tipo: 'ENTRADA', cantidad: 1, observaciones: '',
         requisicionId: '',
         proveedor: '', numeroFactura: '', importeFactura: '',
-        fechaCaducidad: '', empaqueCorrecto: true, cantidadCorrecta: true, presentacionCorrecta: true,
+        fechaCaducidad: '', empaqueCorrecto: false, cantidadCorrecta: false, presentacionCorrecta: false,
         estadoRecepcion: 'PENDIENTE',
         areaSolicitante: '', motivo: '', nombreRecibe: '',
       });
@@ -635,6 +642,22 @@ export function Almacen() {
     }
   });
 
+  const cambiarEstadoCR = useMutation({
+    mutationFn: ({ crId, estado }: { crId: number; estado: string }) => {
+      if (estado === 'PAGADO')    return apiClient.patch(`/contra-recibos/${crId}/marcar-pagado`);
+      if (estado === 'CANCELADO') return apiClient.patch(`/contra-recibos/${crId}/cancelar`, { motivo: 'Cancelado manualmente' });
+      return apiClient.put(`/contra-recibos/${crId}/estado`, { estado });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['movimientos'] });
+      notify('Estado del contra-recibo actualizado');
+    },
+    onError: (err: unknown) => {
+      const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message;
+      notify(msg || 'Error al cambiar estado');
+    }
+  });
+
   const autoCrearProducto = useMutation({
     mutationFn: (d: { nombre: string; categoria: string; unidad: string }) =>
       apiClient.post('/almacen/productos', { nombre: d.nombre, categoria: d.categoria, unidad: d.unidad, stockMinimo: 5 }),
@@ -707,16 +730,43 @@ export function Almacen() {
     await queryClient.invalidateQueries({ queryKey: ['movimientos'] });
     setIsSubmittingMultiple(false);
     setShowModal(null);
-    setMovimientoData({ productoId: '', tipo: 'ENTRADA', cantidad: 1, observaciones: '', requisicionId: '', proveedor: '', numeroFactura: '', importeFactura: '', fechaCaducidad: '', empaqueCorrecto: true, cantidadCorrecta: true, presentacionCorrecta: true, estadoRecepcion: 'PENDIENTE', areaSolicitante: '', motivo: '', nombreRecibe: '' });
+    setMovimientoData({ productoId: '', tipo: 'ENTRADA', cantidad: 1, observaciones: '', requisicionId: '', proveedor: '', numeroFactura: '', importeFactura: '', fechaCaducidad: '', empaqueCorrecto: false, cantidadCorrecta: false, presentacionCorrecta: false, estadoRecepcion: 'PENDIENTE', areaSolicitante: '', motivo: '', nombreRecibe: '' });
     setRecepcionEditada({});
     notify(fail === 0 ? `✅ ${ok} producto${ok !== 1 ? 's' : ''} recibido${ok !== 1 ? 's' : ''} correctamente` : `⚠️ ${ok} recibidos, ${fail} fallaron`);
   };
 
-  const requisicionParaEntrada = movimientoData.requisicionId
+  const usedEntradaReqIds = new Set(
+    (movimientosData ?? []).filter(m => m.tipo === 'ENTRADA' && m.requisicionId != null).map(m => m.requisicionId!)
+  );
+  const usedSalidaReqIds = new Set(
+    (movimientosData ?? []).filter(m => m.tipo === 'SALIDA' && m.requisicionId != null).map(m => m.requisicionId!)
+  );
+
+  const requisicionParaEntrada = movimientoData.tipo === 'ENTRADA' && movimientoData.requisicionId
     ? requisiciones.find(r => String(r.id) === movimientoData.requisicionId) ?? null
     : null;
 
-  const productosDeRequisicion = (requisicionParaEntrada?.requisicion?.detalles ?? []).map(det => {
+  const comprasRecibidas = requisiciones.filter(r =>
+    r.requisicion?.id != null &&
+    usedEntradaReqIds.has(r.requisicion.id) &&
+    !usedSalidaReqIds.has(r.requisicion.id)
+  );
+
+  const requisicionDeptParaSalida = movimientoData.tipo === 'SALIDA' && movimientoData.requisicionId && !movimientoData.requisicionId.startsWith('c:')
+    ? requisicionesDept.find(r => String(r.id) === movimientoData.requisicionId) ?? null
+    : null;
+
+  const requisicionCompraParaSalida = movimientoData.tipo === 'SALIDA' && movimientoData.requisicionId?.startsWith('c:')
+    ? requisiciones.find(r => String(r.id) === movimientoData.requisicionId.slice(2)) ?? null
+    : null;
+
+  const detallesActivos = movimientoData.tipo === 'ENTRADA'
+    ? (requisicionParaEntrada?.requisicion?.detalles ?? [])
+    : movimientoData.requisicionId?.startsWith('c:')
+      ? (requisicionCompraParaSalida?.requisicion?.detalles ?? [])
+      : (requisicionDeptParaSalida?.detalles ?? []);
+
+  const productosDeRequisicion = detallesActivos.map(det => {
     const nombre = det.productoNombre ?? '';
     const unidad = det.unidadLibre ?? '';
     const cantidad = det.cantidadSolicitada;
@@ -744,15 +794,26 @@ export function Almacen() {
 
   const getImporteDeRequisicion = (req: Requisicion): string => {
     if (req.facturas && req.facturas.length > 0) {
-      const total = req.facturas.reduce((s, f) => s + (f.monto || 0), 0);
+      const total = req.facturas.reduce((s, f) => s + (Number(f.monto) || 0), 0);
       if (total > 0) return String(total);
     }
     if (req.ordenes && req.ordenes.length > 0) {
-      const total = req.ordenes.reduce((s, o) => s + (o.total || 0), 0);
+      const total = req.ordenes.reduce((s, o) => s + (Number(o.total) || 0), 0);
       if (total > 0) return String(total);
     }
     return '';
   };
+
+  // ─── Estilos del modal de movimiento ────────────────────────────────────
+  const inpE: React.CSSProperties = { padding: '0.75rem 1rem', borderRadius: 10, border: '1.5px solid #BFDBFE', outline: 'none', fontSize: 14, background: '#FAFCFF', fontFamily: 'inherit' };
+  const inpS: React.CSSProperties = { padding: '0.75rem 1rem', borderRadius: 10, border: '1.5px solid #BBF7D0', outline: 'none', fontSize: 14, background: '#F8FFF8', fontFamily: 'inherit' };
+  const lbE: React.CSSProperties = { fontSize: 11, fontWeight: 700, color: '#2563EB', textTransform: 'uppercase', letterSpacing: '0.06em' };
+  const lbS: React.CSSProperties = { fontSize: 11, fontWeight: 700, color: '#16A34A', textTransform: 'uppercase', letterSpacing: '0.06em' };
+  const lbN: React.CSSProperties = { fontSize: 11, fontWeight: 700, color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.06em' };
+  const secHdrE: React.CSSProperties = { display: 'flex', alignItems: 'center', gap: 8, padding: '12px 18px', background: 'linear-gradient(90deg, #1D4ED8, #3B82F6)', borderRadius: '12px 12px 0 0' };
+  const secHdrS: React.CSSProperties = { display: 'flex', alignItems: 'center', gap: 8, padding: '12px 18px', background: 'linear-gradient(90deg, #15803D, #22C55E)', borderRadius: '12px 12px 0 0' };
+  const secBodyE: React.CSSProperties = { border: '1.5px solid #BFDBFE', borderTop: 'none', borderRadius: '0 0 12px 12px', padding: '20px 18px', display: 'flex', flexDirection: 'column', gap: 16, background: '#FAFCFF' };
+  const secBodyS: React.CSSProperties = { border: '1.5px solid #BBF7D0', borderTop: 'none', borderRadius: '0 0 12px 12px', padding: '20px 18px', display: 'flex', flexDirection: 'column', gap: 16, background: '#F8FFF8' };
 
   // ─── JSX ──────────────────────────────────────────────────────────────────
 
@@ -805,7 +866,7 @@ export function Almacen() {
 
       {/* Tabs */}
       <div style={{ display: 'flex', gap: '0.5rem', background: 'rgba(241, 245, 249, 0.5)', padding: '0.5rem', borderRadius: '20px', width: 'fit-content', marginBottom: '2.5rem' }}>
-        {(['INVENTARIO', 'KARDEX', 'REQUISICIONES', 'CONTRA_RECIBOS'] as const).map(tab => (
+        {(['INVENTARIO', 'REQUISICIONES', 'KARDEX'] as const).map(tab => (
           <button
             key={tab}
             onClick={() => setActiveTab(tab)}
@@ -818,9 +879,8 @@ export function Almacen() {
               boxShadow: activeTab === tab ? '0 4px 6px -1px rgba(0,0,0,0.1)' : 'none'
             }}>
             {tab === 'INVENTARIO' ? 'Inventario Actual'
-              : tab === 'REQUISICIONES' ? 'Requisiciones'
-              : tab === 'KARDEX' ? 'Kardex (Histórico)'
-              : 'Contra-Recibos'}
+              : tab === 'REQUISICIONES' ? 'Requisiciones de Inventario'
+              : 'Kardex (Histórico)'}
           </button>
         ))}
       </div>
@@ -830,19 +890,177 @@ export function Almacen() {
 
         {/* Filtros */}
         <div style={{ padding: '1.25rem 2rem', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#fcfcfc' }}>
-          <div style={{ position: 'relative', width: '400px' }}>
-            <Search size={18} color="#94a3b8" style={{ position: 'absolute', top: '50%', left: '1rem', transform: 'translateY(-50%)' }} />
-            <input
-              type="text"
-              placeholder={activeTab === 'REQUISICIONES' ? 'Buscar por folio o descripción...' : 'Buscar por código o nombre...'}
-              value={activeTab === 'REQUISICIONES' ? busquedaReq : undefined}
-              onChange={activeTab === 'REQUISICIONES' ? e => setBusquedaReq(e.target.value) : undefined}
-              style={{ width: '100%', padding: '0.75rem 1rem 0.75rem 3rem', borderRadius: '14px', border: '1px solid #e2e8f0', outline: 'none', fontSize: '14px' }}
-            />
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+            <div style={{ position: 'relative', width: '400px' }}>
+              <Search size={18} color="#94a3b8" style={{ position: 'absolute', top: '50%', left: '1rem', transform: 'translateY(-50%)' }} />
+              <input
+                type="text"
+                placeholder={activeTab === 'REQUISICIONES' ? 'Buscar por folio o descripción...' : 'Buscar por código o nombre...'}
+                value={activeTab === 'REQUISICIONES' ? busquedaReq : activeTab === 'INVENTARIO' ? busquedaInventario : ''}
+                onChange={activeTab === 'REQUISICIONES' ? e => setBusquedaReq(e.target.value) : activeTab === 'INVENTARIO' ? e => setBusquedaInventario(e.target.value) : undefined}
+                style={{ width: '100%', padding: '0.75rem 1rem 0.75rem 3rem', borderRadius: '14px', border: '1px solid #e2e8f0', outline: 'none', fontSize: '14px' }}
+              />
+            </div>
+            {activeTab === 'REQUISICIONES' && (
+              <button
+                onClick={() => setShowFinalizadas(v => !v)}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 6,
+                  padding: '0.65rem 1.1rem', borderRadius: '12px', border: 'none', cursor: 'pointer',
+                  background: showFinalizadas ? 'linear-gradient(135deg, #15803D, #22C55E)' : '#F0FDF4',
+                  color: showFinalizadas ? 'white' : '#15803D',
+                  fontWeight: 700, fontSize: 13, fontFamily: 'inherit',
+                  boxShadow: showFinalizadas ? '0 2px 8px rgba(21,128,61,0.25)' : 'none',
+                  transition: 'all 0.15s ease', whiteSpace: 'nowrap',
+                }}
+              >
+                <CheckCircle2 size={15} />
+                Finalizadas
+                {(() => {
+                  const count = requisicionesDept.filter(r => r.estado === 'FINALIZADA').length;
+                  return count > 0 ? (
+                    <span style={{
+                      background: showFinalizadas ? 'rgba(255,255,255,0.25)' : '#15803D',
+                      color: 'white', borderRadius: 20, padding: '1px 7px', fontSize: 11, fontWeight: 700,
+                    }}>{count}</span>
+                  ) : null;
+                })()}
+              </button>
+            )}
           </div>
           <div style={{ display: 'flex', gap: '0.75rem' }}>
-            <button style={{ padding: '0.75rem', borderRadius: '12px', border: '1px solid #e2e8f0', background: 'white', display: 'flex', alignItems: 'center' }}><Filter size={18} color="#64748b" /></button>
-            <button style={{ padding: '0.75rem', borderRadius: '12px', border: '1px solid #e2e8f0', background: 'white', display: 'flex', alignItems: 'center' }}><MoreVertical size={18} color="#64748b" /></button>
+            {/* Filter button — stock status filter for INVENTARIO */}
+            {activeTab === 'INVENTARIO' && (
+              <div style={{ position: 'relative' }}>
+                <button
+                  onClick={() => { setShowFilterMenu(p => !p); setShowMoreMenu(false); }}
+                  style={{ padding: '0.75rem', borderRadius: '12px', border: `1px solid ${filtroStock ? '#6366F1' : '#e2e8f0'}`, background: filtroStock ? '#EEF2FF' : 'white', display: 'flex', alignItems: 'center', cursor: 'pointer', gap: 6 }}
+                  title="Filtrar por estado de stock"
+                >
+                  <Filter size={18} color={filtroStock ? '#6366F1' : '#64748b'} />
+                  {filtroStock && <span style={{ fontSize: 11, fontWeight: 700, color: '#6366F1' }}>{filtroStock}</span>}
+                </button>
+                {showFilterMenu && (
+                  <div style={{ position: 'absolute', right: 0, top: 'calc(100% + 6px)', background: 'white', border: '1px solid #e2e8f0', borderRadius: 12, boxShadow: '0 8px 24px rgba(0,0,0,0.12)', zIndex: 100, minWidth: 160, overflow: 'hidden' }}>
+                    {(['', 'NORMAL', 'BAJO', 'CRITICO'] as const).map(op => {
+                      const Icon = op === '' ? Filter : op === 'NORMAL' ? CheckCircle2 : op === 'BAJO' ? AlertTriangle : AlertOctagon;
+                      const color = op === '' ? '#6366F1' : op === 'NORMAL' ? '#16A34A' : op === 'BAJO' ? '#CA8A04' : '#DC2626';
+                      const label = op === '' ? 'Todos' : op === 'NORMAL' ? 'Normal' : op === 'BAJO' ? 'Bajo stock' : 'Crítico';
+                      return (
+                        <button key={op} onClick={() => { setFiltroStock(op); setShowFilterMenu(false); }}
+                          style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', padding: '0.65rem 1rem', textAlign: 'left', border: 'none', background: filtroStock === op ? '#EEF2FF' : 'white', color: filtroStock === op ? '#6366F1' : '#374151', fontSize: 13, fontWeight: filtroStock === op ? 700 : 500, cursor: 'pointer', fontFamily: 'inherit' }}>
+                          <Icon size={14} color={filtroStock === op ? '#6366F1' : color} />
+                          {label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            )}
+            {/* More button — export CSV for INVENTARIO */}
+            {activeTab === 'INVENTARIO' && (
+              <div style={{ position: 'relative' }}>
+                <button
+                  onClick={() => { setShowMoreMenu(p => !p); setShowFilterMenu(false); }}
+                  style={{ padding: '0.75rem', borderRadius: '12px', border: '1px solid #e2e8f0', background: 'white', display: 'flex', alignItems: 'center', cursor: 'pointer' }}
+                  title="Más opciones"
+                >
+                  <MoreVertical size={18} color="#64748b" />
+                </button>
+                {showMoreMenu && (
+                  <div style={{ position: 'absolute', right: 0, top: 'calc(100% + 6px)', background: 'white', border: '1px solid #e2e8f0', borderRadius: 12, boxShadow: '0 8px 24px rgba(0,0,0,0.12)', zIndex: 100, minWidth: 160, overflow: 'hidden' }}>
+                    <button
+                      onClick={async () => {
+                        setShowMoreMenu(false);
+                        if (!productosData) return;
+                        const ExcelJS = (await import('exceljs')).default;
+                        const wb = new ExcelJS.Workbook();
+                        wb.creator = 'Marakame';
+                        const ws = wb.addWorksheet('Inventario');
+
+                        // Column widths
+                        ws.columns = [
+                          { key: 'codigo',     width: 14 },
+                          { key: 'nombre',     width: 36 },
+                          { key: 'categoria',  width: 22 },
+                          { key: 'unidad',     width: 12 },
+                          { key: 'stockActual', width: 14 },
+                          { key: 'stockMinimo', width: 14 },
+                          { key: 'ubicacion',  width: 22 },
+                          { key: 'estado',     width: 13 },
+                        ];
+
+                        // Title row
+                        ws.mergeCells('A1:H1');
+                        const titleCell = ws.getCell('A1');
+                        titleCell.value = 'INVENTARIO DE SUMINISTROS — MARAKAME';
+                        titleCell.font   = { bold: true, size: 14, color: { argb: 'FFFFFFFF' }, name: 'Calibri' };
+                        titleCell.fill   = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF4F46E5' } };
+                        titleCell.alignment = { vertical: 'middle', horizontal: 'center' };
+                        ws.getRow(1).height = 32;
+
+                        // Subtitle row
+                        ws.mergeCells('A2:H2');
+                        const subCell = ws.getCell('A2');
+                        subCell.value = `Generado: ${new Date().toLocaleDateString('es-MX', { day: '2-digit', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' })}`;
+                        subCell.font  = { size: 10, color: { argb: 'FF6B7280' }, italic: true };
+                        subCell.alignment = { horizontal: 'center' };
+                        ws.getRow(2).height = 18;
+
+                        // Empty separator
+                        ws.getRow(3).height = 6;
+
+                        // Header row
+                        const headers = ['Código', 'Nombre', 'Categoría', 'Unidad', 'Stock Actual', 'Stock Mínimo', 'Ubicación', 'Estado'];
+                        const hdrRow = ws.getRow(4);
+                        hdrRow.height = 26;
+                        headers.forEach((h, i) => {
+                          const cell = hdrRow.getCell(i + 1);
+                          cell.value = h;
+                          cell.font  = { bold: true, size: 11, color: { argb: 'FFFFFFFF' }, name: 'Calibri' };
+                          cell.fill  = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1E293B' } };
+                          cell.alignment = { vertical: 'middle', horizontal: i >= 4 && i <= 5 ? 'center' : 'left' };
+                          cell.border = { bottom: { style: 'medium', color: { argb: 'FF4F46E5' } } };
+                        });
+
+                        // Data rows
+                        productosData.forEach((p, idx) => {
+                          const estado = p.stockActual <= 0 ? 'CRÍTICO' : p.stockActual <= p.stockMinimo ? 'BAJO' : 'NORMAL';
+                          const rowBgArgb = idx % 2 === 0 ? 'FFFFFFFF' : 'FFF8FAFC';
+                          const estadoBg  = estado === 'CRÍTICO' ? 'FFFEE2E2' : estado === 'BAJO' ? 'FFFEF3C7' : 'FFF0FDF4';
+                          const estadoFg  = estado === 'CRÍTICO' ? 'FF991B1B' : estado === 'BAJO' ? 'FF92400E' : 'FF166534';
+                          const dataRow = ws.addRow([p.codigo, p.nombre, p.categoria, p.unidad, p.stockActual, p.stockMinimo, p.ubicacion ?? '', estado]);
+                          dataRow.height = 20;
+                          dataRow.eachCell((cell, colNum) => {
+                            cell.font = { size: 11, name: 'Calibri', color: { argb: colNum === 8 ? estadoFg : 'FF1E293B' } };
+                            cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: colNum === 8 ? estadoBg : rowBgArgb } };
+                            cell.alignment = { vertical: 'middle', horizontal: colNum >= 5 && colNum <= 6 ? 'center' : 'left' };
+                            cell.border = { bottom: { style: 'thin', color: { argb: 'FFE2E8F0' } } };
+                            if (colNum === 8) {
+                              cell.font = { ...cell.font, bold: true };
+                              cell.alignment = { ...cell.alignment, horizontal: 'center' };
+                            }
+                          });
+                        });
+
+                        // Freeze header rows
+                        ws.views = [{ state: 'frozen', ySplit: 4 }];
+
+                        const buffer = await wb.xlsx.writeBuffer();
+                        const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+                        const url = URL.createObjectURL(blob);
+                        const a = document.createElement('a'); a.href = url; a.download = 'inventario.xlsx'; a.click();
+                        URL.revokeObjectURL(url);
+                      }}
+                      style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', padding: '0.65rem 1rem', border: 'none', background: 'white', color: '#374151', fontSize: 13, fontWeight: 500, cursor: 'pointer', fontFamily: 'inherit' }}
+                    >
+                      <Download size={14} color="#6366F1" /> Exportar Excel
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         </div>
 
@@ -850,9 +1068,10 @@ export function Almacen() {
         {activeTab === 'REQUISICIONES' ? (() => {
           const q = busquedaReq.toLowerCase();
           const reqFiltradas = requisicionesDept.filter(r =>
-            r.folio.toLowerCase().includes(q) ||
+            (showFinalizadas ? r.estado === 'FINALIZADA' : r.estado !== 'FINALIZADA') &&
+            (r.folio.toLowerCase().includes(q) ||
             (r.descripcion ?? '').toLowerCase().includes(q) ||
-            r.areaSolicitante.toLowerCase().includes(q)
+            r.areaSolicitante.toLowerCase().includes(q))
           );
           if (isLoadingReqs) return (
             <div style={{ padding: '5rem', textAlign: 'center', color: '#94a3b8' }}>
@@ -862,12 +1081,23 @@ export function Almacen() {
           );
           if (reqFiltradas.length === 0) return (
             <div style={{ padding: '5rem', textAlign: 'center', color: '#94a3b8' }}>
-              <ShoppingCart size={36} style={{ margin: '0 auto 12px', display: 'block' }} />
-              <p style={{ margin: 0, fontWeight: 700, color: '#374151', fontSize: 15 }}>Sin requisiciones</p>
-              <p style={{ margin: '6px 0 0', fontSize: 14 }}>No hay requisiciones registradas.</p>
+              <CheckCircle2 size={36} style={{ margin: '0 auto 12px', display: 'block', color: showFinalizadas ? '#16A34A' : undefined }} />
+              <p style={{ margin: 0, fontWeight: 700, color: '#374151', fontSize: 15 }}>
+                {showFinalizadas ? 'Sin requisiciones finalizadas' : 'Sin requisiciones activas'}
+              </p>
+              <p style={{ margin: '6px 0 0', fontSize: 14 }}>
+                {showFinalizadas ? 'Aún no hay requisiciones con estado FINALIZADA.' : 'No hay requisiciones activas registradas.'}
+              </p>
             </div>
           );
           return (
+            <>
+            {showFinalizadas && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 24px', background: '#F0FDF4', borderBottom: '1px solid #BBF7D0' }}>
+                <CheckCircle2 size={14} color="#15803D" />
+                <span style={{ fontSize: 13, fontWeight: 600, color: '#15803D' }}>Requisiciones Finalizadas — {reqFiltradas.length} registro{reqFiltradas.length !== 1 ? 's' : ''}</span>
+              </div>
+            )}
             <table style={{ width: '100%', borderCollapse: 'separate', borderSpacing: 0 }}>
               <thead>
                 <tr style={{ backgroundColor: '#f8fafc' }}>
@@ -923,6 +1153,7 @@ export function Almacen() {
                 })}
               </tbody>
             </table>
+            </>
           );
         })()
 
@@ -933,10 +1164,11 @@ export function Almacen() {
               <col style={{ width: '110px' }} />
               <col />
               <col style={{ width: '140px' }} />
-              <col style={{ width: '130px' }} />
+              <col style={{ width: '180px' }} />
               <col style={{ width: '120px' }} />
               <col style={{ width: '150px' }} />
               <col style={{ width: '110px' }} />
+              <col style={{ width: '80px' }} />
             </colgroup>
             <thead>
               <tr style={{ backgroundColor: '#f8fafc' }}>
@@ -947,12 +1179,26 @@ export function Almacen() {
                 <th style={{ padding: '0.875rem 1.25rem', textAlign: 'center', color: '#64748b', fontSize: '11px', fontWeight: '800', textTransform: 'uppercase', letterSpacing: '0.5px', whiteSpace: 'nowrap', borderBottom: '1px solid #e2e8f0' }}>Stock / Mín</th>
                 <th style={{ padding: '0.875rem 1.25rem', textAlign: 'center', color: '#64748b', fontSize: '11px', fontWeight: '800', textTransform: 'uppercase', letterSpacing: '0.5px', whiteSpace: 'nowrap', borderBottom: '1px solid #e2e8f0' }}>Próx. Caducidad</th>
                 <th style={{ padding: '0.875rem 1.25rem', textAlign: 'center', color: '#64748b', fontSize: '11px', fontWeight: '800', textTransform: 'uppercase', letterSpacing: '0.5px', whiteSpace: 'nowrap', borderBottom: '1px solid #e2e8f0' }}>Estado</th>
+                <th style={{ padding: '0.875rem 1.25rem', borderBottom: '1px solid #e2e8f0' }} />
               </tr>
             </thead>
             <tbody>
               {isLoadingProductos ? (
-                <tr><td colSpan={7} style={{ padding: '4rem', textAlign: 'center', color: '#94a3b8' }}>Procesando base de datos...</td></tr>
-              ) : productosData?.map((prod) => {
+                <tr><td colSpan={8} style={{ padding: '4rem', textAlign: 'center', color: '#94a3b8' }}>Procesando base de datos...</td></tr>
+              ) : (() => {
+                const q = busquedaInventario.toLowerCase().trim();
+                const filtered = (productosData ?? []).filter(p => {
+                  if (q && !p.codigo.toLowerCase().includes(q) && !p.nombre.toLowerCase().includes(q) && !(p.descripcion ?? '').toLowerCase().includes(q) && !p.categoria.toLowerCase().includes(q)) return false;
+                  if (filtroStock) {
+                    const est = p.stockActual <= 0 ? 'CRITICO' : p.stockActual <= p.stockMinimo ? 'BAJO' : 'NORMAL';
+                    if (est !== filtroStock) return false;
+                  }
+                  return true;
+                });
+                if (filtered.length === 0) return (
+                  <tr><td colSpan={8} style={{ padding: '4rem', textAlign: 'center', color: '#94a3b8' }}>Sin resultados para la búsqueda.</td></tr>
+                );
+                return filtered.map((prod) => {
                 const prodExt = prod as Producto & { proximaCaducidad?: string | null; lotes?: { fechaCaducidad: string }[] };
                 const proximaCaducidad = prodExt.proximaCaducidad;
                 const lotes: { fechaCaducidad: string }[] = prodExt.lotes ?? [];
@@ -978,11 +1224,14 @@ export function Almacen() {
                       {prod.descripcion && <div style={{ fontSize: '11px', color: '#94a3b8', marginTop: '2px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{prod.descripcion}</div>}
                     </td>
                     <td style={tdBase}>
-                      <span style={{ fontSize: '12px', fontWeight: '600', color: '#64748b', background: '#f1f5f9', padding: '0.3rem 0.7rem', borderRadius: '8px', whiteSpace: 'nowrap', display: 'inline-block', maxWidth: '100%', overflow: 'hidden', textOverflow: 'ellipsis' }}>{prod.categoria}</span>
+                      <span style={{ fontSize: '12px', fontWeight: '600', color: '#64748b', background: '#f1f5f9', padding: '0.3rem 0.7rem', borderRadius: '8px' }}>{prod.categoria}</span>
                     </td>
                     <td style={tdBase}>
                       {prod.ubicacion ? (
-                        <span style={{ fontSize: '12px', color: '#374151', background: '#F0FDF4', padding: '0.3rem 0.7rem', borderRadius: '8px', fontWeight: '500', display: 'inline-block', maxWidth: '100%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{prod.ubicacion}</span>
+                        <div style={{ display: 'flex', alignItems: 'flex-start', gap: 5 }}>
+                          <MapPin size={12} color="#16A34A" style={{ flexShrink: 0, marginTop: 1 }} />
+                          <span style={{ fontSize: '12px', color: '#374151', fontWeight: '500', lineHeight: '1.4', wordBreak: 'break-word' }}>{prod.ubicacion}</span>
+                        </div>
                       ) : (
                         <span style={{ fontSize: '12px', color: '#94a3b8' }}>—</span>
                       )}
@@ -1014,42 +1263,43 @@ export function Almacen() {
                       )}
                     </td>
                     <td style={{ ...tdBase, textAlign: 'center' }}>
-                      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 }}>
-                        {(() => {
-                          const estado = prod.stockActual <= 0 ? 'CRITICO' : prod.stockActual <= prod.stockMinimo ? 'BAJO' : 'NORMAL';
-                          const bg    = estado === 'NORMAL' ? '#dcfce7' : estado === 'BAJO' ? '#fef3c7' : '#fee2e2';
-                          const color = estado === 'NORMAL' ? '#166534' : estado === 'BAJO' ? '#92400e' : '#991b1b';
-                          const label = estado === 'NORMAL' ? 'Normal' : estado === 'BAJO' ? 'Bajo' : 'Crítico';
-                          return (
-                            <span style={{ padding: '0.4rem 0.85rem', borderRadius: '10px', fontSize: '11px', fontWeight: '800', backgroundColor: bg, color, display: 'inline-flex', alignItems: 'center', gap: '0.35rem', whiteSpace: 'nowrap' }}>
-                              <div style={{ width: '5px', height: '5px', borderRadius: '50%', backgroundColor: 'currentColor', flexShrink: 0 }} />
-                              {label}
-                            </span>
-                          );
-                        })()}
-                        {puedeOperar && (
-                          <button
-                            onClick={() => {
-                              setEditandoProducto(prod);
-                              setEditForm({
-                                nombre:     prod.nombre,
-                                categoria:  prod.categoria,
-                                unidad:     prod.unidad || 'PIEZAS',
-                                descripcion: prod.descripcion || '',
-                                stockMinimo: prod.stockMinimo,
-                                ubicacion:  prod.ubicacion || '',
-                              });
-                            }}
-                            style={{ display: 'inline-flex', alignItems: 'center', gap: 3, padding: '3px 8px', borderRadius: 6, border: '1px solid #e2e8f0', background: 'white', color: '#64748b', fontSize: 11, fontWeight: 600, cursor: 'pointer' }}
-                          >
-                            <Pencil size={11} /> Editar
-                          </button>
-                        )}
-                      </div>
+                      {(() => {
+                        const estado = prod.stockActual <= 0 ? 'CRITICO' : prod.stockActual <= prod.stockMinimo ? 'BAJO' : 'NORMAL';
+                        const bg    = estado === 'NORMAL' ? '#dcfce7' : estado === 'BAJO' ? '#fef3c7' : '#fee2e2';
+                        const color = estado === 'NORMAL' ? '#166534' : estado === 'BAJO' ? '#92400e' : '#991b1b';
+                        const label = estado === 'NORMAL' ? 'Normal' : estado === 'BAJO' ? 'Bajo' : 'Crítico';
+                        return (
+                          <span style={{ padding: '0.4rem 0.85rem', borderRadius: '10px', fontSize: '11px', fontWeight: '800', backgroundColor: bg, color, display: 'inline-flex', alignItems: 'center', gap: '0.35rem', whiteSpace: 'nowrap' }}>
+                            <div style={{ width: '5px', height: '5px', borderRadius: '50%', backgroundColor: 'currentColor', flexShrink: 0 }} />
+                            {label}
+                          </span>
+                        );
+                      })()}
+                    </td>
+                    <td style={{ ...tdBase, textAlign: 'center' }}>
+                      {puedeOperar && (
+                        <button
+                          onClick={() => {
+                            setEditandoProducto(prod);
+                            setEditForm({
+                              nombre:     prod.nombre,
+                              categoria:  prod.categoria,
+                              unidad:     prod.unidad || 'PIEZAS',
+                              descripcion: prod.descripcion || '',
+                              stockMinimo: prod.stockMinimo,
+                              ubicacion:  prod.ubicacion || '',
+                            });
+                          }}
+                          title="Editar producto"
+                          style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 30, height: 30, borderRadius: 6, border: '1px solid #e2e8f0', background: 'white', color: '#64748b', cursor: 'pointer', flexShrink: 0 }}
+                        >
+                          <Pencil size={13} />
+                        </button>
+                      )}
                     </td>
                   </tr>
                 );
-              })}
+              }); })()}
             </tbody>
           </table>
         )
@@ -1107,9 +1357,29 @@ export function Almacen() {
                       </td>
                       <td style={{ padding: '1.25rem 1rem' }}>
                         {cr ? (
-                          <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                             <span style={{ fontFamily: 'monospace', fontSize: 12, fontWeight: 700, color: '#374151' }}>{cr.folio}</span>
-                            <EstadoBadge badge={CR_BADGE[cr.estado] ?? CR_BADGE.PENDIENTE} />
+                            {puedeFinanzas ? (
+                              <select
+                                value={cr.estado}
+                                disabled={cambiarEstadoCR.isPending}
+                                onChange={e => cambiarEstadoCR.mutate({ crId: cr.id, estado: e.target.value })}
+                                style={{
+                                  fontSize: 12, fontWeight: 600, borderRadius: 8, padding: '4px 8px', border: '1px solid',
+                                  borderColor: cr.estado === 'PAGADO' ? '#BBF7D0' : cr.estado === 'CANCELADO' ? '#FECACA' : '#FDE68A',
+                                  background: cr.estado === 'PAGADO' ? '#F0FDF4' : cr.estado === 'CANCELADO' ? '#FEF2F2' : '#FFFBEB',
+                                  color: cr.estado === 'PAGADO' ? '#15803D' : cr.estado === 'CANCELADO' ? '#DC2626' : '#92400E',
+                                  cursor: 'pointer', outline: 'none', fontFamily: 'inherit',
+                                  opacity: cambiarEstadoCR.isPending ? 0.6 : 1,
+                                }}
+                              >
+                                <option value="PENDIENTE">Pendiente</option>
+                                <option value="PAGADO">Pagado</option>
+                                <option value="CANCELADO">Cancelado</option>
+                              </select>
+                            ) : (
+                              <EstadoBadge badge={CR_BADGE[cr.estado] ?? CR_BADGE.PENDIENTE} />
+                            )}
                           </div>
                         ) : (
                           <span style={{ color: '#94a3b8', fontSize: 12 }}>—</span>
@@ -1158,83 +1428,38 @@ export function Almacen() {
             </table>
           </div>
 
-        /* ── CONTRA-RECIBOS ── */
-        ) : (
-          <div>
-            {isLoadingCR ? (
-              <div style={{ padding: '5rem', textAlign: 'center', color: '#94a3b8' }}>
-                <Clock size={32} style={{ margin: '0 auto 12px', display: 'block' }} />
-                <span style={{ fontSize: 15 }}>Cargando contra-recibos...</span>
-              </div>
-            ) : !contraRecibosData || contraRecibosData.length === 0 ? (
-              <div style={{ padding: '5rem', textAlign: 'center', color: '#94a3b8' }}>
-                <FileText size={36} style={{ margin: '0 auto 12px', display: 'block' }} />
-                <p style={{ margin: 0, fontWeight: 700, color: '#374151', fontSize: 15 }}>Sin contra-recibos</p>
-                <p style={{ margin: '6px 0 0', fontSize: 14 }}>No hay contra-recibos generados aún.</p>
-              </div>
-            ) : (
-              <div style={{ overflowX: 'auto' }}>
-                <table style={{ width: '100%', borderCollapse: 'separate', borderSpacing: 0, minWidth: 800 }}>
-                  <thead>
-                    <tr style={{ backgroundColor: '#f8fafc' }}>
-                      {['Folio', 'Fecha', 'Producto', 'Proveedor', 'Factura', 'Importe', 'Estado', 'Acciones'].map((h, i) => (
-                        <th key={i} style={{ padding: '1.1rem 1.25rem', textAlign: 'left', color: '#64748b', fontSize: '12px', fontWeight: '800', textTransform: 'uppercase', letterSpacing: '0.5px', borderBottom: '1px solid #e2e8f0', whiteSpace: 'nowrap' }}>{h}</th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {contraRecibosData.map((cr, idx) => {
-                      const badge = CR_BADGE[cr.estado] ?? CR_BADGE.PENDIENTE;
-                      return (
-                        <tr key={cr.id} style={{ borderBottom: idx < contraRecibosData.length - 1 ? '1px solid #f1f5f9' : 'none' }}
-                          onMouseEnter={e => (e.currentTarget.style.background = '#fafafa')}
-                          onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}>
-                          <td style={{ padding: '1.25rem 1.25rem' }}>
-                            <span style={{ fontFamily: 'monospace', background: '#f1f5f9', padding: '0.3rem 0.6rem', borderRadius: 6, fontSize: 13, fontWeight: 700, color: '#475569' }}>{cr.folio}</span>
-                          </td>
-                          <td style={{ padding: '1.25rem 1.25rem', whiteSpace: 'nowrap' }}>
-                            <div style={{ fontSize: 13, fontWeight: 600, color: '#374151' }}>{new Date(cr.createdAt).toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: 'numeric' })}</div>
-                            <div style={{ fontSize: 11, color: '#94a3b8' }}>{new Date(cr.createdAt).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' })}</div>
-                          </td>
-                          <td style={{ padding: '1.25rem 1.25rem' }}>
-                            <div style={{ fontWeight: 600, fontSize: 14, color: '#111827' }}>{cr.movimiento?.producto?.nombre ?? '—'}</div>
-                            {cr.movimiento && <div style={{ fontSize: 12, color: '#94a3b8', marginTop: 2 }}>Cant: {cr.movimiento.cantidad}</div>}
-                          </td>
-                          <td style={{ padding: '1.25rem 1.25rem' }}>
-                            <span style={{ fontSize: 13, color: '#374151', fontWeight: 500 }}>{cr.proveedor}</span>
-                          </td>
-                          <td style={{ padding: '1.25rem 1.25rem' }}>
-                            <span style={{ fontFamily: 'monospace', fontSize: 13, color: '#374151' }}>{cr.numeroFactura}</span>
-                          </td>
-                          <td style={{ padding: '1.25rem 1.25rem', whiteSpace: 'nowrap' }}>
-                            <span style={{ fontSize: 14, fontWeight: 700, color: '#15803D' }}>${Number(cr.importe).toLocaleString('es-MX', { minimumFractionDigits: 2 })}</span>
-                          </td>
-                          <td style={{ padding: '1.25rem 1.25rem' }}>
-                            <EstadoBadge badge={badge} />
-                          </td>
-                          <td style={{ padding: '1.25rem 1.25rem' }}>
-                            <button onClick={() => abrirPDF(cr.id)} style={{ display: 'inline-flex', alignItems: 'center', gap: 5, background: '#F5F3FF', color: '#7C3AED', border: '1px solid #DDD6FE', borderRadius: 10, padding: '7px 12px', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
-                              <FileText size={14} /> Ver PDF
-                            </button>
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </div>
-        )}
+        ) : null}
       </div>
 
       {/* ── MODAL NUEVO PRODUCTO / MOVIMIENTO ── */}
       {showModal && createPortal(
         <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(15, 23, 42, 0.78)', zIndex: 999999, display: 'flex', alignItems: 'flex-start', justifyContent: 'center', backdropFilter: 'blur(3px)', overflowY: 'auto', padding: '32px 16px' }}>
-          <div style={{ backgroundColor: 'white', padding: '2.5rem', borderRadius: '24px', width: '100%', maxWidth: showModal === 'NUEVO_MOVIMIENTO' ? 'min(95vw, 1080px)' : '560px', overflowY: 'visible', boxShadow: '0 25px 60px rgba(0,0,0,0.28)', border: '1px solid #E8ECF0', margin: 'auto' }}>
-            <h2 style={{ fontSize: '22px', fontWeight: '800', marginBottom: '1.5rem', color: 'var(--text-h)' }}>
-              {showModal === 'NUEVO_PRODUCTO' ? 'Registrar Producto al Catálogo' : 'Registrar Movimiento de Almacén'}
-            </h2>
+          <div style={{ backgroundColor: 'white', borderRadius: '24px', width: '100%', maxWidth: showModal === 'NUEVO_MOVIMIENTO' ? 'min(95vw, 1080px)' : '560px', boxShadow: '0 25px 60px rgba(0,0,0,0.28)', border: '1px solid #E8ECF0', margin: 'auto', overflow: 'hidden' }}>
+
+            {/* ── Cabecera del modal ── */}
+            {showModal === 'NUEVO_MOVIMIENTO' ? (
+              <div style={{ padding: '1.75rem 2rem', background: movimientoData.tipo === 'ENTRADA' ? 'linear-gradient(135deg, #1E3A8A 0%, #2563EB 100%)' : 'linear-gradient(135deg, #14532D 0%, #16A34A 100%)', display: 'flex', alignItems: 'center', gap: 16 }}>
+                <div style={{ width: 52, height: 52, borderRadius: 14, background: 'rgba(255,255,255,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                  {movimientoData.tipo === 'ENTRADA' ? <ArrowDownRight size={26} color="white"/> : <ArrowUpRight size={26} color="white"/>}
+                </div>
+                <div>
+                  <div style={{ fontSize: 20, fontWeight: 800, color: 'white', letterSpacing: '-0.3px', lineHeight: 1.2 }}>
+                    {movimientoData.tipo === 'ENTRADA' ? 'Entrada de mercancía' : 'Salida de inventario'}
+                  </div>
+                  <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.65)', marginTop: 3, fontWeight: 500 }}>Registrar movimiento de almacén</div>
+                </div>
+                <button onClick={() => setShowModal(null)} style={{ marginLeft: 'auto', background: 'rgba(255,255,255,0.15)', border: '1px solid rgba(255,255,255,0.2)', borderRadius: 8, padding: '7px', cursor: 'pointer', color: 'white', display: 'flex', alignItems: 'center', flexShrink: 0 }}>
+                  <X size={18}/>
+                </button>
+              </div>
+            ) : (
+              <div style={{ padding: '1.75rem 2rem 0', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <h2 style={{ fontSize: '20px', fontWeight: '800', color: 'var(--text-h)', margin: 0 }}>Registrar Producto al Catálogo</h2>
+                <button onClick={() => setShowModal(null)} style={{ background: '#F1F5F9', border: 'none', borderRadius: 8, padding: '7px', cursor: 'pointer', color: '#64748B', display: 'flex', alignItems: 'center' }}><X size={18}/></button>
+              </div>
+            )}
+
+            <div style={{ padding: '1.75rem 2rem 2rem' }}>
 
             {showModal === 'NUEVO_PRODUCTO' ? (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
@@ -1285,264 +1510,355 @@ export function Almacen() {
                 </div>
               </div>
             ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-                {!(movimientoData.tipo === 'ENTRADA' && movimientoData.requisicionId && productosDeRequisicion.length > 0) && (
-                  <select value={movimientoData.productoId} onChange={e => setMovimientoData({ ...movimientoData, productoId: e.target.value })} style={{ padding: '1rem', borderRadius: '16px', border: '1px solid #e2e8f0', outline: 'none' }}>
-                    <option value="">Seleccione Producto...</option>
-                    {productosData?.map((p) => (
-                      <option key={p.id} value={p.id}>{p.nombre} (Disponibles: {p.stockActual})</option>
-                    ))}
-                  </select>
-                )}
-                <div style={{ display: 'flex', gap: '1rem' }}>
-                  <select value={movimientoData.tipo} onChange={e => setMovimientoData({ ...movimientoData, tipo: e.target.value, requisicionId: '' })} style={{ flex: 1, padding: '1rem', borderRadius: '16px', border: '1px solid #e2e8f0', outline: 'none' }}>
-                    <option value="ENTRADA">Entrada (+)</option>
-                    <option value="SALIDA">Salida (-)</option>
-                  </select>
-                  {!(movimientoData.tipo === 'ENTRADA' && movimientoData.requisicionId && productosDeRequisicion.length > 0) && (
-                    <input type="number" value={movimientoData.cantidad} onChange={e => setMovimientoData({ ...movimientoData, cantidad: parseInt(e.target.value) || 1 })} style={{ width: '100px', padding: '1rem', borderRadius: '16px', border: '1px solid #e2e8f0', outline: 'none' }} />
-                  )}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+
+                {/* ── Tipo de movimiento ── */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  <label style={lbN}>Tipo de movimiento *</label>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                    {(['ENTRADA', 'SALIDA'] as const).map(tipo => {
+                      const active = movimientoData.tipo === tipo;
+                      const isEntrada = tipo === 'ENTRADA';
+                      const Icon = isEntrada ? ArrowDownRight : ArrowUpRight;
+                      const activeColor = isEntrada ? '#1D4ED8' : '#15803D';
+                      const activeBorder = isEntrada ? '#93C5FD' : '#86EFAC';
+                      const activeBg = isEntrada ? 'linear-gradient(135deg, #EFF6FF, #DBEAFE)' : 'linear-gradient(135deg, #F0FDF4, #DCFCE7)';
+                      const activeShadow = isEntrada ? '0 4px 14px rgba(37,99,235,0.18)' : '0 4px 14px rgba(22,163,74,0.18)';
+                      const iconBg = active ? (isEntrada ? '#DBEAFE' : '#DCFCE7') : '#F1F5F9';
+                      const iconColor = active ? activeColor : '#CBD5E1';
+                      const subText = isEntrada ? 'Recepción de mercancía' : 'Despacho de inventario';
+                      return (
+                        <button key={tipo} type="button"
+                          onClick={() => setMovimientoData({ ...movimientoData, tipo, requisicionId: '' })}
+                          style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8, padding: '1.1rem 1rem', borderRadius: 14, cursor: 'pointer', fontFamily: 'inherit', transition: 'all 0.15s',
+                            border: `2px solid ${active ? activeBorder : '#E2E8F0'}`,
+                            background: active ? activeBg : '#F8FAFC',
+                            color: active ? activeColor : '#94A3B8',
+                            fontWeight: 600, fontSize: 14,
+                            boxShadow: active ? activeShadow : 'none',
+                          }}>
+                          <div style={{ width: 44, height: 44, borderRadius: 12, display: 'flex', alignItems: 'center', justifyContent: 'center', background: iconBg, transition: 'all 0.15s' }}>
+                            <Icon size={22} color={iconColor}/>
+                          </div>
+                          <span>{isEntrada ? 'Entrada' : 'Salida'}</span>
+                          <span style={{ fontSize: 10, fontWeight: 400, color: active ? (isEntrada ? '#3B82F6' : '#22C55E') : '#CBD5E1', textAlign: 'center', lineHeight: 1.3 }}>{subText}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
                 </div>
 
-                {/* Campos específicos ENTRADA */}
+                {/* ══ ENTRADA ══ */}
                 {movimientoData.tipo === 'ENTRADA' && (
-                  <div style={{ border: '1px solid #BFDBFE', borderRadius: 14, padding: 16, background: '#EFF6FF', display: 'flex', flexDirection: 'column', gap: 12 }}>
-                    <div style={{ fontSize: 13, fontWeight: 700, color: '#1D4ED8', marginBottom: 2 }}>Recepción de mercancía</div>
+                  <div>
+                    <div style={secHdrE}>
+                      <Box size={14} color="white" />
+                      <span style={{ fontSize: 13, fontWeight: 700, color: 'white', letterSpacing: '0.01em' }}>Recepción de mercancía</span>
+                    </div>
+                    <div style={secBodyE}>
 
-                    {/* Requisición asociada */}
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                      <span style={{ fontSize: 12, fontWeight: 600, color: '#1D4ED8' }}>Requisición / Orden de compra asociada (opcional)</span>
-                      <select value={movimientoData.requisicionId} onChange={e => {
-                        const reqId = e.target.value;
-                        const req = reqId ? requisiciones.find(r => String(r.id) === reqId) : null;
-                        setMovimientoData({
-                          ...movimientoData,
-                          requisicionId: reqId,
-                          proveedor:      req ? getProveedorDeRequisicion(req) : '',
-                          importeFactura: req ? getImporteDeRequisicion(req)   : '',
-                          numeroFactura:  req?.facturas?.[0]?.numero ?? '',
-                        });
-                      }} style={{ padding: '0.75rem', borderRadius: 10, border: '1px solid #BFDBFE', outline: 'none', fontSize: 14, background: 'white' }}>
-                        <option value="">Sin requisición asociada</option>
-                        {requisiciones
-                          .filter(r => ['AUTORIZADA', 'NEGOCIACION_COMPLETADA', 'ORDEN_GENERADA', 'FACTURAS_RECIBIDAS', 'ORDEN_PAGO_GENERADA', 'PAGO_GENERADO', 'FINALIZADO'].includes(r.estado))
-                          .map(r => (
+                      {/* Aviso inspección */}
+                      {(!movimientoData.empaqueCorrecto || !movimientoData.cantidadCorrecta || !movimientoData.presentacionCorrecta) && (
+                        <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8, padding: '8px 12px', background: '#FFFBEB', border: '1px solid #FDE68A', borderLeft: '3px solid #F59E0B', borderRadius: 8, fontSize: 12, color: '#92400E' }}>
+                          <AlertTriangle size={13} color="#F59E0B" style={{ flexShrink: 0, marginTop: 1 }}/>
+                          <span>Los productos aparecen como <strong>Rechazado</strong> hasta que marques todas las casillas de inspección.</span>
+                        </div>
+                      )}
+
+                      {/* Requisición */}
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+                        <label style={lbE}>Requisición / Orden de compra asociada</label>
+                        <select value={movimientoData.requisicionId} onChange={e => {
+                          const reqId = e.target.value;
+                          const req = reqId ? requisiciones.find(r => String(r.id) === reqId) : null;
+                          setMovimientoData({ ...movimientoData, requisicionId: reqId, proveedor: req ? getProveedorDeRequisicion(req) : '', importeFactura: req ? getImporteDeRequisicion(req) : '', numeroFactura: req?.facturas && req.facturas.length > 0 ? req.facturas.map(f => f.numero).filter(Boolean).join(', ') : '' });
+                        }} style={inpE}>
+                          <option value="">Sin requisición asociada</option>
+                          {requisiciones.filter(r => ['AUTORIZADA','NEGOCIACION_COMPLETADA','ORDEN_GENERADA','FACTURAS_RECIBIDAS','ORDEN_PAGO_GENERADA','PAGO_GENERADO','FINALIZADO'].includes(r.estado) && !usedEntradaReqIds.has(r.id)).map(r => (
                             <option key={r.id} value={r.id}>{r.folio} — {r.requisicion?.areaSolicitante ?? r.areaSolicitante ?? ''} — {(r.requisicion?.descripcion ?? r.descripcion ?? '').slice(0, 40)}</option>
-                          ))
-                        }
-                      </select>
+                          ))}
+                        </select>
 
-                      {/* Tabla de validación multi-producto */}
-                      {productosDeRequisicion.length > 0 && (
-                        <div style={{ marginTop: 10 }}>
-                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
-                            <div style={{ fontSize: 12, fontWeight: 700, color: '#1E3A5F', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                              Validación de recepción — {productosDeRequisicion.length} producto{productosDeRequisicion.length !== 1 ? 's' : ''}
+                        {/* Tabla validación multi-producto */}
+                        {productosDeRequisicion.length > 0 && (
+                          <div style={{ marginTop: 8, border: '1px solid #BFDBFE', borderRadius: 10, overflow: 'hidden' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 12px', background: '#DBEAFE' }}>
+                              <span style={{ fontSize: 11, fontWeight: 700, color: '#1E3A5F', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Validación — {productosDeRequisicion.length} producto{productosDeRequisicion.length !== 1 ? 's' : ''}</span>
+                              {productosDeRequisicion.every(d => d.productoMatch) && (
+                                <span style={{ fontSize: 11, color: '#15803D', background: '#F0FDF4', border: '1px solid #BBF7D0', borderRadius: 6, padding: '2px 8px', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 4 }}><CheckCircle2 size={11}/>Todos en catálogo</span>
+                              )}
                             </div>
-                            {productosDeRequisicion.every(d => d.productoMatch) && (
-                              <span style={{ fontSize: 11, color: '#15803D', background: '#F0FDF4', border: '1px solid #BBF7D0', borderRadius: 6, padding: '3px 8px', fontWeight: 600 }}>
-                                ✓ Todos en catálogo
-                              </span>
+                            <div style={{ overflowX: 'auto' }}>
+                              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12, tableLayout: 'fixed' }}>
+                                <colgroup><col style={{ width: '18%' }}/><col style={{ width: '8%' }}/><col style={{ width: '8%' }}/><col style={{ width: '12%' }}/><col style={{ width: '13%' }}/><col style={{ width: '12%' }}/><col style={{ width: '29%' }}/></colgroup>
+                                <thead>
+                                  <tr>{['Producto','Solic.','Recib.','Estado','Lote','Caducidad','Observaciones'].map((h,i) => <th key={i} style={{ padding: '7px 8px', textAlign: 'left', fontWeight: 700, color: '#1E3A5F', borderBottom: '1px solid #BFDBFE', fontSize: 11, background: '#EFF6FF' }}>{h}</th>)}</tr>
+                                </thead>
+                                <tbody>
+                                  {productosDeRequisicion.map((det, idx) => {
+                                    const edit = recepcionEditada[det.id] ?? { cantidadRecibida: 0, estado: 'CORRECTO', observaciones: '', lote: '', fechaCaducidad: '' };
+                                    const estadoColors: Record<string, { bg: string; text: string; border: string }> = { CORRECTO: { bg: '#F0FDF4', text: '#15803D', border: '#BBF7D0' }, INCOMPLETO: { bg: '#FEFCE8', text: '#CA8A04', border: '#FDE68A' }, EXCEDENTE: { bg: '#EFF6FF', text: '#2563EB', border: '#BFDBFE' }, RECHAZADO: { bg: '#FEF2F2', text: '#DC2626', border: '#FECACA' } };
+                                    const ec = estadoColors[edit.estado] ?? estadoColors.CORRECTO;
+                                    const rowBg = !det.productoMatch ? '#FFF7ED' : idx % 2 === 0 ? '#F8FAFF' : 'white';
+                                    return (
+                                      <tr key={det.id} style={{ background: rowBg, borderBottom: '1px solid #E0EAFF' }}>
+                                        <td style={{ padding: '8px 8px', verticalAlign: 'middle' }}>
+                                          <div style={{ fontWeight: 600, color: '#1E293B', fontSize: 12, lineHeight: 1.3 }}>{det.producto}</div>
+                                          <div style={{ fontSize: 10, color: '#64748B' }}>{det.unidad}</div>
+                                          {det.productoMatch ? <div style={{ fontSize: 10, color: '#15803D', fontFamily: 'monospace' }}>{det.productoMatch.codigo}</div>
+                                            : <button type="button" onClick={() => autoCrearProducto.mutate({ nombre: det.producto, categoria: 'OTRO', unidad: det.unidad })} disabled={autoCrearProducto.isPending} style={{ marginTop: 3, padding: '2px 6px', borderRadius: 5, background: '#B45309', color: 'white', border: 'none', cursor: 'pointer', fontSize: 10, fontWeight: 600 }}>{autoCrearProducto.isPending ? '...' : '+ Crear'}</button>}
+                                        </td>
+                                        <td style={{ padding: '8px 8px', verticalAlign: 'middle', textAlign: 'center', fontWeight: 700, color: '#374151', fontSize: 13 }}>{det.cantidad}</td>
+                                        <td style={{ padding: '8px 8px', verticalAlign: 'middle' }}><input type="number" min={0} value={edit.cantidadRecibida || ''} placeholder="0" onChange={e => {
+                                          const newQty = Number(e.target.value) || 0;
+                                          const anyInspFailed = !movimientoData.empaqueCorrecto || !movimientoData.cantidadCorrecta || !movimientoData.presentacionCorrecta;
+                                          const newEstado = anyInspFailed ? 'RECHAZADO'
+                                            : newQty === 0 ? edit.estado
+                                            : newQty === det.cantidad ? 'CORRECTO'
+                                            : newQty < det.cantidad ? 'INCOMPLETO'
+                                            : 'EXCEDENTE';
+                                          setRecepcionEditada(prev => ({ ...prev, [det.id]: { ...edit, cantidadRecibida: newQty, estado: newEstado } }));
+                                        }} style={{ width: '100%', padding: '4px 6px', borderRadius: 6, border: '1px solid #BFDBFE', outline: 'none', fontSize: 12, textAlign: 'center', fontWeight: 700 }}/></td>
+                                        <td style={{ padding: '8px 8px', verticalAlign: 'middle' }}><select value={edit.estado} onChange={e => setRecepcionEditada(prev => ({ ...prev, [det.id]: { ...edit, estado: e.target.value } }))} style={{ width: '100%', padding: '4px 5px', borderRadius: 6, border: `1px solid ${ec.border}`, background: ec.bg, color: ec.text, fontWeight: 700, fontSize: 11, outline: 'none' }}><option value="CORRECTO">Correcto</option><option value="INCOMPLETO">Incompleto</option><option value="EXCEDENTE">Excedente</option><option value="RECHAZADO">Rechazado</option></select></td>
+                                        <td style={{ padding: '8px 8px', verticalAlign: 'middle' }}><input type="text" placeholder="DZ-01" value={edit.lote} onChange={e => setRecepcionEditada(prev => ({ ...prev, [det.id]: { ...edit, lote: e.target.value } }))} style={{ width: '100%', padding: '4px 6px', borderRadius: 6, border: '1px solid #BFDBFE', outline: 'none', fontSize: 11, fontFamily: 'monospace' }}/></td>
+                                        <td style={{ padding: '8px 8px', verticalAlign: 'middle' }}><input type="date" value={edit.fechaCaducidad} onChange={e => setRecepcionEditada(prev => ({ ...prev, [det.id]: { ...edit, fechaCaducidad: e.target.value } }))} style={{ width: '100%', padding: '4px 6px', borderRadius: 6, border: '1px solid #BFDBFE', outline: 'none', fontSize: 11 }}/></td>
+                                        <td style={{ padding: '8px 8px', verticalAlign: 'middle' }}><input type="text" placeholder="Observaciones..." value={edit.observaciones} onChange={e => setRecepcionEditada(prev => ({ ...prev, [det.id]: { ...edit, observaciones: e.target.value } }))} style={{ width: '100%', padding: '4px 6px', borderRadius: 6, border: '1px solid #BFDBFE', outline: 'none', fontSize: 11 }}/></td>
+                                      </tr>
+                                    );
+                                  })}
+                                </tbody>
+                              </table>
+                            </div>
+                            {productosDeRequisicion.some(d => !d.productoMatch) && (
+                              <div style={{ padding: '6px 12px', background: '#FFF7ED', borderTop: '1px solid #FED7AA', fontSize: 11, color: '#92400E', display: 'flex', gap: 6, alignItems: 'center' }}>
+                                <AlertTriangle size={12} style={{ flexShrink: 0 }}/>Algunos productos no están en el catálogo. Usa el botón "+ Crear" antes de registrar.
+                              </div>
                             )}
                           </div>
-                          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12, tableLayout: 'fixed' }}>
-                            <colgroup>
-                              <col style={{ width: '18%' }} />
-                              <col style={{ width: '8%' }} />
-                              <col style={{ width: '8%' }} />
-                              <col style={{ width: '12%' }} />
-                              <col style={{ width: '13%' }} />
-                              <col style={{ width: '12%' }} />
-                              <col style={{ width: '29%' }} />
-                            </colgroup>
-                            <thead>
-                              <tr style={{ background: '#DBEAFE', borderRadius: 8 }}>
-                                {['Producto', 'Solic.', 'Recib.', 'Estado', 'Lote', 'Caducidad', 'Observaciones'].map((h, i) => (
-                                  <th key={i} style={{ padding: '8px 8px', textAlign: 'left', fontWeight: 700, color: '#1E3A5F', borderBottom: '2px solid #BFDBFE', fontSize: 11 }}>{h}</th>
-                                ))}
-                              </tr>
-                            </thead>
-                            <tbody>
-                              {productosDeRequisicion.map((det, idx) => {
-                                const edit = recepcionEditada[det.id] ?? { cantidadRecibida: det.cantidad, estado: 'CORRECTO', observaciones: '', lote: '', fechaCaducidad: '' };
-                                const estadoColors: Record<string, { bg: string; text: string; border: string }> = {
-                                  CORRECTO:   { bg: '#F0FDF4', text: '#15803D', border: '#BBF7D0' },
-                                  INCOMPLETO: { bg: '#FEFCE8', text: '#CA8A04', border: '#FDE68A' },
-                                  EXCEDENTE:  { bg: '#EFF6FF', text: '#2563EB', border: '#BFDBFE' },
-                                  RECHAZADO:  { bg: '#FEF2F2', text: '#DC2626', border: '#FECACA' },
-                                };
-                                const ec = estadoColors[edit.estado] ?? estadoColors.CORRECTO;
-                                const rowBg = !det.productoMatch ? '#FFF7ED' : idx % 2 === 0 ? '#F8FAFF' : 'white';
-                                return (
-                                  <tr key={det.id} style={{ background: rowBg, borderBottom: '1px solid #E0EAFF' }}>
-                                    <td style={{ padding: '8px 8px', verticalAlign: 'middle' }}>
-                                      <div style={{ fontWeight: 600, color: '#1E293B', fontSize: 12, lineHeight: 1.3 }}>{det.producto}</div>
-                                      <div style={{ fontSize: 10, color: '#64748B' }}>{det.unidad}</div>
-                                      {det.productoMatch
-                                        ? <div style={{ fontSize: 10, color: '#15803D', fontFamily: 'monospace' }}>{det.productoMatch.codigo}</div>
-                                        : <button type="button" onClick={() => autoCrearProducto.mutate({ nombre: det.producto, categoria: 'OTRO', unidad: det.unidad })} disabled={autoCrearProducto.isPending} style={{ marginTop: 3, padding: '2px 6px', borderRadius: 5, background: '#B45309', color: 'white', border: 'none', cursor: 'pointer', fontSize: 10, fontWeight: 600 }}>
-                                            {autoCrearProducto.isPending ? '...' : '+ Crear'}
-                                          </button>
-                                      }
-                                    </td>
-                                    <td style={{ padding: '8px 8px', verticalAlign: 'middle', textAlign: 'center', fontWeight: 700, color: '#374151', fontSize: 13 }}>
-                                      {det.cantidad}
-                                    </td>
-                                    <td style={{ padding: '8px 8px', verticalAlign: 'middle' }}>
-                                      <input type="number" min={0} value={edit.cantidadRecibida}
-                                        onChange={e => setRecepcionEditada(prev => ({ ...prev, [det.id]: { ...edit, cantidadRecibida: Number(e.target.value) || 0 } }))}
-                                        style={{ width: '100%', padding: '4px 6px', borderRadius: 6, border: '1px solid #BFDBFE', outline: 'none', fontSize: 12, textAlign: 'center', fontWeight: 700 }}
-                                      />
-                                    </td>
-                                    <td style={{ padding: '8px 8px', verticalAlign: 'middle' }}>
-                                      <select value={edit.estado}
-                                        onChange={e => setRecepcionEditada(prev => ({ ...prev, [det.id]: { ...edit, estado: e.target.value } }))}
-                                        style={{ width: '100%', padding: '4px 5px', borderRadius: 6, border: `1px solid ${ec.border}`, background: ec.bg, color: ec.text, fontWeight: 700, fontSize: 11, outline: 'none' }}
-                                      >
-                                        <option value="CORRECTO">Correcto</option>
-                                        <option value="INCOMPLETO">Incompleto</option>
-                                        <option value="EXCEDENTE">Excedente</option>
-                                        <option value="RECHAZADO">Rechazado</option>
-                                      </select>
-                                    </td>
-                                    <td style={{ padding: '8px 8px', verticalAlign: 'middle' }}>
-                                      <input type="text" placeholder="Ej: DZ-01"
-                                        value={edit.lote}
-                                        onChange={e => setRecepcionEditada(prev => ({ ...prev, [det.id]: { ...edit, lote: e.target.value } }))}
-                                        style={{ width: '100%', padding: '4px 6px', borderRadius: 6, border: '1px solid #BFDBFE', outline: 'none', fontSize: 11, fontFamily: 'monospace' }}
-                                      />
-                                    </td>
-                                    <td style={{ padding: '8px 8px', verticalAlign: 'middle' }}>
-                                      <input type="date"
-                                        value={edit.fechaCaducidad}
-                                        onChange={e => setRecepcionEditada(prev => ({ ...prev, [det.id]: { ...edit, fechaCaducidad: e.target.value } }))}
-                                        style={{ width: '100%', padding: '4px 6px', borderRadius: 6, border: '1px solid #BFDBFE', outline: 'none', fontSize: 11 }}
-                                      />
-                                    </td>
-                                    <td style={{ padding: '8px 8px', verticalAlign: 'middle' }}>
-                                      <input type="text" placeholder="Observaciones..."
-                                        value={edit.observaciones}
-                                        onChange={e => setRecepcionEditada(prev => ({ ...prev, [det.id]: { ...edit, observaciones: e.target.value } }))}
-                                        style={{ width: '100%', padding: '4px 6px', borderRadius: 6, border: '1px solid #BFDBFE', outline: 'none', fontSize: 11 }}
-                                      />
-                                    </td>
-                                  </tr>
-                                );
-                              })}
-                            </tbody>
-                          </table>
-                          {productosDeRequisicion.some(d => !d.productoMatch) && (
-                            <div style={{ marginTop: 8, padding: '6px 10px', background: '#FFF7ED', border: '1px solid #FED7AA', borderRadius: 8, fontSize: 11, color: '#92400E', display: 'flex', gap: 6, alignItems: 'center' }}>
-                              <AlertTriangle size={12} style={{ flexShrink: 0 }} />
-                              Algunos productos no están en el catálogo. Usa el botón "+ Crear" en cada fila antes de registrar.
-                            </div>
-                          )}
+                        )}
+                      </div>
+
+                      {/* Proveedor / Factura */}
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                          <label style={lbE}>Proveedor *</label>
+                          <input type="text" value={movimientoData.proveedor} onChange={e => setMovimientoData({ ...movimientoData, proveedor: e.target.value })} style={inpE}/>
                         </div>
-                      )}
-                    </div>
-
-                    {/* Datos del proveedor y factura */}
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-                      <input type="text" placeholder="Proveedor *" value={movimientoData.proveedor} onChange={e => setMovimientoData({ ...movimientoData, proveedor: e.target.value })} style={{ padding: '0.75rem', borderRadius: 10, border: '1px solid #BFDBFE', outline: 'none', fontSize: 14 }} />
-                      <input type="text" placeholder="Núm. Factura *" value={movimientoData.numeroFactura} onChange={e => setMovimientoData({ ...movimientoData, numeroFactura: e.target.value })} style={{ padding: '0.75rem', borderRadius: 10, border: '1px solid #BFDBFE', outline: 'none', fontSize: 14 }} />
-                      <input type="number" placeholder="Importe factura ($) *" value={movimientoData.importeFactura} onChange={e => setMovimientoData({ ...movimientoData, importeFactura: e.target.value })} style={{ padding: '0.75rem', borderRadius: 10, border: '1px solid #BFDBFE', outline: 'none', fontSize: 14 }} />
-                      {/* Fecha de caducidad global solo para entrada sin requisición */}
-                      {!(movimientoData.requisicionId && productosDeRequisicion.length > 0) && (
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
-                          <label style={{ fontSize: 11, fontWeight: 600, color: '#1D4ED8' }}>Fecha de caducidad</label>
-                          <input type="date" value={movimientoData.fechaCaducidad} onChange={e => setMovimientoData({ ...movimientoData, fechaCaducidad: e.target.value })} style={{ padding: '0.75rem', borderRadius: 10, border: '1px solid #BFDBFE', outline: 'none', fontSize: 14 }} />
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                          <label style={lbE}>Núm. de factura *</label>
+                          <input type="text" value={movimientoData.numeroFactura} onChange={e => setMovimientoData({ ...movimientoData, numeroFactura: e.target.value })} style={inpE}/>
                         </div>
-                      )}
-                    </div>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                          <label style={lbE}>Importe de factura ($) *</label>
+                          <input type="number" value={movimientoData.importeFactura} onChange={e => setMovimientoData({ ...movimientoData, importeFactura: e.target.value })} style={inpE}/>
+                        </div>
+                      </div>
 
-                    {/* Estado de recepción */}
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                      <span style={{ fontSize: 12, fontWeight: 600, color: '#1D4ED8' }}>Estado de recepción</span>
-                      <select value={movimientoData.estadoRecepcion} onChange={e => setMovimientoData({ ...movimientoData, estadoRecepcion: e.target.value })} style={{ padding: '0.75rem', borderRadius: 10, border: '1px solid #BFDBFE', outline: 'none', fontSize: 14, background: 'white' }}>
-                        <option value="PENDIENTE">Pendiente de revisión — se validará en el Kardex</option>
-                        <option value="ACEPTADO">Aceptado — ingresa al inventario de inmediato</option>
-                      </select>
-                      {movimientoData.estadoRecepcion === 'ACEPTADO' && (
-                        <span style={{ fontSize: 11, color: '#15803D', background: '#F0FDF4', border: '1px solid #BBF7D0', borderRadius: 6, padding: '4px 8px' }}>
-                          El stock del producto se actualizará al registrar este movimiento.
-                        </span>
-                      )}
-                      {movimientoData.estadoRecepcion === 'PENDIENTE' && (
-                        <span style={{ fontSize: 11, color: '#CA8A04', background: '#FEFCE8', border: '1px solid #FDE68A', borderRadius: 6, padding: '4px 8px' }}>
-                          Quedará en espera. Desde el Kardex podrá aceptar o rechazar la recepción.
-                        </span>
-                      )}
-                    </div>
+                      {/* Estado de recepción — toggle */}
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                        <label style={lbE}>Estado de recepción</label>
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                          {(['PENDIENTE', 'ACEPTADO'] as const).map(est => {
+                            const active = movimientoData.estadoRecepcion === est;
+                            const isPend = est === 'PENDIENTE';
+                            return (
+                              <button key={est} type="button" onClick={() => setMovimientoData({ ...movimientoData, estadoRecepcion: est })}
+                                style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 2, padding: '10px 14px', borderRadius: 10, cursor: 'pointer', fontFamily: 'inherit', transition: 'all 0.15s',
+                                  border: `2px solid ${active ? (isPend ? '#FDE68A' : '#86EFAC') : '#E2E8F0'}`,
+                                  background: active ? (isPend ? '#FEFCE8' : '#F0FDF4') : 'white',
+                                  color: active ? (isPend ? '#92400E' : '#15803D') : '#94A3B8',
+                                }}>
+                                <span style={{ fontWeight: 700, fontSize: 13 }}>{isPend ? 'Pendiente' : 'Aceptado'}</span>
+                                <span style={{ fontSize: 10, lineHeight: 1.3, color: active ? (isPend ? '#B45309' : '#16A34A') : '#CBD5E1' }}>{isPend ? 'Se validará en el Kardex' : 'Ingresa al inventario de inmediato'}</span>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
 
-                    {/* Inspección visual */}
-                    <div style={{ background: 'white', border: '1px solid #BFDBFE', borderRadius: 10, padding: 12, display: 'flex', flexDirection: 'column', gap: 8 }}>
-                      <span style={{ fontSize: 12, fontWeight: 700, color: '#1D4ED8' }}>Inspección visual de mercancía</span>
-                      <span style={{ fontSize: 11, color: '#6B7280' }}>Verifique cada punto antes de registrar. Todos son obligatorios para aceptar la mercancía.</span>
-                      {[
-                        { key: 'empaqueCorrecto', label: 'Empaque en buen estado y correcto' },
-                        { key: 'cantidadCorrecta', label: 'Cantidad coincide con factura/orden' },
-                        { key: 'presentacionCorrecta', label: 'Presentación conforme a especificaciones' },
-                      ].map(({ key, label }) => (
-                        <label key={key} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: '#374151', cursor: 'pointer', padding: '2px 0' }}>
-                          <input
-                            type="checkbox"
-                            checked={movimientoData[key as keyof typeof movimientoData] as boolean}
-                            onChange={e => setMovimientoData({ ...movimientoData, [key]: e.target.checked })}
-                            style={{ width: 16, height: 16, cursor: 'pointer' }}
-                          />
-                          <span style={{ color: (movimientoData[key as keyof typeof movimientoData] as boolean) ? '#15803D' : '#6B7280' }}>{label}</span>
-                          {!(movimientoData[key as keyof typeof movimientoData] as boolean) && (
-                            <span style={{ color: '#DC2626', fontSize: 11, fontWeight: 600, marginLeft: 'auto' }}>
-                              <AlertTriangle size={10} style={{ display: 'inline', marginRight: 2 }} />No verificado
-                            </span>
-                          )}
-                        </label>
-                      ))}
-                    </div>
+                      {/* Inspección visual */}
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                        <label style={lbE}>Inspección visual de mercancía *</label>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                          {[
+                            { key: 'empaqueCorrecto',      label: 'Empaque en buen estado y correcto' },
+                            { key: 'cantidadCorrecta',     label: 'Cantidad coincide con factura / orden' },
+                            { key: 'presentacionCorrecta', label: 'Presentación conforme a especificaciones' },
+                          ].map(({ key, label }) => {
+                            const checked = movimientoData[key as keyof typeof movimientoData] as boolean;
+                            return (
+                              <label key={key} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', borderRadius: 10, cursor: 'pointer', transition: 'all 0.15s',
+                                background: checked ? '#F0FDF4' : '#F8FAFC',
+                                border: `1.5px solid ${checked ? '#86EFAC' : '#E2E8F0'}`,
+                              }}>
+                                <input type="checkbox" checked={checked} onChange={e => {
+                                  const newChecked = e.target.checked;
+                                  const newMov = { ...movimientoData, [key]: newChecked };
+                                  const anyFailed = !newMov.empaqueCorrecto || !newMov.cantidadCorrecta || !newMov.presentacionCorrecta;
+                                  setMovimientoData(newMov);
+                                  if (productosDeRequisicion.length > 0) {
+                                    setRecepcionEditada(prev => {
+                                      const updated: typeof prev = {};
+                                      productosDeRequisicion.forEach(d => {
+                                        const ed = prev[d.id] ?? { cantidadRecibida: 0, estado: 'CORRECTO', observaciones: '', lote: '', fechaCaducidad: '' };
+                                        const qty = ed.cantidadRecibida;
+                                        const estado = anyFailed ? 'RECHAZADO'
+                                          : qty === 0 ? (ed.estado === 'RECHAZADO' ? 'CORRECTO' : ed.estado)
+                                          : qty === d.cantidad ? 'CORRECTO'
+                                          : qty < d.cantidad ? 'INCOMPLETO'
+                                          : 'EXCEDENTE';
+                                        updated[d.id] = { ...ed, estado };
+                                      });
+                                      return { ...prev, ...updated };
+                                    });
+                                  }
+                                }} style={{ width: 16, height: 16, cursor: 'pointer', accentColor: '#16A34A' }}/>
+                                <span style={{ fontSize: 13, fontWeight: checked ? 600 : 400, color: checked ? '#15803D' : '#374151', flex: 1 }}>{label}</span>
+                                {checked
+                                  ? <CheckCircle2 size={15} color="#16A34A"/>
+                                  : <AlertTriangle size={14} color="#D97706"/>
+                                }
+                              </label>
+                            );
+                          })}
+                        </div>
+                      </div>
 
-                    {/* Norma operativa */}
-                    <div style={{ fontSize: 11, color: '#1E40AF', padding: '8px 12px', background: '#DBEAFE', borderRadius: 8, display: 'flex', alignItems: 'center', gap: 8, fontWeight: 500 }}>
-                      <AlertTriangle size={12} style={{ flexShrink: 0 }} />
-                      <span><strong>Norma operativa:</strong> Recepción de mercancías únicamente los <strong>jueves de 9:00 a 14:00 h</strong>.</span>
+                      {/* Norma operativa */}
+                      <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10, padding: '10px 14px', background: '#EFF6FF', border: '1px solid #BFDBFE', borderLeft: '3px solid #2563EB', borderRadius: 8, fontSize: 12, color: '#1E3A8A', fontWeight: 500 }}>
+                        <Bell size={13} color="#2563EB" style={{ flexShrink: 0, marginTop: 1 }}/>
+                        <span><strong>Norma operativa:</strong> Recepción de mercancías únicamente los <strong>jueves de 9:00 a 14:00 h</strong>.</span>
+                      </div>
                     </div>
                   </div>
                 )}
 
-                {/* Campos específicos SALIDA */}
+                {/* ══ SALIDA ══ */}
                 {movimientoData.tipo === 'SALIDA' && (
-                  <div style={{ border: '1px solid #BBF7D0', borderRadius: 14, padding: 16, background: '#F0FDF4', display: 'flex', flexDirection: 'column', gap: 10 }}>
-                    <div style={{ fontSize: 13, fontWeight: 700, color: '#15803D', marginBottom: 2 }}>Datos de salida</div>
-                    <select
-                      value={movimientoData.areaSolicitante}
-                      onChange={e => setMovimientoData({ ...movimientoData, areaSolicitante: e.target.value })}
-                      style={{ padding: '0.75rem', borderRadius: 10, border: '1px solid #BBF7D0', outline: 'none', fontSize: 14, background: 'white', fontFamily: 'inherit', color: movimientoData.areaSolicitante ? '#111827' : '#6B7280' }}
-                    >
-                      <option value="">Selecciona un área</option>
-                      <option value="Dirección General">Dirección General</option>
-                      <option value="Unidad de Transparencia">Unidad de Transparencia</option>
-                      <option value="Departamento Clínico">Departamento Clínico</option>
-                      <option value="Departamento Médico">Departamento Médico</option>
-                      <option value="Departamento de Admisiones">Departamento de Admisiones</option>
-                      <option value="Departamento de Administración">Departamento de Administración</option>
-                      <option value="Oficina de Recursos Materiales">Oficina de Recursos Materiales</option>
-                    </select>
-                    <input type="text" placeholder="Motivo / descripción" value={movimientoData.motivo} onChange={e => setMovimientoData({ ...movimientoData, motivo: e.target.value })} style={{ padding: '0.75rem', borderRadius: 10, border: '1px solid #BBF7D0', outline: 'none', fontSize: 14 }} />
-                    <input type="text" placeholder="Nombre de quien recibe" value={movimientoData.nombreRecibe} onChange={e => setMovimientoData({ ...movimientoData, nombreRecibe: e.target.value })} style={{ padding: '0.75rem', borderRadius: 10, border: '1px solid #BBF7D0', outline: 'none', fontSize: 14 }} />
+                  <div>
+                    <div style={secHdrS}>
+                      <ArrowUpRight size={14} color="white"/>
+                      <span style={{ fontSize: 13, fontWeight: 700, color: 'white', letterSpacing: '0.01em' }}>Despacho de mercancía</span>
+                    </div>
+                    <div style={secBodyS}>
+
+                      {/* Requisición */}
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+                        <label style={lbS}>Solicitud de suministro asociada</label>
+                        <select value={movimientoData.requisicionId} onChange={e => {
+                          const reqId = e.target.value;
+                          let newArea = movimientoData.areaSolicitante;
+                          if (reqId.startsWith('c:')) {
+                            const r = requisiciones.find(rq => String(rq.id) === reqId.slice(2));
+                            newArea = r?.requisicion?.areaSolicitante ?? r?.areaSolicitante ?? movimientoData.areaSolicitante;
+                          } else if (reqId) {
+                            const r = requisicionesDept.find(rq => String(rq.id) === reqId);
+                            newArea = r?.areaSolicitante ?? movimientoData.areaSolicitante;
+                          }
+                          setMovimientoData({ ...movimientoData, requisicionId: reqId, areaSolicitante: newArea });
+                        }} style={inpS}>
+                          <option value="">Sin solicitud asociada</option>
+                          {requisicionesDept.filter(r => ['EN_REVISION_ALMACEN', 'PARCIAL', 'SIN_EXISTENCIA', 'ENVIADA_A_COMPRAS'].includes(r.estado) && !usedSalidaReqIds.has(r.id)).length > 0 && (
+                            <optgroup label="Solicitudes de suministro">
+                              {requisicionesDept.filter(r => ['EN_REVISION_ALMACEN', 'PARCIAL', 'SIN_EXISTENCIA', 'ENVIADA_A_COMPRAS'].includes(r.estado) && !usedSalidaReqIds.has(r.id)).map(r => (
+                                <option key={r.id} value={String(r.id)}>{r.folio} — {r.areaSolicitante} — {(r.descripcion ?? '').slice(0, 40)}</option>
+                              ))}
+                            </optgroup>
+                          )}
+                          {comprasRecibidas.length > 0 && (
+                            <optgroup label="Compras recibidas en almacén">
+                              {comprasRecibidas.map(r => (
+                                <option key={`c${r.id}`} value={`c:${r.id}`}>
+                                  {r.folio} — {r.requisicion?.areaSolicitante ?? r.areaSolicitante ?? ''} — {(r.requisicion?.descripcion ?? r.descripcion ?? '').slice(0, 40)}
+                                </option>
+                              ))}
+                            </optgroup>
+                          )}
+                        </select>
+
+                        {/* Tabla despacho multi-producto */}
+                        {productosDeRequisicion.length > 0 && (
+                          <div style={{ marginTop: 8, border: '1px solid #BBF7D0', borderRadius: 10, overflow: 'hidden' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 12px', background: '#DCFCE7' }}>
+                              <span style={{ fontSize: 11, fontWeight: 700, color: '#14532D', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Despacho — {productosDeRequisicion.length} producto{productosDeRequisicion.length !== 1 ? 's' : ''}</span>
+                              {productosDeRequisicion.every(d => d.productoMatch) && (
+                                <span style={{ fontSize: 11, color: '#15803D', background: '#F0FDF4', border: '1px solid #BBF7D0', borderRadius: 6, padding: '2px 8px', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 4 }}><CheckCircle2 size={11}/>Todos en catálogo</span>
+                              )}
+                            </div>
+                            <div style={{ overflowX: 'auto' }}>
+                              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12, tableLayout: 'fixed' }}>
+                                <colgroup><col style={{ width: '35%' }}/><col style={{ width: '12%' }}/><col style={{ width: '15%' }}/><col style={{ width: '13%' }}/><col style={{ width: '25%' }}/></colgroup>
+                                <thead>
+                                  <tr>{['Producto','Solic.','A despachar','Estado','Observaciones'].map((h, i) => <th key={i} style={{ padding: '7px 8px', textAlign: 'left', fontWeight: 700, color: '#14532D', borderBottom: '1px solid #BBF7D0', fontSize: 11, background: '#F0FDF4' }}>{h}</th>)}</tr>
+                                </thead>
+                                <tbody>
+                                  {productosDeRequisicion.map((det, idx) => {
+                                    const edit = recepcionEditada[det.id] ?? { cantidadRecibida: det.cantidad, estado: 'CORRECTO', observaciones: '', lote: '', fechaCaducidad: '' };
+                                    const estadoColors: Record<string, { bg: string; text: string; border: string }> = { CORRECTO: { bg: '#F0FDF4', text: '#15803D', border: '#BBF7D0' }, INCOMPLETO: { bg: '#FEFCE8', text: '#CA8A04', border: '#FDE68A' }, EXCEDENTE: { bg: '#EFF6FF', text: '#2563EB', border: '#BFDBFE' }, RECHAZADO: { bg: '#FEF2F2', text: '#DC2626', border: '#FECACA' } };
+                                    const ec = estadoColors[edit.estado] ?? estadoColors.CORRECTO;
+                                    const rowBg = !det.productoMatch ? '#FFF7ED' : idx % 2 === 0 ? '#F8FFF8' : 'white';
+                                    return (
+                                      <tr key={det.id} style={{ background: rowBg, borderBottom: '1px solid #DCFCE7' }}>
+                                        <td style={{ padding: '8px 8px', verticalAlign: 'middle' }}>
+                                          <div style={{ fontWeight: 600, color: '#1E293B', fontSize: 12, lineHeight: 1.3 }}>{det.producto}</div>
+                                          <div style={{ fontSize: 10, color: '#64748B' }}>{det.unidad}</div>
+                                          {det.productoMatch
+                                            ? <div style={{ fontSize: 10, color: '#15803D', fontFamily: 'monospace' }}>{det.productoMatch.codigo}</div>
+                                            : <span style={{ fontSize: 10, color: '#B45309', fontWeight: 600 }}>Sin match en catálogo</span>}
+                                        </td>
+                                        <td style={{ padding: '8px 8px', verticalAlign: 'middle', textAlign: 'center', fontWeight: 700, color: '#374151', fontSize: 13 }}>{det.cantidad}</td>
+                                        <td style={{ padding: '8px 8px', verticalAlign: 'middle' }}><input type="number" min={0} value={edit.cantidadRecibida} onChange={e => setRecepcionEditada(prev => ({ ...prev, [det.id]: { ...edit, cantidadRecibida: Number(e.target.value) || 0 } }))} style={{ width: '100%', padding: '4px 6px', borderRadius: 6, border: '1px solid #BBF7D0', outline: 'none', fontSize: 12, textAlign: 'center', fontWeight: 700 }}/></td>
+                                        <td style={{ padding: '8px 8px', verticalAlign: 'middle' }}><select value={edit.estado} onChange={e => setRecepcionEditada(prev => ({ ...prev, [det.id]: { ...edit, estado: e.target.value } }))} style={{ width: '100%', padding: '4px 5px', borderRadius: 6, border: `1px solid ${ec.border}`, background: ec.bg, color: ec.text, fontWeight: 700, fontSize: 11, outline: 'none' }}><option value="CORRECTO">Correcto</option><option value="INCOMPLETO">Incompleto</option><option value="EXCEDENTE">Excedente</option><option value="RECHAZADO">Rechazado</option></select></td>
+                                        <td style={{ padding: '8px 8px', verticalAlign: 'middle' }}><input type="text" placeholder="Observaciones..." value={edit.observaciones} onChange={e => setRecepcionEditada(prev => ({ ...prev, [det.id]: { ...edit, observaciones: e.target.value } }))} style={{ width: '100%', padding: '4px 6px', borderRadius: 6, border: '1px solid #BBF7D0', outline: 'none', fontSize: 11 }}/></td>
+                                      </tr>
+                                    );
+                                  })}
+                                </tbody>
+                              </table>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Área, motivo, quien recibe */}
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                        <label style={lbS}>Área solicitante *</label>
+                        <select value={movimientoData.areaSolicitante} onChange={e => setMovimientoData({ ...movimientoData, areaSolicitante: e.target.value })} style={{ ...inpS, color: movimientoData.areaSolicitante ? '#111827' : '#6B7280' }}>
+                          <option value="">Selecciona un área...</option>
+                          <option value="Dirección General">Dirección General</option>
+                          <option value="Unidad de Transparencia">Unidad de Transparencia</option>
+                          <option value="Departamento Clínico">Departamento Clínico</option>
+                          <option value="Departamento Médico">Departamento Médico</option>
+                          <option value="Departamento de Admisiones">Departamento de Admisiones</option>
+                          <option value="Departamento de Administración">Departamento de Administración</option>
+                          <option value="Oficina de Recursos Materiales">Oficina de Recursos Materiales</option>
+                        </select>
+                      </div>
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                          <label style={lbS}>Motivo / descripción *</label>
+                          <input type="text" value={movimientoData.motivo} onChange={e => setMovimientoData({ ...movimientoData, motivo: e.target.value })} style={inpS}/>
+                        </div>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                          <label style={lbS}>Nombre de quien recibe *</label>
+                          <input type="text" value={movimientoData.nombreRecibe} onChange={e => setMovimientoData({ ...movimientoData, nombreRecibe: e.target.value })} style={inpS}/>
+                        </div>
+                      </div>
+                    </div>
                   </div>
                 )}
 
-                <textarea
-                  placeholder="Observaciones (opcional)"
-                  value={movimientoData.observaciones}
-                  onChange={e => setMovimientoData({ ...movimientoData, observaciones: e.target.value })}
-                  rows={2}
-                  style={{ padding: '0.75rem', borderRadius: 12, border: '1px solid #e2e8f0', outline: 'none', fontSize: 14, fontFamily: 'inherit', resize: 'vertical' }}
-                />
+                {/* Observaciones */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  <label style={lbN}>Observaciones</label>
+                  <textarea value={movimientoData.observaciones} onChange={e => setMovimientoData({ ...movimientoData, observaciones: e.target.value })} rows={2} placeholder="Notas adicionales sobre este movimiento..."
+                    style={{ padding: '0.75rem 1rem', borderRadius: 10, border: '1.5px solid #E2E8F0', outline: 'none', fontSize: 14, fontFamily: 'inherit', resize: 'vertical', background: '#FAFAFA', color: '#374151' }}/>
+                </div>
               </div>
             )}
 
-            <div style={{ display: 'flex', gap: '1rem', marginTop: '2rem' }}>
-              <button onClick={() => setShowModal(null)} style={{ flex: 1, padding: '1rem', borderRadius: '18px', border: '1px solid #e2e8f0', fontWeight: '700', color: '#64748b', background: 'white', cursor: 'pointer' }}>Cerrar</button>
+            <div style={{ display: 'flex', gap: '0.75rem', marginTop: '1.75rem' }}>
+              <button onClick={() => setShowModal(null)} style={{ flex: 1, padding: '0.875rem', borderRadius: '14px', border: '1.5px solid #E2E8F0', fontWeight: '700', color: '#64748b', background: 'white', cursor: 'pointer', fontSize: 14 }}>Cancelar</button>
               <button
                 onClick={() => {
                   if (showModal === 'NUEVO_PRODUCTO') {
@@ -1554,11 +1870,20 @@ export function Almacen() {
                   }
                 }}
                 disabled={crearProducto.isPending || registrarMovimiento.isPending || isSubmittingMultiple}
-                style={{ flex: 1, padding: '1rem', borderRadius: '18px', backgroundColor: 'var(--primary)', color: 'white', border: 'none', fontWeight: '800', boxShadow: '0 10px 15px -3px rgba(59, 130, 246, 0.3)', cursor: 'pointer', opacity: (crearProducto.isPending || registrarMovimiento.isPending || isSubmittingMultiple) ? 0.7 : 1 }}
+                style={{ flex: 2, padding: '0.875rem', borderRadius: '14px', border: 'none', fontWeight: '800', fontSize: 14, cursor: 'pointer', color: 'white', transition: 'opacity 0.15s',
+                  background: showModal === 'NUEVO_MOVIMIENTO'
+                    ? (movimientoData.tipo === 'ENTRADA' ? 'linear-gradient(135deg, #1D4ED8, #3B82F6)' : 'linear-gradient(135deg, #15803D, #22C55E)')
+                    : 'linear-gradient(135deg, #1D4ED8, #3B82F6)',
+                  boxShadow: showModal === 'NUEVO_MOVIMIENTO'
+                    ? (movimientoData.tipo === 'ENTRADA' ? '0 6px 18px rgba(37,99,235,0.35)' : '0 6px 18px rgba(22,163,74,0.35)')
+                    : '0 6px 18px rgba(37,99,235,0.35)',
+                  opacity: (crearProducto.isPending || registrarMovimiento.isPending || isSubmittingMultiple) ? 0.7 : 1,
+                }}
               >
                 {(crearProducto.isPending || registrarMovimiento.isPending || isSubmittingMultiple) ? 'Procesando...' : 'Confirmar Registro'}
               </button>
             </div>
+            </div>{/* end padding wrapper */}
           </div>
         </div>,
         document.body

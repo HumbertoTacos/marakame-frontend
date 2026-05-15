@@ -302,6 +302,74 @@ export function NuevaRequisicionModal({ isOpen, onClose, onSuccess }: Props) {
             </div>
           )}
 
+          {/* ── Tipo de Requisición ── */}
+          <div style={{ marginBottom: '1.75rem' }}>
+            <label style={{ ...sLabel, fontSize: '12px', marginBottom: '0.75rem' }}>
+              Tipo de Requisición <span style={{ color: '#ef4444' }}>*</span>
+            </label>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.85rem' }}>
+              {/* Ordinaria */}
+              <button
+                type="button"
+                onClick={() => setForm(prev => ({ ...prev, tipo: 'ORDINARIA' }))}
+                style={{
+                  padding: '1.1rem 1.25rem',
+                  borderRadius: '16px',
+                  border: form.tipo === 'ORDINARIA' ? '2.5px solid #3b82f6' : '2px solid #e2e8f0',
+                  backgroundColor: form.tipo === 'ORDINARIA' ? '#eff6ff' : 'white',
+                  cursor: 'pointer',
+                  textAlign: 'left',
+                  transition: 'all 0.15s',
+                  boxShadow: form.tipo === 'ORDINARIA' ? '0 0 0 4px rgba(59,130,246,0.1)' : 'none',
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', marginBottom: '0.4rem' }}>
+                  <div style={{
+                    width: '14px', height: '14px', borderRadius: '50%', flexShrink: 0,
+                    border: form.tipo === 'ORDINARIA' ? '4px solid #3b82f6' : '2px solid #cbd5e1',
+                    backgroundColor: form.tipo === 'ORDINARIA' ? 'white' : 'transparent',
+                  }} />
+                  <span style={{ fontSize: '14px', fontWeight: '800', color: form.tipo === 'ORDINARIA' ? '#1d4ed8' : '#475569' }}>
+                    Ordinaria
+                  </span>
+                </div>
+                <p style={{ margin: 0, fontSize: '12px', color: form.tipo === 'ORDINARIA' ? '#3b82f6' : '#94a3b8', lineHeight: '1.5', paddingLeft: '1.35rem' }}>
+                  Compra planificada dentro del presupuesto regular. Sigue el flujo estándar de aprobación.
+                </p>
+              </button>
+
+              {/* Extraordinaria */}
+              <button
+                type="button"
+                onClick={() => setForm(prev => ({ ...prev, tipo: 'EXTRAORDINARIA' }))}
+                style={{
+                  padding: '1.1rem 1.25rem',
+                  borderRadius: '16px',
+                  border: form.tipo === 'EXTRAORDINARIA' ? '2.5px solid #f59e0b' : '2px solid #e2e8f0',
+                  backgroundColor: form.tipo === 'EXTRAORDINARIA' ? '#fffbeb' : 'white',
+                  cursor: 'pointer',
+                  textAlign: 'left',
+                  transition: 'all 0.15s',
+                  boxShadow: form.tipo === 'EXTRAORDINARIA' ? '0 0 0 4px rgba(245,158,11,0.1)' : 'none',
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', marginBottom: '0.4rem' }}>
+                  <div style={{
+                    width: '14px', height: '14px', borderRadius: '50%', flexShrink: 0,
+                    border: form.tipo === 'EXTRAORDINARIA' ? '4px solid #f59e0b' : '2px solid #cbd5e1',
+                    backgroundColor: form.tipo === 'EXTRAORDINARIA' ? 'white' : 'transparent',
+                  }} />
+                  <span style={{ fontSize: '14px', fontWeight: '800', color: form.tipo === 'EXTRAORDINARIA' ? '#b45309' : '#475569' }}>
+                    Extraordinaria
+                  </span>
+                </div>
+                <p style={{ margin: 0, fontSize: '12px', color: form.tipo === 'EXTRAORDINARIA' ? '#d97706' : '#94a3b8', lineHeight: '1.5', paddingLeft: '1.35rem' }}>
+                  Compra urgente o fuera de presupuesto. Requiere justificación y autorización directa de Dirección.
+                </p>
+              </button>
+            </div>
+          </div>
+
           {/* ── Datos generales ── */}
           <p style={sSectionTitle}>
             <span style={{ width: 6, height: 6, backgroundColor: '#3b82f6', borderRadius: '50%', flexShrink: 0 }} />
@@ -321,24 +389,21 @@ export function NuevaRequisicionModal({ isOpen, onClose, onSuccess }: Props) {
             </div>
             <div>
               <label style={sLabel}>Área Solicitante *</label>
-              <input
-                placeholder="Ej: Área Médica, Cocina, Admisiones…"
+              <select
                 value={form.areaSolicitante}
                 onChange={e => setField('areaSolicitante', e.target.value)}
                 style={inp(!!errors.areaSolicitante)}
-              />
-              {errors.areaSolicitante && <p style={sErrorMsg}>{errors.areaSolicitante}</p>}
-            </div>
-            <div>
-              <label style={sLabel}>Tipo de Requisición</label>
-              <select
-                value={form.tipo}
-                onChange={e => setForm(prev => ({ ...prev, tipo: e.target.value as 'ORDINARIA' | 'EXTRAORDINARIA' }))}
-                style={inp()}
               >
-                <option value="ORDINARIA">Ordinaria</option>
-                <option value="EXTRAORDINARIA">Extraordinaria</option>
+                <option value="">— Seleccionar área —</option>
+                <option>Dirección General</option>
+                <option>Unidad de Transparencia</option>
+                <option>Departamento Clínico</option>
+                <option>Departamento Médico</option>
+                <option>Departamento de Admisiones</option>
+                <option>Departamento de Administración</option>
+                <option>Oficina de Recursos Materiales</option>
               </select>
+              {errors.areaSolicitante && <p style={sErrorMsg}>{errors.areaSolicitante}</p>}
             </div>
             <div>
               <label style={sLabel}>Quién Solicita *</label>
@@ -488,16 +553,6 @@ export function NuevaRequisicionModal({ isOpen, onClose, onSuccess }: Props) {
                   </div>
                 </div>
 
-                {/* Fila 3: Justificación individual */}
-                <div>
-                  <label style={sLabel}>Justificación del Artículo</label>
-                  <input
-                    placeholder="¿Por qué se necesita este artículo?"
-                    value={art.justificacion}
-                    onChange={e => setArticuloField(idx, 'justificacion', e.target.value)}
-                    style={inp()}
-                  />
-                </div>
               </div>
             ))}
           </div>

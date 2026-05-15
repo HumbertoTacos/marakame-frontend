@@ -96,9 +96,14 @@ export function Layout() {
     return '/dashboard';
   };
 
-  const getNavItemClass = (path: string) => {
-    const isActive = location.pathname.includes(path);
-    return `nav-item ${isActive ? 'active' : ''}`;
+  const getNavItemClass = (path: string, navKey?: string) => {
+    const pathMatch = location.pathname === `/${path}` || location.pathname.startsWith(`/${path}/`);
+    if (!pathMatch) return 'nav-item';
+    if (navKey) {
+      const stateKey = (location.state as { navKey?: string } | null)?.navKey;
+      return `nav-item ${stateKey === navKey ? 'active' : ''}`;
+    }
+    return 'nav-item active';
   };
 
   return (
@@ -212,7 +217,7 @@ export function Layout() {
           {(['RRHH_FINANZAS', 'RECURSOS_HUMANOS', 'ADMIN_GENERAL'].includes(usuario?.rol || '')) && (
             <>
               <div className="sidebar-section-title">Recursos Humanos</div>
-              <div className={getNavItemClass('nominas')} onClick={() => navigate('/nominas')}>
+              <div className={getNavItemClass('nominas', 'rrhh-nominas')} onClick={() => navigate('/nominas', { state: { navKey: 'rrhh-nominas' } })}>
                 <Banknote size={20} style={{ marginRight: '1rem' }}/> Nóminas y Personal
               </div>
             </>
@@ -225,7 +230,7 @@ export function Layout() {
               <div className={getNavItemClass('administracion')} onClick={() => navigate('/administracion')}>
                 <ClipboardCheck size={20} style={{ marginRight: '1rem' }}/> Revisión de Pre-Nóminas
               </div>
-              <div className={getNavItemClass('nominas')} onClick={() => navigate('/nominas')}>
+              <div className={getNavItemClass('nominas', 'jefatura-nominas')} onClick={() => navigate('/nominas', { state: { navKey: 'jefatura-nominas' } })}>
                 <Banknote size={20} style={{ marginRight: '1rem' }}/> Nóminas y RRHH
               </div>
               <div className={getNavItemClass('revision-compras')} onClick={() => navigate('/revision-compras')}>

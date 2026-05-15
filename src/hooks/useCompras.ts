@@ -11,9 +11,13 @@ import {
     registrarCotizacionCatalogo,
     registrarCotizacionesBulk,
     enviarARevisionAdministrativa,
+    aprobarCompraAdministracion,
     generarExpedienteCompra,
     enviarAFinanzasCompra,
     finalizarCompraService,
+    agregarCotizacionProducto,
+    seleccionarCotizacionProducto,
+    type NuevaCotizacionProductoPayload,
     } from '../services/compras.service';
     import type { EstadoCompra } from '../types';
 
@@ -152,6 +156,14 @@ import {
         },
     });
 
+    const aprobarAdministracion = useMutation({
+        mutationFn: ({ id, observaciones }: { id: number; observaciones?: string }) =>
+            aprobarCompraAdministracion(id, observaciones),
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ['compras'] });
+        },
+    });
+
     const genExpediente = useMutation({
         mutationFn: ({ id, observaciones }: { id: number; observaciones?: string }) =>
             generarExpedienteCompra(id, observaciones),
@@ -195,6 +207,22 @@ import {
         },
     });
 
+    const addCotProducto = useMutation({
+        mutationFn: ({ id, data }: { id: number; data: NuevaCotizacionProductoPayload }) =>
+            agregarCotizacionProducto(id, data),
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ['compras'] });
+        },
+    });
+
+    const selectCotProducto = useMutation({
+        mutationFn: ({ compraId, cotizacionId }: { compraId: number; cotizacionId: number }) =>
+            seleccionarCotizacionProducto(compraId, cotizacionId),
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ['compras'] });
+        },
+    });
+
     return {
         requisiciones:
             requisicionesQuery.data || [],
@@ -206,7 +234,10 @@ import {
         deleteCot,
         createCotCatalogo,
         createCotBulk,
+        addCotProducto,
+        selectCotProducto,
         enviarAdministracion,
+        aprobarAdministracion,
         createOrden,
         createOrdenPago,
         uploadFactura,

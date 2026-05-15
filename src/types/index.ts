@@ -515,6 +515,11 @@ export interface Cotizacion {
   precio: number;
   tiempoEntrega?: string;
   formaPago?: string;
+  condicionesPago?: string;
+  garantia?: string;
+  marca?: string;
+  modelo?: string;
+  observaciones?: string;
   requisicionId?: number;
   esMejorOpcion?: boolean;
 }
@@ -535,7 +540,9 @@ export interface OrdenCompra {
 
   fecha: string;
 
-  proveedor: string;
+  proveedor: string | { id: number; nombre: string };
+
+  proveedorId?: number;
 
   total: number;
 
