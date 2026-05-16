@@ -916,15 +916,6 @@ export function Almacen() {
               >
                 <CheckCircle2 size={15} />
                 Finalizadas
-                {(() => {
-                  const count = requisicionesDept.filter(r => r.estado === 'FINALIZADA').length;
-                  return count > 0 ? (
-                    <span style={{
-                      background: showFinalizadas ? 'rgba(255,255,255,0.25)' : '#15803D',
-                      color: 'white', borderRadius: 20, padding: '1px 7px', fontSize: 11, fontWeight: 700,
-                    }}>{count}</span>
-                  ) : null;
-                })()}
               </button>
             )}
           </div>

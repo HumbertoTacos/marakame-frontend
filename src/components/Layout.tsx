@@ -208,7 +208,7 @@ export function Layout() {
             <>
               <div className="sidebar-section-title">Logística</div>
               <div className={getNavItemClass('almacen')} onClick={() => navigate('/almacen')}>
-                <PackageOpen size={20} style={{ marginRight: '1rem' }}/> Almacén General
+                <PackageOpen size={20} style={{ marginRight: '1rem' }}/> Inventario General
               </div>
             </>
           )}
