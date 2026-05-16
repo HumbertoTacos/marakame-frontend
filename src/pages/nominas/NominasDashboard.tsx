@@ -169,19 +169,42 @@ const NominasDashboard: React.FC = () => {
   };
 
   const empleadosActivos = empleados.filter((e: any) => e.activo !== false).length;
-  const nominaEnProceso = nominas.find((n: Nomina) => n.estado !== 'PAGADO' && n.estado !== 'BORRADOR');
-  
-  // El flujo ya no incluye "Dirección" como paso explícito (se autocompleta con Administración).
-  // Visiblemente contamos 3 firmas: Finanzas, Administración y RH.
+  const nominasEnProceso = nominas.filter((n: Nomina) => n.estado !== 'PAGADO' && n.estado !== 'BORRADOR');
+
+  // Totales por régimen — cada pre-nómina trae empleado.regimen (CONFIANZA / LISTA_RAYA).
+  // Si el régimen no viene en la pre-nómina caemos al de la nómina (legacy).
+  let totalRaya = 0;
+  let totalConfianza = 0;
+  for (const n of nominasEnProceso) {
+    const prenominas = ((n as any).prenominas as any[]) || [];
+    if (prenominas.length === 0) {
+      // Fallback: sin desglose por empleado, usamos el régimen de la nómina entera.
+      const monto = Number(n.totalNetoPagar || 0);
+      if ((n as any).regimen === 'LISTA_RAYA') totalRaya += monto;
+      else                                     totalConfianza += monto;
+      continue;
+    }
+    for (const pn of prenominas) {
+      const reg = pn.empleado?.regimen || (n as any).regimen;
+      const monto = Number(pn.totalAPagar || 0);
+      if (reg === 'LISTA_RAYA') totalRaya += monto;
+      else                      totalConfianza += monto;
+    }
+  }
+  const totalGeneral = totalRaya + totalConfianza;
+
+  // Flujo de 4 firmas: Finanzas → Administración → Dirección → Recursos Humanos.
   const nominasPendientesFirma = nominas.filter((n: Nomina) => {
-    const firmas = [n.firmaRecursosHumanos, n.firmaFinanzas, n.firmaAdministracion];
-    return firmas.filter(Boolean).length < 3 && n.estado !== 'BORRADOR';
+    const firmas = [n.firmaFinanzas, n.firmaAdministracion, (n as any).firmaDireccion, n.firmaRecursosHumanos];
+    return firmas.filter(Boolean).length < 4 && n.estado !== 'BORRADOR';
   }).length;
 
   const stats = [
     { label: 'Empleados Activos', value: empleadosActivos, icon: Users, color: '#3b82f6', bg: '#eff6ff' },
-    { label: 'Nóminas en Proceso', value: nominaEnProceso ? 1 : 0, icon: Calendar, color: '#f59e0b', bg: '#fffbeb' },
-    { label: 'Total a Pagar (Actual)', value: nominaEnProceso ? formatCurrency(nominaEnProceso.totalNetoPagar || 0) : '$0.00', icon: Banknote, color: '#10b981', bg: '#f0fdf4' },
+    { label: 'Nóminas en Proceso', value: nominasEnProceso.length, icon: Calendar, color: '#f59e0b', bg: '#fffbeb' },
+    { label: 'Total Lista de Raya', value: formatCurrency(totalRaya),     icon: Banknote, color: '#0ea5e9', bg: '#e0f2fe' },
+    { label: 'Total Confianza',     value: formatCurrency(totalConfianza), icon: Banknote, color: '#8b5cf6', bg: '#f5f3ff' },
+    { label: 'Total General',       value: formatCurrency(totalGeneral),   icon: Banknote, color: '#10b981', bg: '#f0fdf4' },
     { label: 'Pendientes de Firma', value: nominasPendientesFirma, icon: FileSignature, color: '#ef4444', bg: '#fef2f2' },
   ];
 
@@ -233,6 +256,25 @@ const NominasDashboard: React.FC = () => {
             Nueva requisición
           </button>
         </div>
+
+        {puedeCrear && (
+          <div style={{ display: 'flex', gap: '1rem' }}>
+            <button
+              onClick={openCreateModal}
+              style={{ backgroundColor: 'white', color: '#1e293b', border: '1px solid #e2e8f0', padding: '0.75rem 1.5rem', borderRadius: '12px', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}
+            >
+              <UserPlus size={20} color="#3b82f6" />
+              Nuevo Empleado
+            </button>
+            <button
+              onClick={() => navigate('/nominas/nueva')}
+              style={{ backgroundColor: '#3b82f6', color: 'white', border: 'none', padding: '0.75rem 1.5rem', borderRadius: '12px', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', boxShadow: '0 4px 6px -1px rgba(59,130,246,0.3)' }}
+            >
+              <FileText size={20} />
+              Crear Pre-Nómina
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Banner de error si fetchNominas falló */}
@@ -340,13 +382,12 @@ const NominasDashboard: React.FC = () => {
                   </thead>
                   <tbody>
                     {nominasFiltradas.length > 0 ? nominasFiltradas.map((nomina: Nomina) => {
-                      // Sólo contamos las 3 firmas visibles del flujo (Finanzas, Administración, RH).
-                      // firmaDireccion se setea automáticamente cuando Administración firma.
-                      const firmas = [nomina.firmaRecursosHumanos, nomina.firmaFinanzas, nomina.firmaAdministracion];
+                      // Flujo completo de 4 firmas: Finanzas → Administración → Dirección → RH.
+                      const firmas = [nomina.firmaFinanzas, nomina.firmaAdministracion, (nomina as any).firmaDireccion, nomina.firmaRecursosHumanos];
                       const firmasCompletadas = firmas.filter(Boolean).length;
 
                       let estadoVisual = nomina.estado;
-                      if (firmasCompletadas === 3 && (estadoVisual === 'EN_REVISION' || estadoVisual === 'SOLICITUD_SUBSIDIO')) {
+                      if (firmasCompletadas === 4 && (estadoVisual === 'EN_REVISION' || estadoVisual === 'SOLICITUD_SUBSIDIO')) {
                         estadoVisual = 'AUTORIZADO';
                       }
 
@@ -368,9 +409,9 @@ const NominasDashboard: React.FC = () => {
                           <td style={{ padding: '1.25rem 1.5rem' }}>
                             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                               <div style={{ width: '100px', height: '6px', backgroundColor: '#e2e8f0', borderRadius: '3px', overflow: 'hidden' }}>
-                                <div style={{ width: `${(firmasCompletadas / 3) * 100}%`, height: '100%', backgroundColor: firmasCompletadas === 3 ? '#10b981' : '#3b82f6' }}></div>
+                                <div style={{ width: `${(firmasCompletadas / 4) * 100}%`, height: '100%', backgroundColor: firmasCompletadas === 4 ? '#10b981' : '#3b82f6' }}></div>
                               </div>
-                              <span style={{ fontSize: '12px', fontWeight: '700', color: '#64748b' }}>{firmasCompletadas}/3</span>
+                              <span style={{ fontSize: '12px', fontWeight: '700', color: '#64748b' }}>{firmasCompletadas}/4</span>
                             </div>
                           </td>
                           <td style={{ padding: '1.25rem 1.5rem', textAlign: 'right' }}>

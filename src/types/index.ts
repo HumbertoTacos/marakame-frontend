@@ -4,6 +4,7 @@
 
 export type Rol =
   | 'ADMIN_GENERAL'
+  | 'DIRECCION'
   | 'AREA_MEDICA'
   | 'ENFERMERIA'
   | 'NUTRICION'
@@ -14,7 +15,10 @@ export type Rol =
   | 'JEFE_ADMINISTRATIVO'
   | 'ADMISIONES'
   | 'ALMACEN'
-  | 'JEFE_MEDICO';
+  | 'JEFE_MEDICO'
+  | 'JEFE_CLINICO'
+  | 'JEFE_ADMISIONES'
+  | 'DIRECCION_GENERAL';      // titular que firma el paso 3 del flujo de nómina
 
 export const EstadoPaciente = {
   PROSPECTO: 'PROSPECTO',
@@ -292,6 +296,7 @@ export interface Usuario {
   apellidos: string;
   correo: string;
   rol: Rol;
+  esJefe?: boolean;
   activo: boolean;
 }
 
@@ -738,7 +743,7 @@ export interface PreNomina {
   empleado?: Empleado;
 }
 
-export interface Auditoria {
+export interface RegistroBitacora {
   id: number;
   createdAt: string;
   usuario: Usuario;

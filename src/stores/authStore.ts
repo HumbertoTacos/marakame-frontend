@@ -3,6 +3,7 @@ import { persist } from 'zustand/middleware';
 
 type Rol =
   | 'ADMIN_GENERAL'
+  | 'DIRECCION'
   | 'AREA_MEDICA'
   | 'NUTRICION'
   | 'PSICOLOGIA'
@@ -13,7 +14,10 @@ type Rol =
   | 'ADMISIONES'
   | 'ALMACEN'
   | 'ENFERMERIA'
-  | 'JEFE_MEDICO';
+  | 'JEFE_MEDICO'
+  | 'JEFE_CLINICO'
+  | 'JEFE_ADMISIONES'
+  | 'DIRECCION_GENERAL';
 
 interface Usuario {
   id: number;

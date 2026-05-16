@@ -2,6 +2,7 @@ import React, { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Briefcase, FileText, ChevronRight, AlertCircle, FileSignature } from 'lucide-react';
 import { useNominaStore } from '../../stores/nominaStore';
+import { useAuthStore } from '../../stores/authStore';
 import type { Nomina } from '../../types';
 
 const getEstadoConfig = (estado: string) => {
@@ -17,9 +18,14 @@ const getEstadoConfig = (estado: string) => {
 
 const DashboardAdministracion: React.FC = () => {
   const navigate = useNavigate();
+  const { usuario } = useAuthStore();
   const { nominas, fetchNominas, isLoading } = useNominaStore();
 
   useEffect(() => { fetchNominas(); }, [fetchNominas]);
+
+  // JEFE_ADMINISTRATIVO solo observa (sin firma). ADMIN_GENERAL puede entrar al detalle.
+  const soloLectura = usuario?.rol === 'JEFE_ADMINISTRATIVO';
+  const abrirDetalle = (id: number) => { if (!soloLectura) navigate(`/nominas/${id}`); };
 
   // Pendientes para Jefatura: ya firmó Finanzas pero falta tu firma de Administración.
   const pendientesAdmin = nominas.filter((n: Nomina) => n.firmaFinanzas && !n.firmaAdministracion);
@@ -34,7 +40,9 @@ const DashboardAdministracion: React.FC = () => {
           <Briefcase size={28} color="#7c3aed" /> Jefatura Administrativa
         </h1>
         <p style={{ color: '#64748b', fontSize: '15px', marginTop: '4px' }}>
-          Revisión y firma intermedia del flujo de nómina antes de pasar a Dirección General.
+          {soloLectura
+            ? 'Resumen del flujo de nómina (vista de solo lectura para Jefatura Administrativa).'
+            : 'Revisión y firma intermedia del flujo de nómina antes de pasar a Dirección General.'}
         </p>
       </div>
 
@@ -50,7 +58,7 @@ const DashboardAdministracion: React.FC = () => {
             No hay pre-nóminas pendientes de tu revisión.
           </div>
         ) : (
-          pendientesAdmin.map((n: Nomina) => <NominaRow key={n.id} nomina={n} onClick={() => navigate(`/nominas/${n.id}`)} />)
+          pendientesAdmin.map((n: Nomina) => <NominaRow key={n.id} nomina={n} onClick={() => abrirDetalle(n.id)} />)
         )}
       </div>
 
@@ -62,7 +70,7 @@ const DashboardAdministracion: React.FC = () => {
         {haciaDireccion.length === 0 ? (
           <div style={{ padding: '1.5rem', textAlign: 'center', color: '#94a3b8', fontSize: '13px' }}>Sin registros.</div>
         ) : (
-          haciaDireccion.map((n: Nomina) => <NominaRow key={n.id} nomina={n} onClick={() => navigate(`/nominas/${n.id}`)} compacto />)
+          haciaDireccion.map((n: Nomina) => <NominaRow key={n.id} nomina={n} onClick={() => abrirDetalle(n.id)} compacto />)
         )}
       </div>
 
@@ -72,7 +80,7 @@ const DashboardAdministracion: React.FC = () => {
         {yaCerradas.length === 0 ? (
           <div style={{ padding: '1.5rem', textAlign: 'center', color: '#94a3b8', fontSize: '13px' }}>Sin registros.</div>
         ) : (
-          yaCerradas.map((n: Nomina) => <NominaRow key={n.id} nomina={n} onClick={() => navigate(`/nominas/${n.id}`)} compacto />)
+          yaCerradas.map((n: Nomina) => <NominaRow key={n.id} nomina={n} onClick={() => abrirDetalle(n.id)} compacto />)
         )}
       </div>
     </div>

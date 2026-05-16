@@ -88,12 +88,7 @@ export function Reportes() {
           </button>
         </div>
 
-        {/* Placeholders Futuros */}
-        <div style={{ backgroundColor: '#f7fafc', borderRadius: '8px', padding: '2rem', border: '1px dashed #cbd5e0', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: '#a0aec0' }}>
-          <Lock size={32} style={{ marginBottom: '1rem' }} />
-          <h2 style={{ fontSize: '16px', fontWeight: 'bold', margin: '0 0 0.5rem 0' }}>Sábana de Nóminas (Próximamente)</h2>
-          <p style={{ fontSize: '12px', textAlign: 'center' }}>Módulo de exportación financiera en desarrollo por el equipo de ingeniería.</p>
-        </div>
+
 
       </div>
     </div>
