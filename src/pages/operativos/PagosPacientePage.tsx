@@ -31,6 +31,8 @@ interface Cargo {
   usuarioCarga: { nombre: string; apellidos: string };
 }
 
+type EstadoValidacion = 'PENDIENTE_VALIDACION' | 'VALIDADO' | 'OBSERVADO' | 'DEPOSITADO' | 'FACTURADO';
+
 interface Pago {
   id: number;
   monto: number;
@@ -38,8 +40,19 @@ interface Pago {
   fechaPago: string;
   metodoPago: string;
   facturado: boolean;
+  folioRecibo: string | null;
+  estadoValidacion: EstadoValidacion;
+  observaciones: string | null;
   usuarioRecibe: { nombre: string; apellidos: string };
 }
+
+const ESTADO_VALIDACION_STYLE: Record<EstadoValidacion, { label: string; bg: string; color: string }> = {
+  PENDIENTE_VALIDACION: { label: 'Por validar',  bg: '#fef3c7', color: '#d97706' },
+  OBSERVADO:            { label: 'Observado',    bg: '#fee2e2', color: '#dc2626' },
+  VALIDADO:             { label: 'Validado',     bg: '#dbeafe', color: '#2563eb' },
+  DEPOSITADO:           { label: 'Depositado',   bg: '#ede9fe', color: '#7c3aed' },
+  FACTURADO:            { label: 'Facturado',    bg: '#dcfce7', color: '#16a34a' },
+};
 
 interface EstadoCuenta {
   paciente: { id: number; claveUnica: string | null; nombre: string; estado: string; fechaIngreso: string; cama: string };
@@ -67,22 +80,26 @@ const ModalRegistrarPago = ({
   isOpen, onClose, paciente, onSuccess,
 }: { isOpen: boolean; onClose: () => void; paciente: ResumenPaciente | null; onSuccess: () => void }) => {
   const { usuario } = useAuthStore();
-  const [form, setForm] = useState({ monto: '', metodoPago: 'EFECTIVO', concepto: '' });
+  const [form, setForm] = useState({ monto: '', metodoPago: 'EFECTIVO', concepto: '', folioRecibo: '' });
   const [error, setError] = useState('');
+
+  const esEfectivo = form.metodoPago === 'EFECTIVO';
 
   const mutation = useMutation({
     mutationFn: () => apiClient.post(`/pagos/paciente/${paciente!.id}`, {
       monto: parseFloat(form.monto),
       metodoPago: form.metodoPago,
       concepto: form.concepto,
+      folioRecibo: esEfectivo ? form.folioRecibo.trim() : undefined,
     }),
-    onSuccess: () => { onSuccess(); onClose(); setForm({ monto: '', metodoPago: 'EFECTIVO', concepto: '' }); setError(''); },
+    onSuccess: () => { onSuccess(); onClose(); setForm({ monto: '', metodoPago: 'EFECTIVO', concepto: '', folioRecibo: '' }); setError(''); },
     onError: (err: any) => setError(err.response?.data?.message || 'Error al registrar el pago'),
   });
 
   const handleSubmit = () => {
     if (!form.monto || parseFloat(form.monto) <= 0) return setError('Ingresa un monto válido');
     if (!form.concepto.trim()) return setError('El concepto es requerido');
+    if (esEfectivo && !form.folioRecibo.trim()) return setError('El folio de recibo es obligatorio para pagos en efectivo');
     setError('');
     mutation.mutate();
   };
@@ -128,12 +145,36 @@ const ModalRegistrarPago = ({
               {Object.entries(METODO_LABELS).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
             </select>
           </div>
+          {esEfectivo && (
+            <div>
+              <label style={{ fontSize: '13px', fontWeight: '700', color: '#374151', display: 'block', marginBottom: '0.4rem' }}>
+                Folio del recibo foliado *
+              </label>
+              <input
+                type="text"
+                placeholder="Ej: REC-001234"
+                value={form.folioRecibo}
+                onChange={e => setForm(f => ({ ...f, folioRecibo: e.target.value }))}
+                style={inp}
+              />
+              <p style={{ margin: '0.4rem 0 0', fontSize: '11px', color: '#94a3b8', fontWeight: '600' }}>
+                Captura el folio del talonario físico. Recursos Financieros validará el cuadre con el monto.
+              </p>
+            </div>
+          )}
           <div>
             <label style={{ fontSize: '13px', fontWeight: '700', color: '#374151', display: 'block', marginBottom: '0.4rem' }}>Concepto *</label>
             <input type="text" placeholder="Ej: Mensualidad Mayo, Semana 3..." value={form.concepto}
               onChange={e => setForm(f => ({ ...f, concepto: e.target.value }))} style={inp} />
           </div>
         </div>
+
+        {esEfectivo && (
+          <div style={{ marginTop: '1rem', padding: '0.75rem 1rem', backgroundColor: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: '12px', color: '#1e40af', fontSize: '12px', fontWeight: '600', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+            <AlertCircle size={14} />
+            El pago entrará al flujo de validación de Recursos Financieros.
+          </div>
+        )}
 
         {error && (
           <div style={{ marginTop: '1rem', padding: '0.75rem 1rem', backgroundColor: '#fef2f2', border: '1px solid #fecaca', borderRadius: '12px', color: '#ef4444', fontSize: '13px', fontWeight: '600' }}>
@@ -339,36 +380,50 @@ const DetallePaciente = ({
                 <thead>
                   <tr style={{ color: '#94a3b8', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
                     <th style={{ textAlign: 'left', padding: '0 1rem', fontWeight: '800' }}>Fecha</th>
+                    <th style={{ textAlign: 'left', padding: '0 1rem', fontWeight: '800' }}>Folio</th>
                     <th style={{ textAlign: 'left', padding: '0 1rem', fontWeight: '800' }}>Concepto</th>
                     <th style={{ textAlign: 'left', padding: '0 1rem', fontWeight: '800' }}>Método</th>
-                    <th style={{ textAlign: 'left', padding: '0 1rem', fontWeight: '800' }}>Recibió</th>
+                    <th style={{ textAlign: 'left', padding: '0 1rem', fontWeight: '800' }}>Estado</th>
                     <th style={{ textAlign: 'right', padding: '0 1rem', fontWeight: '800' }}>Monto</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {pagos.map(pago => (
-                    <tr key={pago.id} style={{ backgroundColor: '#f8fafc', borderRadius: '12px' }}>
-                      <td style={{ padding: '1rem', borderRadius: '12px 0 0 12px' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#475569', fontSize: '13px', fontWeight: '600' }}>
-                          <Clock size={14} /> {new Date(pago.fechaPago).toLocaleDateString('es-MX')}
-                        </div>
-                      </td>
-                      <td style={{ padding: '1rem' }}>
-                        <span style={{ fontWeight: '700', color: '#1e293b', fontSize: '14px' }}>{pago.concepto}</span>
-                      </td>
-                      <td style={{ padding: '1rem' }}>
-                        <span style={{ backgroundColor: `${METODO_COLORS[pago.metodoPago]}18`, color: METODO_COLORS[pago.metodoPago], padding: '0.3rem 0.75rem', borderRadius: '8px', fontSize: '12px', fontWeight: '800', border: `1px solid ${METODO_COLORS[pago.metodoPago]}30` }}>
-                          {METODO_LABELS[pago.metodoPago] ?? pago.metodoPago}
-                        </span>
-                      </td>
-                      <td style={{ padding: '1rem', fontSize: '13px', color: '#64748b', fontWeight: '600' }}>
-                        {pago.usuarioRecibe.nombre} {pago.usuarioRecibe.apellidos}
-                      </td>
-                      <td style={{ padding: '1rem', textAlign: 'right', borderRadius: '0 12px 12px 0' }}>
-                        <span style={{ fontSize: '16px', fontWeight: '900', color: '#10b981' }}>{fmt(pago.monto)}</span>
-                      </td>
-                    </tr>
-                  ))}
+                  {pagos.map(pago => {
+                    const estilo = ESTADO_VALIDACION_STYLE[pago.estadoValidacion];
+                    return (
+                      <tr key={pago.id} style={{ backgroundColor: '#f8fafc', borderRadius: '12px' }}>
+                        <td style={{ padding: '1rem', borderRadius: '12px 0 0 12px' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#475569', fontSize: '13px', fontWeight: '600' }}>
+                            <Clock size={14} /> {new Date(pago.fechaPago).toLocaleDateString('es-MX')}
+                          </div>
+                        </td>
+                        <td style={{ padding: '1rem', fontSize: '13px', color: '#475569', fontWeight: '700', fontFamily: 'ui-monospace, monospace' }}>
+                          {pago.folioRecibo ?? '—'}
+                        </td>
+                        <td style={{ padding: '1rem' }}>
+                          <span style={{ fontWeight: '700', color: '#1e293b', fontSize: '14px' }}>{pago.concepto}</span>
+                          {pago.observaciones && (
+                            <p style={{ margin: '0.25rem 0 0', fontSize: '11px', color: '#dc2626', fontWeight: '600' }} title={pago.observaciones}>
+                              Obs: {pago.observaciones.length > 40 ? pago.observaciones.slice(0, 40) + '…' : pago.observaciones}
+                            </p>
+                          )}
+                        </td>
+                        <td style={{ padding: '1rem' }}>
+                          <span style={{ backgroundColor: `${METODO_COLORS[pago.metodoPago]}18`, color: METODO_COLORS[pago.metodoPago], padding: '0.3rem 0.75rem', borderRadius: '8px', fontSize: '12px', fontWeight: '800', border: `1px solid ${METODO_COLORS[pago.metodoPago]}30` }}>
+                            {METODO_LABELS[pago.metodoPago] ?? pago.metodoPago}
+                          </span>
+                        </td>
+                        <td style={{ padding: '1rem' }}>
+                          <span style={{ backgroundColor: estilo.bg, color: estilo.color, padding: '0.3rem 0.75rem', borderRadius: '8px', fontSize: '12px', fontWeight: '800' }}>
+                            {estilo.label}
+                          </span>
+                        </td>
+                        <td style={{ padding: '1rem', textAlign: 'right', borderRadius: '0 12px 12px 0' }}>
+                          <span style={{ fontSize: '16px', fontWeight: '900', color: '#10b981' }}>{fmt(pago.monto)}</span>
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             )

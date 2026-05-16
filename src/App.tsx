@@ -64,6 +64,10 @@ const UsuariosPage = lazy(() => import('./pages/admin/UsuariosPage'));
 const DashboardDirectora = lazy(() => import('./pages/admin/DashboardDirectora'));
 const PagosPacientePage = lazy(() => import('./pages/operativos/PagosPacientePage'));
 
+// Recursos Financieros — Fase 1: Ingresos Propios
+const IngresosPendientes = lazy(() => import('./pages/financieros/IngresosPendientes'));
+const FacturasMensuales  = lazy(() => import('./pages/financieros/FacturasMensuales'));
+
 // Paneles de jefatura (solo lectura/resumen)
 const DashboardJefeClinico = lazy(() => import('./pages/jefes/DashboardJefeClinico'));
 const DashboardJefeAdmisiones = lazy(() => import('./pages/jefes/DashboardJefeAdmisiones'));
@@ -184,6 +188,17 @@ function App() {
                 <DashboardFinanzas />
               </ProtectedRoute>
             } />
+
+            {/* Recursos Financieros — Fase 1: Ingresos Propios */}
+            <Route path="financieros" element={
+              <ProtectedRoute allowedRoles={['RECURSOS_FINANCIEROS', 'RRHH_FINANZAS', 'ADMIN_GENERAL']}>
+                <Outlet />
+              </ProtectedRoute>
+            }>
+              <Route index element={<Navigate to="ingresos" replace />} />
+              <Route path="ingresos" element={<IngresosPendientes />} />
+              <Route path="facturas" element={<FacturasMensuales />} />
+            </Route>
 
             {/* Dashboard de Jefatura Administrativa */}
             <Route path="administracion" element={

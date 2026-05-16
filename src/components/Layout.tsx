@@ -1,5 +1,5 @@
 import { Outlet, useNavigate, useLocation } from 'react-router-dom';
-import { LogOut, Search, Bell, HeartPulse, Stethoscope, PackageOpen, ShoppingCart, Banknote, ShieldAlert, FileOutput, ChevronRight, Users, Clock, ClipboardList, LayoutDashboard, Droplets, FlaskConical, UserCog, ClipboardCheck, Wallet, CalendarCheck } from 'lucide-react';
+import { LogOut, Search, Bell, HeartPulse, Stethoscope, PackageOpen, ShoppingCart, Banknote, ShieldAlert, FileOutput, ChevronRight, Users, Clock, ClipboardList, LayoutDashboard, Droplets, FlaskConical, UserCog, ClipboardCheck, Wallet, CalendarCheck, Inbox, FileText } from 'lucide-react';
 import { useState, useEffect, useCallback } from 'react';
 import { useAuthStore } from '../stores/authStore';
 import { notificacionService, type Notificacion } from '../services/notificacion.service';
@@ -226,6 +226,16 @@ export function Layout() {
                 <div className={getNavItemClass('finanzas')} onClick={() => navigate('/finanzas')}>
                   <Banknote size={20} style={{ marginRight: '1rem' }}/> Panel de Finanzas
                 </div>
+              )}
+              {(['RECURSOS_FINANCIEROS', 'ADMIN_GENERAL'].includes(usuario?.rol || '')) && (
+                <>
+                  <div className={getNavItemClass('financieros/ingresos')} onClick={() => navigate('/financieros/ingresos')}>
+                    <Inbox size={20} style={{ marginRight: '1rem' }}/> Bandeja de Ingresos
+                  </div>
+                  <div className={getNavItemClass('financieros/facturas')} onClick={() => navigate('/financieros/facturas')}>
+                    <FileText size={20} style={{ marginRight: '1rem' }}/> Facturas Mensuales
+                  </div>
+                </>
               )}
               <div className={getNavItemClass('compras')} onClick={() => navigate('/compras')}>
                 <ShoppingCart size={20} style={{ marginRight: '1rem' }}/> Control de Compras
