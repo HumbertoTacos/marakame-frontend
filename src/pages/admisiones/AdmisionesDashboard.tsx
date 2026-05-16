@@ -1,8 +1,9 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import {
   Users, Bed, Clock as ClockIcon, Calendar, Phone,
-  FileText, MapPin, PhoneCall, ChevronLeft, ChevronRight
+  FileText, MapPin, PhoneCall, ChevronLeft, ChevronRight, ClipboardList
 } from 'lucide-react';
+import { NuevaRequisicionModal } from '../../components/common/NuevaRequisicionModal';
 import { useIngresoStore } from '../../stores/ingresoStore';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import apiClient from '../../services/api';
@@ -54,6 +55,7 @@ const AdmisionesDashboard: React.FC = () => {
 
   const [selectedSolicitud, setSelectedSolicitud] = useState<SolicitudIngreso | null>(null);
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
+  const [showNuevaRequisicion, setShowNuevaRequisicion] = useState(false);
 
   // Estado para el mes actual del calendario
   const [currentDate, setCurrentDate] = useState(new Date());
@@ -229,6 +231,13 @@ const AdmisionesDashboard: React.FC = () => {
           <h1 style={{ fontSize: '32px', fontWeight: '900', color: '#1e293b', margin: 0, letterSpacing: '-1px' }}>Dashboard de Admisiones</h1>
           <p style={{ color: '#64748b', fontSize: '16px', marginTop: '4px' }}>Gestión centralizada de solicitudes, ingresos y agenda residencial.</p>
         </div>
+        <button
+          onClick={() => setShowNuevaRequisicion(true)}
+          style={{ backgroundColor: 'white', color: '#1e293b', border: '1px solid #e2e8f0', padding: '0.75rem 1.5rem', borderRadius: '12px', fontWeight: '700', display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}
+        >
+          <ClipboardList size={18} color="#3b82f6" />
+          Nueva requisición
+        </button>
       </div>
 
       {/* MÉTRICAS (Mantenido intacto) */}
@@ -317,6 +326,11 @@ const AdmisionesDashboard: React.FC = () => {
       <style>{`
         @keyframes spin { to { transform: rotate(360deg); } }
       `}</style>
+
+      <NuevaRequisicionModal
+        isOpen={showNuevaRequisicion}
+        onClose={() => setShowNuevaRequisicion(false)}
+      />
     </div>
   );
 };
