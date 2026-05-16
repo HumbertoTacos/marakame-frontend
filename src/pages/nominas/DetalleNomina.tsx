@@ -106,7 +106,7 @@ export const DetalleNomina = () => {
   };
 
   const handleCerrarNomina = async () => {
-    if (!window.confirm('Vas a cerrar la nómina aplicando los descuentos por faltas no justificadas del periodo. Esta acción no se puede deshacer. ¿Continuar?')) return;
+    if (!window.confirm('Vas a cerrar la nómina aplicando los descuentos por faltas no justificadas del periodo y generar los recibos finales (PDF, un recibo por empleado para firma del trabajador). Esta acción no se puede deshacer. ¿Continuar?')) return;
     try {
       setCerrandoNomina(true);
       const res = await apiClient.post(`/nominas/ciclo/${nominaId}/cerrar`);
@@ -152,6 +152,7 @@ export const DetalleNomina = () => {
   const link = (rel?: string | null) => (rel ? `${apiBase}${rel}` : null);
   const preNominaPdfAbs     = link((nomina as any).archivoUrl);
   const subsidioUrlAbs      = link((nomina as any).archivoSubsidioUrl);
+  const nominaFinalPdfAbs   = link((nomina as any).archivoNominaFinalUrl);
 
   return (
     <div style={{ padding: '2rem', maxWidth: '1400px', margin: '0 auto', backgroundColor: '#f8fafc', minHeight: '100vh' }}>
@@ -262,11 +263,11 @@ export const DetalleNomina = () => {
                 </p>
               </div>
 
-              {/* CTA: Cerrar nómina (calcula descuentos por faltas y firma de RH automáticamente) */}
+              {/* CTA: Cerrar nómina (calcula descuentos, firma de RH y genera PDF final) */}
               <div style={{ backgroundColor: 'white', padding: '1.5rem 2rem', borderRadius: '20px', border: '1px solid #e2e8f0', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)' }}>
-                <h3 style={{ margin: '0 0 6px 0', color: '#1e293b' }}>Cerrar nómina y aplicar descuentos</h3>
+                <h3 style={{ margin: '0 0 6px 0', color: '#1e293b' }}>Cerrar nómina y generar recibos finales</h3>
                 <p style={{ margin: '0 0 1rem 0', fontSize: '13px', color: '#64748b', lineHeight: 1.5 }}>
-                  El sistema recalcula cada recibo descontando las faltas no justificadas del periodo (sueldo/15 × días de falta). Al confirmar se aplica tu firma de RH y la nómina queda lista para que Finanzas la archive.
+                  Antes de cerrar, ve a <strong>Justificaciones</strong> y aprueba/rechaza los pendientes — el salario calculado de cada empleado se actualiza en tiempo real. Al confirmar aquí, el sistema descuenta las faltas no aprobadas (sueldo/15 × días), aplica tu firma de RH y genera un PDF con un recibo por empleado listo para imprimir y recoger la firma del trabajador antes de mandarlo a Finanzas.
                 </p>
                 <button
                   onClick={handleCerrarNomina}
@@ -279,7 +280,7 @@ export const DetalleNomina = () => {
                   }}
                 >
                   {cerrandoNomina ? <Loader2 size={18} className="animate-spin" /> : <Calculator size={18} />}
-                  {cerrandoNomina ? 'Calculando y cerrando…' : 'Calcular y cerrar nómina'}
+                  {cerrandoNomina ? 'Calculando, cerrando y generando PDF…' : 'Calcular, cerrar y generar recibos'}
                 </button>
               </div>
             </div>
@@ -287,19 +288,33 @@ export const DetalleNomina = () => {
 
           {/* PASO 5: Finanzas archiva */}
           {estadoReal === 'AUTORIZADO' && firmaRH && esFinanzas && (
-            <div style={{ backgroundColor: '#1e293b', padding: '1.5rem 2rem', borderRadius: '20px', color: 'white', display: 'flex', justifyContent: 'space-between', alignItems: 'center', boxShadow: '0 10px 15px -3px rgba(0,0,0,0.1)' }}>
-              <div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '6px' }}>
-                  <Banknote size={22} color="#34d399" />
-                  <h2 style={{ margin: 0, fontSize: '18px', fontWeight: '900' }}>Lista para archivar</h2>
+            <div style={{ backgroundColor: '#1e293b', padding: '1.5rem 2rem', borderRadius: '20px', color: 'white', boxShadow: '0 10px 15px -3px rgba(0,0,0,0.1)' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem' }}>
+                <div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '6px' }}>
+                    <Banknote size={22} color="#34d399" />
+                    <h2 style={{ margin: 0, fontSize: '18px', fontWeight: '900' }}>Lista para archivar</h2>
+                  </div>
+                  <p style={{ margin: 0, color: '#94a3b8', fontSize: '13px', maxWidth: '600px' }}>
+                    RH ya cerró la nómina y generó los recibos finales. Verifica que estén firmados por el trabajador y archiva para cerrar el ciclo.
+                  </p>
                 </div>
-                <p style={{ margin: 0, color: '#94a3b8', fontSize: '13px', maxWidth: '600px' }}>
-                  RH ya entregó la nómina firmada por el trabajador. Archiva para cerrar el ciclo.
-                </p>
+                <button onClick={handleArchivar} style={{ backgroundColor: '#34d399', color: '#064e3b', border: 'none', padding: '0.8rem 1.5rem', borderRadius: '12px', fontWeight: '900', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <Archive size={18} /> Archivar Nómina
+                </button>
               </div>
-              <button onClick={handleArchivar} style={{ backgroundColor: '#34d399', color: '#064e3b', border: 'none', padding: '0.8rem 1.5rem', borderRadius: '12px', fontWeight: '900', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <Archive size={18} /> Archivar Nómina
-              </button>
+              {nominaFinalPdfAbs && (
+                <a
+                  href={nominaFinalPdfAbs}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  style={{ marginTop: '1rem', display: 'inline-flex', alignItems: 'center', gap: '8px', padding: '0.6rem 1rem', backgroundColor: '#0f172a', border: '1px solid #334155', borderRadius: '10px', color: '#a7f3d0', textDecoration: 'none', fontWeight: '700', fontSize: '13px' }}
+                >
+                  <FileText size={14} />
+                  Ver recibos finales (PDF)
+                  <ExternalLink size={12} />
+                </a>
+              )}
             </div>
           )}
         </div>
@@ -334,6 +349,11 @@ export const DetalleNomina = () => {
             url={subsidioUrlAbs}
             etiqueta="Solicitud de subsidio — subido por Finanzas"
             faltaTexto="Aún no se sube el documento de subsidio"
+          />
+          <ArchivoLink
+            url={nominaFinalPdfAbs}
+            etiqueta="Nómina final (PDF, un recibo por empleado) — generado al cerrar"
+            faltaTexto="Aún no se cierra la nómina (paso de RH)"
           />
         </div>
       </div>

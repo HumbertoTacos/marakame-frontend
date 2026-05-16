@@ -52,6 +52,9 @@ const ControlAsistencias: React.FC = () => {
   const [celdaEditar, setCeldaEditar] = useState<{ empleado: any; fechaStr: string; registro: any | null } | null>(null);
   const [justificarEmpleado, setJustificarEmpleado] = useState<any | null>(null);
   const [incidenciaSeleccionada, setIncidenciaSeleccionada] = useState<any | null>(null);
+  // Para RRHH: ver el justificante GENERAL de un empleado en la quincena
+  // (un solo motivo + archivo que cubre todos los días que el jefe justificó).
+  const [verJustificante, setVerJustificante] = useState<{ empleado: any; motivo: string; documentoUrl: string | null } | null>(null);
 
   useEffect(() => { fetchEmpleados(); }, [fetchEmpleados]);
 
@@ -190,7 +193,7 @@ const ControlAsistencias: React.FC = () => {
           </h1>
           <p style={{ color: '#64748b', fontSize: '15px', marginTop: '4px' }}>
             {veTodo
-              ? 'Vista quincenal de todas las áreas — clic en una celda para editar el día; justificación quincenal por empleado.'
+              ? 'Revisa los justificantes y aprueba/rechaza día por día (clic en el punto amarillo). El salario calculado se actualiza en tiempo real.'
               : 'Vista quincenal de tu equipo — clic en una celda para editar el día; justificación quincenal por empleado.'}
           </p>
         </div>
@@ -257,7 +260,7 @@ const ControlAsistencias: React.FC = () => {
                       <th key={d.dia} style={{ padding: '0.75rem 0.25rem', fontSize: '11px', fontWeight: '900', color: '#475569', width: '32px' }}>{d.dia}</th>
                     ))}
                     <th style={{ padding: '0.75rem 0.75rem', fontSize: '11px', fontWeight: '900', color: '#b91c1c' }}>FALTAS</th>
-                    <th style={{ padding: '0.75rem 0.75rem', fontSize: '11px', fontWeight: '900', color: '#64748b' }}>QUINCENA</th>
+                    <th style={{ padding: '0.75rem 0.75rem', fontSize: '11px', fontWeight: '900', color: '#64748b' }}>{veTodo ? 'SALARIO CALC.' : 'QUINCENA'}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -271,11 +274,33 @@ const ControlAsistencias: React.FC = () => {
                       if (r.tipo === 'FALTA' && r.estadoJustificacion !== 'APROBADA') faltas++;
                     });
 
+                    // Justificante quincenal del empleado: el backend duplica motivo+archivo en
+                    // todas las FALTAs del periodo cuando el jefe sube uno solo. Tomamos el primero
+                    // que tenga datos como representativo del documento general.
+                    const regConJustif = asistenciasEmp.find(
+                      a => a.tipo === 'FALTA' && (a.motivoJustificacion || a.documentoUrl)
+                    );
+                    const justificanteEmp = regConJustif
+                      ? {
+                          motivo: regConJustif.motivoJustificacion || '',
+                          documentoUrl: regConJustif.documentoUrl || null,
+                        }
+                      : null;
+
                     return (
                       <tr key={emp.id} style={{ borderBottom: '1px solid #e2e8f0' }}>
                         <td style={{ padding: '0.75rem 1rem', textAlign: 'left', position: 'sticky', left: 0, backgroundColor: 'white', zIndex: 1 }}>
                           <p style={{ margin: 0, fontWeight: '800', color: '#1e293b', fontSize: '12px' }}>{emp.nombre} {emp.apellidos}</p>
                           <p style={{ margin: 0, color: '#94a3b8', fontSize: '10px' }}>{emp.puesto}</p>
+                          {veTodo && justificanteEmp && (
+                            <button
+                              onClick={() => setVerJustificante({ empleado: emp, motivo: justificanteEmp.motivo, documentoUrl: justificanteEmp.documentoUrl })}
+                              title="Ver el justificante quincenal que subió el jefe (motivo + archivo)"
+                              style={{ marginTop: 4, display: 'inline-flex', alignItems: 'center', gap: 4, padding: '3px 8px', borderRadius: 6, border: '1px solid #fde68a', backgroundColor: '#fffbeb', color: '#92400e', fontSize: 10, fontWeight: 800, cursor: 'pointer' }}
+                            >
+                              <Paperclip size={10} /> Ver justificante
+                            </button>
+                          )}
                         </td>
 
                         {diasQuincena.map(d => {
@@ -286,39 +311,54 @@ const ControlAsistencias: React.FC = () => {
                           const rechazada = estado === 'RECHAZADA';
                           const pendiente = estado === 'PENDIENTE';
                           const tieneJustificante = !!(registroDia?.motivoJustificacion || registroDia?.documentoUrl);
+                          const esFalta = tipo === 'FALTA';
+
+                          // Para RRHH/Admin, una FALTA es siempre decidible (click directo abre la revisión).
+                          // Para jefes, click abre el editor de asistencia (cambiar a ASISTENCIA/FALTA).
+                          const clickRevisa = veTodo && esFalta && !!registroDia;
+                          const handleCellClick = () => {
+                            if (clickRevisa) setIncidenciaSeleccionada({ ...registroDia, empleado: emp });
+                            else setCeldaEditar({ empleado: emp, fechaStr: d.fechaStr, registro: registroDia || null });
+                          };
 
                           let icono: React.ReactNode = <span style={{ color: '#cbd5e1', fontWeight: '700' }}>·</span>;
                           if (tipo === 'ASISTENCIA') icono = <Check size={15} color="#10b981" style={{ margin: '0 auto' }} />;
-                          else if (tipo === 'FALTA') icono = aprobada
+                          else if (esFalta) icono = aprobada
                             ? <Check size={15} color="#10b981" style={{ margin: '0 auto' }} />
                             : <X size={15} color={rechazada ? '#b91c1c' : '#ef4444'} style={{ margin: '0 auto' }} />;
+
+                          // Color de fondo según estado (para RRHH es más informativo).
+                          let bg: string | undefined;
+                          if (esFalta && pendiente) bg = '#fefce8';            // amarillo: pendiente de decisión
+                          else if (esFalta && aprobada) bg = '#ecfdf5';        // verde: justificada
+                          else if (esFalta && rechazada) bg = '#fef2f2';       // rojo claro: rechazada
+
+                          const titleTxt = clickRevisa
+                            ? `${d.fechaStr} — falta ${pendiente ? 'pendiente de decisión' : aprobada ? 'justificada' : 'no justificada'} · click para revisar`
+                            : `${d.fechaStr} — click para editar`;
 
                           return (
                             <td
                               key={d.dia}
-                              onClick={() => setCeldaEditar({ empleado: emp, fechaStr: d.fechaStr, registro: registroDia || null })}
-                              title={`${d.fechaStr} — click para editar`}
+                              onClick={handleCellClick}
+                              title={titleTxt}
                               style={{
                                 padding: '0.5rem',
                                 borderLeft: '1px solid #f1f5f9',
                                 cursor: 'pointer',
                                 position: 'relative',
-                                backgroundColor: pendiente && tieneJustificante ? '#fefce8' : undefined
+                                backgroundColor: bg
                               }}
                             >
                               {icono}
-                              {aprobada && tipo === 'FALTA' && (
+                              {esFalta && aprobada && (
                                 <span style={{ position: 'absolute', top: 2, right: 2, width: 6, height: 6, borderRadius: '50%', backgroundColor: '#10b981' }} />
                               )}
-                              {rechazada && tieneJustificante && (
+                              {esFalta && rechazada && (
                                 <span style={{ position: 'absolute', top: 2, right: 2, width: 6, height: 6, borderRadius: '50%', backgroundColor: '#b91c1c' }} />
                               )}
-                              {pendiente && tieneJustificante && (
-                                <button
-                                  onClick={(e) => { e.stopPropagation(); setIncidenciaSeleccionada({ ...registroDia, empleado: emp }); }}
-                                  title="Revisar justificación"
-                                  style={{ position: 'absolute', bottom: 1, right: 1, width: 12, height: 12, borderRadius: '50%', backgroundColor: '#eab308', color: 'white', border: 'none', fontSize: '9px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: '900' }}
-                                >!</button>
+                              {esFalta && pendiente && tieneJustificante && (
+                                <span title="Tiene justificante quincenal del jefe" style={{ position: 'absolute', bottom: 1, right: 1, width: 8, height: 8, borderRadius: '50%', backgroundColor: '#eab308' }} />
                               )}
                             </td>
                           );
@@ -326,20 +366,41 @@ const ControlAsistencias: React.FC = () => {
 
                         <td style={{ padding: '0.75rem 0.75rem', fontWeight: 'bold', color: faltas > 0 ? '#ef4444' : '#64748b', fontSize: '13px', backgroundColor: '#fef2f2' }}>{faltas}</td>
                         <td style={{ padding: '0.5rem 0.75rem' }}>
-                          <button
-                            onClick={() => setJustificarEmpleado(emp)}
-                            disabled={faltas === 0}
-                            title={faltas === 0 ? 'Sin faltas por justificar' : 'Justificar faltas de toda la quincena'}
-                            style={{
-                              padding: '5px 10px', borderRadius: '8px', border: 'none',
-                              backgroundColor: faltas === 0 ? '#e2e8f0' : '#8b5cf6',
-                              color: faltas === 0 ? '#94a3b8' : 'white',
-                              cursor: faltas === 0 ? 'not-allowed' : 'pointer',
-                              fontSize: '11px', fontWeight: '800', display: 'inline-flex', alignItems: 'center', gap: '4px'
-                            }}
-                          >
-                            <Paperclip size={12} /> Justificar
-                          </button>
+                          {veTodo ? (() => {
+                            // Cálculo en tiempo real para RRHH/Admin.
+                            //   neto = sueldoBase + compensación − ISR(8%) − (sueldoBase/15 × faltas no aprobadas)
+                            const sueldoBase  = Number((emp as any).salarioBase) || 0;
+                            const comp        = Number((emp as any).compensacionFija) || 0;
+                            const isr         = sueldoBase * 0.08;
+                            const tarifaDia   = sueldoBase / 15;
+                            const descFaltas  = tarifaDia * faltas;
+                            const neto        = Math.max(sueldoBase + comp - isr - descFaltas, 0);
+                            const fmt         = new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN', maximumFractionDigits: 0 });
+                            const tieneDesc   = descFaltas > 0;
+                            return (
+                              <div title={tieneDesc ? `Descuento por faltas: ${fmt.format(descFaltas)}` : 'Sin descuentos en la quincena'} style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', minWidth: '90px' }}>
+                                <span style={{ fontSize: '13px', fontWeight: '900', color: tieneDesc ? '#b45309' : '#047857' }}>{fmt.format(neto)}</span>
+                                {tieneDesc && (
+                                  <span style={{ fontSize: '10px', color: '#b91c1c', fontWeight: '700' }}>−{fmt.format(descFaltas)}</span>
+                                )}
+                              </div>
+                            );
+                          })() : (
+                            <button
+                              onClick={() => setJustificarEmpleado(emp)}
+                              disabled={faltas === 0}
+                              title={faltas === 0 ? 'Sin faltas por justificar' : 'Justificar faltas de toda la quincena'}
+                              style={{
+                                padding: '5px 10px', borderRadius: '8px', border: 'none',
+                                backgroundColor: faltas === 0 ? '#e2e8f0' : '#8b5cf6',
+                                color: faltas === 0 ? '#94a3b8' : 'white',
+                                cursor: faltas === 0 ? 'not-allowed' : 'pointer',
+                                fontSize: '11px', fontWeight: '800', display: 'inline-flex', alignItems: 'center', gap: '4px'
+                              }}
+                            >
+                              <Paperclip size={12} /> Justificar
+                            </button>
+                          )}
                         </td>
                       </tr>
                     );
@@ -353,10 +414,12 @@ const ControlAsistencias: React.FC = () => {
 
       {/* LEYENDA */}
       <div style={{ marginTop: '1.5rem', backgroundColor: 'white', border: '1px solid #e2e8f0', borderRadius: '12px', padding: '1rem 1.25rem', display: 'flex', flexWrap: 'wrap', gap: '1.25rem', fontSize: '12px', color: '#475569', fontWeight: '600' }}>
-        <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}><Check size={14} color="#10b981" /> Asistencia / justificación aprobada</span>
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}><Check size={14} color="#10b981" /> Asistencia / día justificado</span>
         <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}><X size={14} color="#ef4444" /> Falta</span>
-        <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}><span style={{ width: 12, height: 12, borderRadius: 3, backgroundColor: '#fefce8', border: '1px solid #facc15' }} /> Pendiente de revisión</span>
-        <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}><span style={{ width: 6, height: 6, borderRadius: '50%', backgroundColor: '#b91c1c' }} /> Justificación rechazada</span>
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}><span style={{ width: 12, height: 12, borderRadius: 3, backgroundColor: '#fefce8', border: '1px solid #facc15' }} /> Pendiente de decisión</span>
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}><span style={{ width: 12, height: 12, borderRadius: 3, backgroundColor: '#ecfdf5', border: '1px solid #86efac' }} /> Justificada (no descuenta)</span>
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}><span style={{ width: 12, height: 12, borderRadius: 3, backgroundColor: '#fef2f2', border: '1px solid #fecaca' }} /> No justificada (descuenta)</span>
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}><span style={{ width: 8, height: 8, borderRadius: '50%', backgroundColor: '#eab308' }} /> Tiene justificante del jefe</span>
       </div>
 
       {/* MODAL: editar celda */}
@@ -392,6 +455,82 @@ const ControlAsistencias: React.FC = () => {
           onDecidir={handleDecidirJustificacion}
         />
       )}
+
+      {/* MODAL: ver justificante quincenal GENERAL del empleado (sólo lectura, para RRHH) */}
+      {verJustificante && (
+        <JustificanteEmpleadoModal
+          empleado={verJustificante.empleado}
+          motivo={verJustificante.motivo}
+          documentoUrl={verJustificante.documentoUrl}
+          onClose={() => setVerJustificante(null)}
+        />
+      )}
+    </div>
+  );
+};
+
+// ────────────────────────────────────────────────────────────────────────────
+// Modal: ver el justificante quincenal GENERAL de un empleado (motivo + archivo
+// que subió el jefe). De aquí no se decide nada — la decisión por día se hace
+// con click en cada celda del grid.
+// ────────────────────────────────────────────────────────────────────────────
+const JustificanteEmpleadoModal: React.FC<{
+  empleado: any;
+  motivo: string;
+  documentoUrl: string | null;
+  onClose: () => void;
+}> = ({ empleado, motivo, documentoUrl, onClose }) => {
+  const apiBase = (apiClient.defaults.baseURL || '').replace(/\/api\/v1\/?$/, '');
+  const tieneMotivo = !!(motivo && motivo.trim());
+  const tieneArchivo = !!documentoUrl;
+
+  return (
+    <div onClick={onClose} style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(15,23,42,0.55)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: '1rem' }}>
+      <div onClick={(e) => e.stopPropagation()} style={{ backgroundColor: 'white', borderRadius: '16px', maxWidth: '520px', width: '100%', overflow: 'hidden', boxShadow: '0 25px 50px -12px rgba(0,0,0,0.25)' }}>
+        <div style={{ padding: '1.25rem 1.5rem', borderBottom: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+          <div>
+            <h3 style={{ margin: 0, fontWeight: '900', color: '#1e293b', fontSize: '18px' }}>Justificante quincenal</h3>
+            <p style={{ margin: '4px 0 0', color: '#64748b', fontSize: '13px' }}>
+              {empleado.nombre} {empleado.apellidos} · {empleado.puesto || empleado.departamento}
+            </p>
+          </div>
+          <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#64748b' }}>
+            <X size={20} />
+          </button>
+        </div>
+
+        <div style={{ padding: '1.25rem 1.5rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+          <div style={{ padding: '0.7rem 0.85rem', backgroundColor: '#eff6ff', borderRadius: '8px', border: '1px solid #bfdbfe', fontSize: '12px', color: '#1e40af', lineHeight: 1.5 }}>
+            Este justificante cubre toda la quincena. Usalo como referencia: decide día por día en el grid si justificas o no cada falta.
+          </div>
+
+          <div>
+            <p style={{ margin: '0 0 6px 0', fontSize: '11px', fontWeight: '800', color: '#475569', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Motivo</p>
+            <div style={{ padding: '0.75rem', backgroundColor: '#f8fafc', borderRadius: '8px', border: '1px solid #e2e8f0', fontSize: '13px', color: tieneMotivo ? '#1e293b' : '#94a3b8', fontStyle: tieneMotivo ? 'normal' : 'italic' }}>
+              {tieneMotivo ? motivo : 'El jefe no capturó motivo.'}
+            </div>
+          </div>
+
+          <div>
+            <p style={{ margin: '0 0 6px 0', fontSize: '11px', fontWeight: '800', color: '#475569', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Archivo adjunto</p>
+            {tieneArchivo ? (
+              <a href={`${apiBase}${documentoUrl}`} target="_blank" rel="noopener noreferrer" style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '0.75rem', backgroundColor: '#eff6ff', borderRadius: '8px', border: '1px solid #bfdbfe', color: '#1d4ed8', textDecoration: 'none', fontSize: '13px', fontWeight: '600' }}>
+                <FileText size={16} />
+                <span style={{ flex: 1 }}>Ver justificante</span>
+                <Eye size={14} />
+              </a>
+            ) : (
+              <div style={{ padding: '0.75rem', backgroundColor: '#f1f5f9', borderRadius: '8px', border: '1px dashed #cbd5e1', fontSize: '12px', color: '#94a3b8', fontStyle: 'italic' }}>
+                Sin archivo adjunto
+              </div>
+            )}
+          </div>
+        </div>
+
+        <div style={{ padding: '0.75rem 1.5rem', backgroundColor: '#f8fafc', borderTop: '1px solid #e2e8f0', fontSize: '11px', color: '#64748b', textAlign: 'right' }}>
+          Cierra esta ventana y haz clic en cada día con falta para decidir.
+        </div>
+      </div>
     </div>
   );
 };
@@ -587,9 +726,7 @@ const RevisarModal: React.FC<{
   const aprobada = incidencia.estadoJustificacion === 'APROBADA';
   const rechazada = incidencia.estadoJustificacion === 'RECHAZADA';
   const pendiente = !aprobada && !rechazada;
-  const tieneDocumento = !!incidencia.documentoUrl;
-  const tieneMotivo = incidencia.motivoJustificacion && incidencia.motivoJustificacion.trim() !== '';
-  const apiBase = (apiClient.defaults.baseURL || '').replace(/\/api\/v1\/?$/, '');
+  const tieneJustificanteQuincenal = !!(incidencia.motivoJustificacion || incidencia.documentoUrl);
 
   const decidir = async (aprobar: boolean) => {
     setDecidiendo(true);
@@ -602,7 +739,7 @@ const RevisarModal: React.FC<{
         <div style={{ padding: '1.5rem', borderBottom: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
           <div>
             <h3 style={{ margin: 0, fontWeight: '900', color: '#1e293b', fontSize: '18px' }}>
-              Revisar falta
+              Decidir falta del día {toYMD(incidencia.fecha).slice(8, 10)}
             </h3>
             <p style={{ margin: '4px 0 0', color: '#64748b', fontSize: '13px' }}>
               {incidencia.empleado?.nombre} {incidencia.empleado?.apellidos} · {toYMD(incidencia.fecha)}
@@ -615,41 +752,26 @@ const RevisarModal: React.FC<{
 
         <div style={{ padding: '1.5rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <span style={{ fontSize: '12px', fontWeight: '700', color: '#475569' }}>Estado:</span>
+            <span style={{ fontSize: '12px', fontWeight: '700', color: '#475569' }}>Estado actual:</span>
             <span style={{
               padding: '4px 12px', borderRadius: '999px', fontSize: '11px', fontWeight: '800',
               backgroundColor: aprobada ? '#dcfce7' : rechazada ? '#fee2e2' : '#fef9c3',
               color: aprobada ? '#047857' : rechazada ? '#b91c1c' : '#854d0e'
             }}>
-              {aprobada ? 'APROBADA' : rechazada ? 'RECHAZADA' : 'PENDIENTE DE REVISIÓN'}
+              {aprobada ? 'JUSTIFICADA' : rechazada ? 'NO JUSTIFICADA' : 'PENDIENTE DE DECISIÓN'}
             </span>
           </div>
 
-          <div>
-            <p style={{ margin: '0 0 6px 0', fontSize: '12px', fontWeight: '700', color: '#475569' }}>Motivo</p>
-            <div style={{ padding: '0.75rem', backgroundColor: '#f8fafc', borderRadius: '8px', border: '1px solid #e2e8f0', fontSize: '13px', color: tieneMotivo ? '#1e293b' : '#94a3b8', fontStyle: tieneMotivo ? 'normal' : 'italic' }}>
-              {tieneMotivo ? incidencia.motivoJustificacion : 'Sin motivo registrado'}
-            </div>
-          </div>
-
-          <div>
-            <p style={{ margin: '0 0 6px 0', fontSize: '12px', fontWeight: '700', color: '#475569' }}>Documento adjunto</p>
-            {tieneDocumento ? (
-              <a href={`${apiBase}${incidencia.documentoUrl}`} target="_blank" rel="noopener noreferrer" style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '0.75rem', backgroundColor: '#eff6ff', borderRadius: '8px', border: '1px solid #bfdbfe', color: '#1d4ed8', textDecoration: 'none', fontSize: '13px', fontWeight: '600' }}>
-                <FileText size={16} />
-                <span style={{ flex: 1 }}>Ver justificante</span>
-                <Eye size={14} />
-              </a>
-            ) : (
-              <div style={{ padding: '0.75rem', backgroundColor: '#f1f5f9', borderRadius: '8px', border: '1px dashed #cbd5e1', fontSize: '12px', color: '#64748b', fontStyle: 'italic' }}>
-                No se adjuntó documento
-              </div>
+          <div style={{ padding: '0.7rem 0.85rem', backgroundColor: '#eff6ff', borderRadius: '8px', border: '1px solid #bfdbfe', fontSize: '12px', color: '#1e40af', lineHeight: 1.5 }}>
+            Decide para <strong>este día</strong>: si <strong>justificas</strong>, la falta no descuenta del salario; si <strong>no la justificas</strong>, se descuenta sueldo/15 al cerrar la nómina.
+            {tieneJustificanteQuincenal && (
+              <> El motivo y el archivo del justificante quincenal del empleado los consultas con el botón <em>Ver justificante</em> que aparece junto a su nombre.</>
             )}
           </div>
 
           {!pendiente && (
             <div style={{ padding: '0.6rem 0.75rem', backgroundColor: '#fffbeb', borderRadius: '8px', border: '1px solid #fde68a', fontSize: '12px', color: '#854d0e' }}>
-              Esta incidencia ya fue {aprobada ? 'aprobada' : 'rechazada'}. Puedes cambiar la decisión si es necesario.
+              Este día ya fue {aprobada ? 'justificado' : 'rechazado'}. Puedes cambiar la decisión si es necesario.
             </div>
           )}
         </div>
@@ -660,14 +782,14 @@ const RevisarModal: React.FC<{
             disabled={decidiendo}
             style={{ padding: '0.6rem 1.2rem', borderRadius: '10px', border: '1px solid #fecaca', backgroundColor: rechazada ? '#fee2e2' : 'white', color: '#b91c1c', fontWeight: '700', cursor: decidiendo ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px' }}
           >
-            <X size={14} /> Rechazar
+            <X size={14} /> No justificar este día
           </button>
           <button
             onClick={() => decidir(true)}
             disabled={decidiendo}
             style={{ padding: '0.6rem 1.2rem', borderRadius: '10px', border: 'none', backgroundColor: aprobada ? '#047857' : '#10b981', color: 'white', fontWeight: '800', cursor: decidiendo ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px' }}
           >
-            {decidiendo ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />} Aprobar
+            {decidiendo ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />} Justificar este día
           </button>
         </div>
       </div>
