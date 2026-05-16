@@ -171,27 +171,31 @@ const NominasDashboard: React.FC = () => {
   const empleadosActivos = empleados.filter((e: any) => e.activo !== false).length;
   const nominasEnProceso = nominas.filter((n: Nomina) => n.estado !== 'PAGADO' && n.estado !== 'BORRADOR');
 
-  // Totales por régimen — cada pre-nómina trae empleado.regimen (CONFIANZA / LISTA_RAYA).
-  // Si el régimen no viene en la pre-nómina caemos al de la nómina (legacy).
-  let totalRaya = 0;
-  let totalConfianza = 0;
+  // Totales POR RÉGIMEN — dos vistas:
+  //   1) Preliminar (totalAPagar de la prenómina, antes de descuentos por faltas).
+  //   2) Final (totalAPagarFinal calculado en backend en tiempo real con las faltas no justificadas
+  //      actuales). Refleja el efecto inmediato de aprobar/rechazar justificantes.
+  let totalRaya = 0, totalConfianza = 0;
+  let totalRayaFinal = 0, totalConfianzaFinal = 0;
   for (const n of nominasEnProceso) {
     const prenominas = ((n as any).prenominas as any[]) || [];
     if (prenominas.length === 0) {
-      // Fallback: sin desglose por empleado, usamos el régimen de la nómina entera.
       const monto = Number(n.totalNetoPagar || 0);
-      if ((n as any).regimen === 'LISTA_RAYA') totalRaya += monto;
-      else                                     totalConfianza += monto;
+      if ((n as any).regimen === 'LISTA_RAYA') { totalRaya += monto; totalRayaFinal += monto; }
+      else                                     { totalConfianza += monto; totalConfianzaFinal += monto; }
       continue;
     }
     for (const pn of prenominas) {
       const reg = pn.empleado?.regimen || (n as any).regimen;
-      const monto = Number(pn.totalAPagar || 0);
-      if (reg === 'LISTA_RAYA') totalRaya += monto;
-      else                      totalConfianza += monto;
+      const prelim = Number(pn.totalAPagar || 0);
+      // totalAPagarFinal viene del backend cuando hay faltas; si no, usamos el preliminar.
+      const final  = Number(pn.totalAPagarFinal != null ? pn.totalAPagarFinal : pn.totalAPagar) || 0;
+      if (reg === 'LISTA_RAYA') { totalRaya += prelim; totalRayaFinal += final; }
+      else                      { totalConfianza += prelim; totalConfianzaFinal += final; }
     }
   }
-  const totalGeneral = totalRaya + totalConfianza;
+  const totalGeneral      = totalRaya + totalConfianza;
+  const totalGeneralFinal = totalRayaFinal + totalConfianzaFinal;
 
   // Flujo de 4 firmas: Finanzas → Administración → Dirección → Recursos Humanos.
   const nominasPendientesFirma = nominas.filter((n: Nomina) => {
@@ -202,9 +206,14 @@ const NominasDashboard: React.FC = () => {
   const stats = [
     { label: 'Empleados Activos', value: empleadosActivos, icon: Users, color: '#3b82f6', bg: '#eff6ff' },
     { label: 'Nóminas en Proceso', value: nominasEnProceso.length, icon: Calendar, color: '#f59e0b', bg: '#fffbeb' },
+    // Preliminares (sin descuentos por faltas)
     { label: 'Total Lista de Raya', value: formatCurrency(totalRaya),     icon: Banknote, color: '#0ea5e9', bg: '#e0f2fe' },
     { label: 'Total Confianza',     value: formatCurrency(totalConfianza), icon: Banknote, color: '#8b5cf6', bg: '#f5f3ff' },
     { label: 'Total General',       value: formatCurrency(totalGeneral),   icon: Banknote, color: '#10b981', bg: '#f0fdf4' },
+    // Finales (después de aplicar descuentos por faltas no justificadas — se actualiza al aprobar/rechazar)
+    { label: 'Final Lista de Raya', value: formatCurrency(totalRayaFinal),      icon: Banknote, color: '#0369a1', bg: '#cffafe' },
+    { label: 'Final Confianza',     value: formatCurrency(totalConfianzaFinal), icon: Banknote, color: '#6d28d9', bg: '#ede9fe' },
+    { label: 'Final General',       value: formatCurrency(totalGeneralFinal),   icon: Banknote, color: '#047857', bg: '#d1fae5' },
     { label: 'Pendientes de Firma', value: nominasPendientesFirma, icon: FileSignature, color: '#ef4444', bg: '#fef2f2' },
   ];
 
