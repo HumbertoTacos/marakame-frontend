@@ -143,6 +143,9 @@ export function Layout() {
               <div className={getNavItemClass('admisiones/areas')} onClick={() => navigate('/admisiones/areas')}>
                 <PackageOpen size={20} style={{ marginRight: '1rem' }}/> Mapa de Áreas
               </div>
+              <div className={getNavItemClass('pagos')} onClick={() => navigate('/pagos')}>
+                <Wallet size={20} style={{ marginRight: '1rem' }}/> Cobros y Recibos
+              </div>
             </>
           )}
 
