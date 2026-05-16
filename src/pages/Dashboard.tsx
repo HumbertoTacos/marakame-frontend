@@ -91,7 +91,7 @@ export function Dashboard() {
   const { usuario } = useAuthStore();
   const navigate = useNavigate();
 
-  const { data: stats, isLoading } = useQuery({
+  const { data: stats, isLoading, isError, refetch } = useQuery({
     queryKey: ['dashboard_stats'],
     queryFn: () => apiClient.get('/dashboard').then(res => res.data.data),
     refetchInterval: 30000
@@ -99,6 +99,22 @@ export function Dashboard() {
 
   if (isLoading) {
     return <div style={{ padding: '2rem', textAlign: 'center' }}>Cargando panel de control...</div>;
+  }
+
+  if (isError || !stats) {
+    return (
+      <div style={{ padding: '2rem', textAlign: 'center' }}>
+        <p style={{ color: '#dc2626', fontWeight: 700, marginBottom: '1rem' }}>
+          No se pudo cargar el panel de control.
+        </p>
+        <button
+          onClick={() => refetch()}
+          style={{ padding: '0.6rem 1.2rem', border: '1.5px solid #dc2626', borderRadius: '10px', background: 'white', color: '#dc2626', cursor: 'pointer', fontWeight: 700 }}
+        >
+          Reintentar
+        </button>
+      </div>
+    );
   }
 
   const rol = usuario?.rol ?? '';
@@ -198,10 +214,10 @@ export function Dashboard() {
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '1.5rem', marginBottom: '3rem' }}>
             <Widget
               title="Ocupación de Camas"
-              value={`${stats?.ocupacion.porcentaje}%`}
-              subValue={`${stats?.ocupacion.internados} de ${stats?.ocupacion.capacidad} camas disponibles`}
+              value={`${stats?.ocupacion?.porcentaje ?? 0}%`}
+              subValue={`${stats?.ocupacion?.internados ?? 0} de ${stats?.ocupacion?.capacidad ?? 0} camas disponibles`}
               icon={Activity}
-              color={stats?.ocupacion.porcentaje > 90 ? '#e53e3e' : '#3182ce'}
+              color={(stats?.ocupacion?.porcentaje ?? 0) > 90 ? '#e53e3e' : '#3182ce'}
               onClick={() => navigate('/dashboard')}
             />
             {!esNutricion && !esPsicologia && (
