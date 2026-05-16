@@ -313,12 +313,13 @@ export function Compras() {
   const rol = usuario?.rol ?? '';
   const queryClient = useQueryClient();
 
-  const { requisiciones = [], isLoading, createReq, changeEstado, createCot, deleteCot, createCotCatalogo, createCotBulk, enviarAdministracion, createOrden, createOrdenPago, genExpediente, enviarFinanzas, finalizar } = useCompras();
+  const { requisiciones = [], isLoading, createReq, changeEstado, createCot, deleteCot, createCotCatalogo, createCotBulk, addCotProducto, enviarAdministracion, createOrden, createOrdenPago, genExpediente, enviarFinanzas, finalizar } = useCompras();
 
   const [proceso, setProceso]               = useState<Requisicion | null>(null);
   const [detalle, setDetalle]               = useState<Requisicion | null>(null);
   const [ordenesDetalle, setOrdenesDetalle] = useState<Requisicion | null>(null);
   const [tabOrdenes, setTabOrdenes]         = useState<'compra' | 'pago'>('compra');
+  const [selectedOrdenIdx, setSelectedOrdenIdx] = useState<number>(0);
   const [showCreate, setShowCreate]     = useState(false);
   const [busqueda, setBusqueda]         = useState('');
   const [filtroEstado, setFiltroEstado] = useState('');
@@ -331,6 +332,8 @@ export function Compras() {
 
   // FIX: todos los campos de formCot inicializados como string vacío, nunca undefined
   const [formCot, setFormCot] = useState({ proveedor: '', precio: '', tiempoEntrega: '' });
+  const [enviadoOrden, setEnviadoOrden] = useState(false);
+  const [enviadoFinalizar, setEnviadoFinalizar] = useState(false);
 
   // Nuevo flujo EN_COMPRAS: cotizaciones con catálogo de proveedores
   const [busquedaProveedor, setBusquedaProveedor] = useState('');
@@ -339,31 +342,34 @@ export function Compras() {
   const [mostrarDropdownProv, setMostrarDropdownProv] = useState(false);
   const [preciosPorProducto, setPreciosPorProducto] = useState<Record<number, number>>({});
 
-  // Nuevo flujo: cotización por producto (proveedor individual por artículo)
-  const [cotPorProducto, setCotPorProducto] = useState<Record<number, {
-    proveedorId: number | null;
-    precioUnitario: number;
+  // Estado para formularios de agregar cotización por producto
+  interface AddCotFormState {
+    open: boolean;
+    proveedorId: string;
+    precioUnitario: string;
     tiempoEntrega: string;
     formaPago: string;
-  }>>({});
+    condicionesPago: string;
+    garantia: string;
+    marca: string;
+    modelo: string;
+    observaciones: string;
+    error: string;
+  }
+  const emptyAddCotForm = (): AddCotFormState => ({
+    open: false, proveedorId: '', precioUnitario: '', tiempoEntrega: '',
+    formaPago: '', condicionesPago: '', garantia: '', marca: '', modelo: '',
+    observaciones: '', error: '',
+  });
+  const [addCotForms, setAddCotForms] = useState<Record<number, AddCotFormState>>({});
 
-  // Pre-llenar cotPorProducto cuando se abre el modal con cotizaciones ya guardadas
+  const getAddForm = (detalleId: number): AddCotFormState =>
+    addCotForms[detalleId] ?? emptyAddCotForm();
+  const setAddForm = (detalleId: number, patch: Partial<AddCotFormState>) =>
+    setAddCotForms(prev => ({ ...prev, [detalleId]: { ...getAddForm(detalleId), ...patch } }));
+
   React.useEffect(() => {
-    if (!proceso) { setCotPorProducto({}); return; }
-    const cots = proceso.cotizaciones ?? [];
-    const conDetalle = cots.filter(c => c.requisicionDetalleId != null);
-    if (conDetalle.length === 0) return;
-    const initial: typeof cotPorProducto = {};
-    for (const c of conDetalle) {
-      const provId = c.proveedorId ?? (typeof c.proveedor === 'object' && c.proveedor !== null ? (c.proveedor as { id: number }).id : null);
-      initial[c.requisicionDetalleId!] = {
-        proveedorId:    provId ?? null,
-        precioUnitario: Number(c.precioUnitario ?? 0),
-        tiempoEntrega:  c.tiempoEntrega ?? '',
-        formaPago:      c.formaPago ?? '',
-      };
-    }
-    setCotPorProducto(initial);
+    if (!proceso) { setAddCotForms({}); setEnviadoOrden(false); setEnviadoFinalizar(false); }
   }, [proceso?.id]);
 
   const { data: proveedoresData } = useQuery({
@@ -376,9 +382,10 @@ export function Compras() {
     presupuestoEstimado: '', tipo: 'ORDINARIA' as 'ORDINARIA'|'EXTRAORDINARIA'
   });
   const [detalles, setDetalles] = useState([{ producto: '', unidad: '', cantidad: 1 }]);
-  const [facturaFile, setFacturaFile]     = useState<File | null>(null);
-  const [facturaNumero, setFacturaNumero] = useState('');
-  const [facturaMonto, setFacturaMonto]   = useState('');
+  const [facturaFile, setFacturaFile]         = useState<File | null>(null);
+  const [facturaNumero, setFacturaNumero]     = useState('');
+  const [facturaMonto, setFacturaMonto]       = useState('');
+  const [facturaProveedorId, setFacturaProveedorId] = useState<number | null>(null);
   const [tabVista, setTabVista]           = useState<'activas' | 'finalizados'>('activas');
   const [expedienteDetalle, setExpedienteDetalle] = useState<Requisicion | null>(null);
   const [tabExpediente, setTabExpediente] = useState<'datos' | 'documentos' | 'historial'>('datos');
@@ -391,14 +398,15 @@ export function Compras() {
   const notify = (msg: string) => { setNotif(msg); setTimeout(() => setNotif(null), 3500); };
 
   const descargarOrdenPDF = async () => {
-    if (!ordenPdfRef.current || !ordenesDetalle?.ordenCompra) return;
+    if (!ordenPdfRef.current || !ordenesDetalle?.ordenes?.length) return;
     const canvas  = await html2canvas(ordenPdfRef.current, { scale: 2 });
     const imgData = canvas.toDataURL('image/png');
     const pdf     = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
     const pdfWidth  = pdf.internal.pageSize.getWidth();
     const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
     pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
-    pdf.save(`${ordenesDetalle.ordenCompra.folio}.pdf`);
+    const folio = ordenesDetalle.ordenes[selectedOrdenIdx]?.folio ?? ordenesDetalle.ordenes[0].folio;
+    pdf.save(`${folio}.pdf`);
   };
 
   const agregarDetalle    = () => setDetalles([...detalles, { producto: '', unidad: '', cantidad: 1 }]);
@@ -435,7 +443,7 @@ export function Compras() {
         <Modal title="Enviar a Recursos Materiales" onClose={() => setProceso(null)} width={600}>
           <div style={{ background: '#F9FAFB', borderRadius: 10, padding: 16, fontSize: 13, color: '#374151', display: 'flex', flexDirection: 'column', gap: 6 }}>
             <div><strong>Folio:</strong> {req.folio}</div>
-            <div><strong>Área:</strong> {req.areaSolicitante}</div>
+            <div><strong>Área:</strong> {(req.requisicion?.areaSolicitante || req.areaSolicitante)}</div>
             <div><strong>Descripción:</strong> {req.descripcion}</div>
             <div><strong>Justificación:</strong> {req.requisicion?.justificacion ?? req.justificacion}</div>
             <div><strong>Presupuesto:</strong> ${(req.presupuestoEstimado ?? 0).toLocaleString('es-MX')}</div>
@@ -503,7 +511,7 @@ export function Compras() {
         <Modal title="Captura de cotizaciones" onClose={cerrarModal} width={640}>
           {/* ── Info de la requisición ── */}
           <div style={{ background: '#F9FAFB', borderRadius: 10, padding: 14, fontSize: 13, color: '#374151', display: 'flex', flexDirection: 'column', gap: 4 }}>
-            <div><strong>Folio:</strong> {req.folio} · <strong>Área:</strong> {req.areaSolicitante}</div>
+            <div><strong>Folio:</strong> {req.folio} · <strong>Área:</strong> {(req.requisicion?.areaSolicitante || req.areaSolicitante)}</div>
             <div><strong>Descripción:</strong> {req.descripcion}</div>
             <div><strong>Presupuesto estimado:</strong> ${(req.presupuestoEstimado ?? 0).toLocaleString('es-MX')}</div>
           </div>
@@ -655,7 +663,7 @@ export function Compras() {
             </p>
           </div>
           <div style={{ background: '#F9FAFB', borderRadius: 10, padding: 14, fontSize: 13, color: '#374151', display: 'flex', flexDirection: 'column', gap: 4 }}>
-            <div><strong>Folio:</strong> {req.folio} &nbsp;·&nbsp; <strong>Área:</strong> {req.areaSolicitante}</div>
+            <div><strong>Folio:</strong> {req.folio} &nbsp;·&nbsp; <strong>Área:</strong> {(req.requisicion?.areaSolicitante || req.areaSolicitante)}</div>
             {req.descripcion && <div><strong>Descripción:</strong> {req.descripcion}</div>}
             <div>
               <strong>Artículos cotizados:</strong>{' '}
@@ -668,247 +676,6 @@ export function Compras() {
           <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
             <Btn variant="ghost" onClick={() => { estadoModalRef.current = null; setProceso(null); }}>Cerrar</Btn>
           </div>
-        </Modal>
-      );
-    }
-
-    // ── 4. EN_REVISION_ADMINISTRACION → EN_REVISION_DIRECCION ────────────────
-    if (estadoModal === 'EN_REVISION_ADMINISTRACION' && puedeHacer(rol, 'admin')) {
-      const cotizaciones  = req.cotizaciones ?? [];
-      const detallesReq   = req.requisicion?.detalles ?? [];
-
-      // Construir filas por producto: cada cotización está ligada a un detalle vía requisicionDetalleId
-      const filasPorProducto = detallesReq.map(d => {
-        const cot = cotizaciones.find(c => c.requisicionDetalleId === d.id);
-        const precioUnit = cot ? Number(cot.precioUnitario ?? cot.precio ?? 0) : 0;
-        const total      = precioUnit * d.cantidadSolicitada;
-        return { detalle: d, cot, precioUnit, total };
-      });
-
-      // Filas legacy (cotizaciones sin requisicionDetalleId) — flujo antiguo
-      const cotsLegacy = cotizaciones.filter(c => !c.requisicionDetalleId);
-
-      const usaFlujoPorProducto = filasPorProducto.some(f => f.cot);
-
-      // Totales
-      const subtotal    = filasPorProducto.reduce((s, f) => s + f.total, 0)
-                        + cotsLegacy.reduce((s, c) => s + Number(c.precio ?? 0), 0);
-      const iva         = subtotal * 0.16;
-      const totalConIva = subtotal + iva;
-
-      // Resumen por proveedor
-      const resumenProv: Record<string, { nombre: string; cantidad: number; subtotal: number }> = {};
-      for (const f of filasPorProducto) {
-        if (!f.cot) continue;
-        const nombre = getCotizacionProveedorNombre(f.cot);
-        if (!resumenProv[nombre]) resumenProv[nombre] = { nombre, cantidad: 0, subtotal: 0 };
-        resumenProv[nombre].cantidad  += 1;
-        resumenProv[nombre].subtotal  += f.total;
-      }
-      const gruposProv = Object.values(resumenProv);
-
-      return (
-        <Modal title="Revisión de Administración" onClose={() => { setProceso(null); setFormObs(''); }} width={780}>
-          {/* Banner instrucción */}
-          <div style={{ background: '#FEFCE8', border: '1px solid #FEF08A', borderRadius: 10, padding: '10px 14px', fontSize: 13, color: '#854D0E', display: 'flex', alignItems: 'center', gap: 8 }}>
-            <AlertCircle size={15} style={{ flexShrink: 0 }} />
-            Revisa el expediente de cotizaciones por artículo y envía a Dirección General para autorización.
-          </div>
-
-          {/* Encabezado */}
-          <div style={{ background: 'linear-gradient(135deg, #78350F 0%, #D97706 100%)', borderRadius: 12, padding: '14px 20px', color: 'white' }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap' as const, gap: 10 }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 24, flexWrap: 'wrap' as const }}>
-                <div>
-                  <div style={{ fontSize: 10, opacity: 0.65, textTransform: 'uppercase' as const, letterSpacing: '0.08em', marginBottom: 2 }}>Folio</div>
-                  <div style={{ fontSize: 15, fontWeight: 800 }}>{req.folio}</div>
-                </div>
-                <div style={{ width: 1, height: 34, background: 'rgba(255,255,255,0.25)' }} />
-                <div>
-                  <div style={{ fontSize: 10, opacity: 0.65, textTransform: 'uppercase' as const, letterSpacing: '0.08em', marginBottom: 2 }}>Área</div>
-                  <div style={{ fontSize: 13, fontWeight: 600 }}>{req.areaSolicitante}</div>
-                </div>
-                <div style={{ width: 1, height: 34, background: 'rgba(255,255,255,0.25)' }} />
-                <div>
-                  <div style={{ fontSize: 10, opacity: 0.65, textTransform: 'uppercase' as const, letterSpacing: '0.08em', marginBottom: 2 }}>Presupuesto estimado</div>
-                  <div style={{ fontSize: 13, fontWeight: 600 }}>${(req.presupuestoEstimado ?? 0).toLocaleString('es-MX')}</div>
-                </div>
-              </div>
-              <div style={{ display: 'flex', gap: 8 }}>
-                <div style={{ background: 'rgba(255,255,255,0.15)', borderRadius: 16, padding: '5px 12px', fontSize: 11, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 5 }}>
-                  <Package size={12} /> {detallesReq.length} artículos
-                </div>
-                <div style={{ background: 'rgba(255,255,255,0.15)', borderRadius: 16, padding: '5px 12px', fontSize: 11, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 5 }}>
-                  <Building2 size={12} /> {gruposProv.length} {gruposProv.length === 1 ? 'proveedor' : 'proveedores'}
-                </div>
-              </div>
-            </div>
-            {req.descripcion && <div style={{ marginTop: 8, fontSize: 12, opacity: 0.85 }}>{req.descripcion}</div>}
-          </div>
-
-          {/* Tabla por producto */}
-          {usaFlujoPorProducto && (
-            <div style={{ border: '1px solid #E2E8F0', borderRadius: 12, overflow: 'hidden', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
-              <div style={{ padding: '9px 16px', background: '#F8FAFC', borderBottom: '1px solid #E2E8F0', display: 'flex', alignItems: 'center', gap: 8 }}>
-                <Package size={13} style={{ color: '#D97706' }} />
-                <span style={{ fontWeight: 700, fontSize: 11, color: '#1E293B', textTransform: 'uppercase' as const, letterSpacing: '0.07em' }}>
-                  Mejor opción por artículo
-                </span>
-              </div>
-              <div style={{ overflowX: 'auto' as const }}>
-                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
-                  <thead>
-                    <tr style={{ background: '#1E293B' }}>
-                      <th style={{ padding: '8px 12px', textAlign: 'left' as const, fontWeight: 600, color: '#94A3B8', fontSize: 10, textTransform: 'uppercase' as const, letterSpacing: '0.06em' }}>#</th>
-                      <th style={{ padding: '8px 12px', textAlign: 'left' as const, fontWeight: 600, color: '#94A3B8', fontSize: 10, textTransform: 'uppercase' as const, letterSpacing: '0.06em' }}>Artículo</th>
-                      <th style={{ padding: '8px 12px', textAlign: 'center' as const, fontWeight: 600, color: '#94A3B8', fontSize: 10, textTransform: 'uppercase' as const, letterSpacing: '0.06em' }}>Cant.</th>
-                      <th style={{ padding: '8px 12px', textAlign: 'left' as const, fontWeight: 600, color: '#94A3B8', fontSize: 10, textTransform: 'uppercase' as const, letterSpacing: '0.06em' }}>Proveedor seleccionado</th>
-                      <th style={{ padding: '8px 12px', textAlign: 'right' as const, fontWeight: 600, color: '#94A3B8', fontSize: 10, textTransform: 'uppercase' as const, letterSpacing: '0.06em' }}>P. Unit.</th>
-                      <th style={{ padding: '8px 12px', textAlign: 'right' as const, fontWeight: 600, color: '#94A3B8', fontSize: 10, textTransform: 'uppercase' as const, letterSpacing: '0.06em' }}>Total</th>
-                      <th style={{ padding: '8px 12px', textAlign: 'left' as const, fontWeight: 600, color: '#94A3B8', fontSize: 10, textTransform: 'uppercase' as const, letterSpacing: '0.06em' }}>Entrega</th>
-                      <th style={{ padding: '8px 12px', textAlign: 'left' as const, fontWeight: 600, color: '#94A3B8', fontSize: 10, textTransform: 'uppercase' as const, letterSpacing: '0.06em' }}>Forma pago</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {filasPorProducto.map((f, idx) => (
-                      <tr key={f.detalle.id} style={{ borderTop: idx === 0 ? 'none' : '1px solid #F1F5F9', background: f.cot ? 'white' : '#FFF8F0', borderLeft: f.cot ? '3px solid transparent' : '3px solid #FED7AA' }}>
-                        <td style={{ padding: '9px 12px', color: '#94A3B8', fontWeight: 500 }}>{f.detalle.numero}</td>
-                        <td style={{ padding: '9px 12px', fontWeight: 600, color: '#0F172A' }}>{f.detalle.productoNombre ?? '—'}</td>
-                        <td style={{ padding: '9px 12px', textAlign: 'center' as const, fontWeight: 700, color: '#1E293B' }}>{f.detalle.cantidadSolicitada}</td>
-                        <td style={{ padding: '9px 12px' }}>
-                          {f.cot
-                            ? <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, background: '#F0FDF4', border: '1px solid #BBF7D0', borderRadius: 6, padding: '2px 8px', fontSize: 11, fontWeight: 700, color: '#15803D' }}>
-                                <CheckCircle size={11} /> {getCotizacionProveedorNombre(f.cot)}
-                              </span>
-                            : <span style={{ fontSize: 11, color: '#F97316' }}>Sin cotización</span>}
-                        </td>
-                        <td style={{ padding: '9px 12px', textAlign: 'right' as const, color: '#374151', fontWeight: 600 }}>
-                          {f.precioUnit > 0 ? `$${f.precioUnit.toLocaleString('es-MX', { minimumFractionDigits: 2 })}` : '—'}
-                        </td>
-                        <td style={{ padding: '9px 12px', textAlign: 'right' as const, fontWeight: 700, color: f.total > 0 ? '#0F172A' : '#CBD5E1' }}>
-                          {f.total > 0 ? `$${f.total.toLocaleString('es-MX', { minimumFractionDigits: 2 })}` : '—'}
-                        </td>
-                        <td style={{ padding: '9px 12px', color: '#64748B', fontSize: 11 }}>{f.cot?.tiempoEntrega ?? '—'}</td>
-                        <td style={{ padding: '9px 12px', color: '#64748B', fontSize: 11 }}>{f.cot?.formaPago ?? '—'}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-              {/* Totales */}
-              <div style={{ borderTop: '2px solid #E2E8F0', background: '#F8FAFC', padding: '10px 20px', display: 'flex', justifyContent: 'flex-end' as const }}>
-                <div style={{ display: 'flex', flexDirection: 'column' as const, gap: 4, minWidth: 240 }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between' as const, fontSize: 12, color: '#64748B' }}>
-                    <span>Subtotal</span>
-                    <span style={{ fontWeight: 600, color: '#334155' }}>${subtotal.toLocaleString('es-MX', { minimumFractionDigits: 2 })}</span>
-                  </div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between' as const, fontSize: 12, color: '#64748B' }}>
-                    <span>IVA (16%)</span>
-                    <span style={{ fontWeight: 600, color: '#334155' }}>${iva.toLocaleString('es-MX', { minimumFractionDigits: 2 })}</span>
-                  </div>
-                  <div style={{ height: 1, background: '#E2E8F0', margin: '3px 0' }} />
-                  <div style={{ display: 'flex', justifyContent: 'space-between' as const, alignItems: 'center' }}>
-                    <span style={{ fontSize: 13, fontWeight: 700, color: '#1E293B' }}>Total con IVA</span>
-                    <span style={{ fontSize: 15, fontWeight: 800, color: '#16A34A' }}>${totalConIva.toLocaleString('es-MX', { minimumFractionDigits: 2 })}</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Cotizaciones legacy (flujo antiguo sin requisicionDetalleId) */}
-          {cotsLegacy.length > 0 && (
-            <div style={{ border: '1px solid #E8ECF0', borderRadius: 10, overflow: 'hidden' }}>
-              <div style={{ padding: '9px 16px', background: '#F9FAFB', fontWeight: 700, fontSize: 11, color: '#374151', borderBottom: '1px solid #E8ECF0', textTransform: 'uppercase' as const, letterSpacing: '0.06em' }}>
-                Cotizaciones ({cotsLegacy.length})
-              </div>
-              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
-                <thead>
-                  <tr style={{ background: '#F3F4F6' }}>
-                    <th style={{ padding: '8px 14px', textAlign: 'left' as const, fontWeight: 600, fontSize: 11, color: '#6B7280' }}>Proveedor</th>
-                    <th style={{ padding: '8px 14px', textAlign: 'right' as const, fontWeight: 600, fontSize: 11, color: '#6B7280' }}>Precio</th>
-                    <th style={{ padding: '8px 14px', textAlign: 'left' as const, fontWeight: 600, fontSize: 11, color: '#6B7280' }}>Entrega</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {cotsLegacy.map((c: Cotizacion) => (
-                    <tr key={c.id} style={{ borderTop: '1px solid #E8ECF0' }}>
-                      <td style={{ padding: '9px 14px', fontWeight: 500, color: '#111827' }}>{getCotizacionProveedorNombre(c)}</td>
-                      <td style={{ padding: '9px 14px', textAlign: 'right' as const, fontWeight: 700, color: '#374151' }}>${Number(c.precio).toLocaleString('es-MX', { minimumFractionDigits: 2 })}</td>
-                      <td style={{ padding: '9px 14px', color: '#6B7280' }}>{c.tiempoEntrega ?? '—'}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-
-          {/* Resumen por proveedor */}
-          {gruposProv.length > 0 && (
-            <div style={{ border: '1px solid #BFDBFE', borderRadius: 12, overflow: 'hidden', background: 'white' }}>
-              <div style={{ padding: '9px 16px', background: '#EFF6FF', borderBottom: '1px solid #BFDBFE', display: 'flex', alignItems: 'center', gap: 8 }}>
-                <Building2 size={13} style={{ color: '#2563EB' }} />
-                <span style={{ fontWeight: 700, fontSize: 11, color: '#1D4ED8', textTransform: 'uppercase' as const, letterSpacing: '0.07em' }}>
-                  Órdenes de compra que se generarán
-                </span>
-                <span style={{ marginLeft: 'auto', background: '#DBEAFE', color: '#1D4ED8', fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 10 }}>
-                  {gruposProv.length} {gruposProv.length === 1 ? 'proveedor' : 'proveedores'}
-                </span>
-              </div>
-              <div style={{ padding: '12px 16px', display: 'flex', flexWrap: 'wrap' as const, gap: 10 }}>
-                {gruposProv.map((g, i) => (
-                  <div key={i} style={{ flex: '1 1 200px', border: '1px solid #BFDBFE', borderLeft: '4px solid #2563EB', borderRadius: 8, padding: '10px 14px', background: '#F8FBFF' }}>
-                    <div style={{ fontWeight: 700, fontSize: 13, color: '#1E293B', marginBottom: 6 }}>{g.nombre}</div>
-                    <div style={{ display: 'flex', justifyContent: 'space-between' as const, alignItems: 'center' }}>
-                      <span style={{ background: '#DBEAFE', color: '#1D4ED8', fontSize: 10, fontWeight: 700, padding: '2px 7px', borderRadius: 10 }}>
-                        {g.cantidad} {g.cantidad === 1 ? 'artículo' : 'artículos'}
-                      </span>
-                      <span style={{ fontSize: 13, fontWeight: 800, color: '#1E293B' }}>
-                        ${g.subtotal.toLocaleString('es-MX', { minimumFractionDigits: 2 })}
-                      </span>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {(req.requisicion?.justificacion ?? req.justificacion) && (
-            <div style={{ background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: 10, padding: '10px 14px', fontSize: 12, color: '#475569' }}>
-              <strong style={{ color: '#1E293B' }}>Justificación:</strong> {req.requisicion?.justificacion ?? req.justificacion}
-            </div>
-          )}
-
-          <Textarea label="Observaciones de Administración (opcionales)" placeholder="Notas para Dirección General..." value={formObs ?? ''} onChange={e => setFormObs(e.target.value)} />
-          <div style={{ display: 'flex', gap: 8 }}>
-            <Btn variant="success" icon={<Send size={15}/>} disabled={changeEstado.isPending}
-              onClick={() => {
-                changeEstado.mutate(
-                  { id: req.id, estado: 'EN_REVISION_DIRECCION' as EstadoCompra, observaciones: formObs.trim() || undefined },
-                  {
-                    onSuccess: () => { estadoModalRef.current = null; setProceso(null); setFormObs(''); notify('✅ Expediente enviado a Dirección General'); },
-                    onError: (err: any) => notify(`❌ Error: ${err?.response?.data?.message ?? err?.message}`),
-                  }
-                );
-              }}
-            >
-              {changeEstado.isPending ? 'Procesando…' : 'Enviar a Dirección General'}
-            </Btn>
-            <Btn variant="danger" icon={<XCircle size={15}/>} disabled={changeEstado.isPending || !formObs.trim()}
-              onClick={() => {
-                changeEstado.mutate(
-                  { id: req.id, estado: 'RECHAZADO' as EstadoCompra, observaciones: formObs.trim() },
-                  {
-                    onSuccess: () => { estadoModalRef.current = null; setProceso(null); setFormObs(''); notify('Requisición rechazada por Administración'); },
-                    onError: (err: any) => notify(`❌ Error: ${err?.response?.data?.message ?? err?.message}`),
-                  }
-                );
-              }}
-            >
-              {changeEstado.isPending ? 'Procesando…' : 'Rechazar'}
-            </Btn>
-          </div>
-          {!formObs.trim() && <p style={{ margin: 0, fontSize: 12, color: '#9CA3AF' }}>* Para rechazar se requieren observaciones.</p>}
         </Modal>
       );
     }
@@ -962,7 +729,7 @@ export function Compras() {
                 <div style={{ width: 1, height: 34, background: 'rgba(255,255,255,0.25)' }} />
                 <div>
                   <div style={{ fontSize: 10, opacity: 0.65, textTransform: 'uppercase' as const, letterSpacing: '0.08em', marginBottom: 2 }}>Área</div>
-                  <div style={{ fontSize: 13, fontWeight: 600 }}>{req.areaSolicitante}</div>
+                  <div style={{ fontSize: 13, fontWeight: 600 }}>{(req.requisicion?.areaSolicitante || req.areaSolicitante)}</div>
                 </div>
                 <div style={{ width: 1, height: 34, background: 'rgba(255,255,255,0.25)' }} />
                 <div>
@@ -1149,84 +916,36 @@ export function Compras() {
       );
     }
 
-    // ── NUEVO FLUJO: EN_COMPRAS / DEVUELTA_A_COMPRAS → cotizaciones por producto ──
+    // ── NUEVO FLUJO: EN_COMPRAS / DEVUELTA_A_COMPRAS / COTIZACIONES_CARGADAS → múltiples cotizaciones por producto ──
     if ((estadoModal === 'EN_COMPRAS' || estadoModal === 'DEVUELTA_A_COMPRAS' || estadoModal === 'COTIZACIONES_CARGADAS') && puedeHacer(rol, 'cotizar')) {
-      // Usar datos frescos para que "Enviar" aparezca tras guardar
-      const req = requisiciones.find(r => r.id === proceso.id) ?? proceso;
+      const req            = requisiciones.find(r => r.id === proceso.id) ?? proceso;
       const detallesReq    = req.requisicion?.detalles ?? [];
       const proveedoresCat = proveedoresData?.data ?? [];
+      const todasCots      = req.cotizaciones ?? [];
+      const esCompraMayor  = req.esCompraMayor ?? false;
+      const minCots        = esCompraMayor ? 3 : 1;
 
-      const getCot = (detalleId: number) => cotPorProducto[detalleId] ?? {
-        proveedorId: null as number | null, precioUnitario: 0, tiempoEntrega: '', formaPago: '',
-      };
+      // Helper: cotizaciones de un artículo específico
+      const cotsDeDetalle = (detalleId: number): Cotizacion[] =>
+        todasCots.filter(c => c.requisicionDetalleId === detalleId);
 
-      const subtotal    = detallesReq.reduce((sum, d) => sum + getCot(d.id).precioUnitario * d.cantidadSolicitada, 0);
-      const iva         = subtotal * 0.16;
-      const totalConIva = subtotal + iva;
-
-      const todoCompleto = detallesReq.length > 0 && detallesReq.every(d => {
-        const c = getCot(d.id);
-        return c.proveedorId !== null && c.precioUnitario > 0;
-      });
-
-      const gruposProv: { nombre: string; subtotal: number; cantidad: number }[] = [];
-      for (const d of detallesReq) {
-        const c = getCot(d.id);
-        if (!c.proveedorId) continue;
-        const prov   = proveedoresCat.find((p: Proveedor) => p.id === c.proveedorId);
-        const nombre = prov?.nombre ?? `Proveedor #${c.proveedorId}`;
-        const monto  = c.precioUnitario * d.cantidadSolicitada;
-        const ex     = gruposProv.find(g => g.nombre === nombre);
-        if (ex) { ex.subtotal += monto; ex.cantidad += 1; }
-        else      gruposProv.push({ nombre, subtotal: monto, cantidad: 1 });
-      }
+      const todoListo = detallesReq.length > 0 && detallesReq.every(d =>
+        cotsDeDetalle(d.id).length >= minCots
+      );
 
       const cerrarCatalogo = () => {
         estadoModalRef.current = null;
         setProceso(null);
-        setBusquedaProveedor('');
-        setProveedorSeleccionadoCot(null);
-        setFormCotCatalogo({ precio: '', tiempoEntrega: '', formaPago: '' });
-        setMostrarDropdownProv(false);
-        setPreciosPorProducto({});
-        setCotPorProducto({});
+        setAddCotForms({});
       };
 
-      const updateCot = (detalleId: number, fields: Partial<ReturnType<typeof getCot>>) => {
-        setCotPorProducto(prev => ({ ...prev, [detalleId]: { ...getCot(detalleId), ...fields } }));
-      };
-
-      const guardarBulk = () => {
-        const items = detallesReq.map(d => ({
-          requisicionDetalleId: d.id,
-          proveedorId:          getCot(d.id).proveedorId!,
-          precioUnitario:       getCot(d.id).precioUnitario,
-          tiempoEntrega:        getCot(d.id).tiempoEntrega || undefined,
-          formaPago:            getCot(d.id).formaPago     || undefined,
-        }));
-        createCotBulk.mutate(
-          { id: req.id, items },
-          {
-            onSuccess: () => notify('Cotizaciones guardadas correctamente'),
-            onError:   (err: unknown) => {
-              const e = err as { response?: { data?: { message?: string } }; message?: string };
-              notify(`Error: ${e?.response?.data?.message ?? e?.message}`);
-            },
-          }
-        );
-      };
-
-      const puedeContinuar = req.estado === 'COTIZACIONES_CARGADAS';
-
-      const cotizadosCount = detallesReq.filter(d => { const c = getCot(d.id); return c.proveedorId !== null && c.precioUnitario > 0; }).length;
-      const inputBase: React.CSSProperties = { height: 32, padding: '0 8px', border: '1px solid #D1D5DB', borderRadius: 6, fontSize: 12, fontFamily: 'inherit', outline: 'none', background: 'white', boxSizing: 'border-box' };
-      const inputWarn: React.CSSProperties = { ...inputBase, border: '1px solid #FBBF24', background: '#FFFBEB' };
+      const inpBase: React.CSSProperties = { height: 30, padding: '0 8px', border: '1px solid #D1D5DB', borderRadius: 6, fontSize: 12, fontFamily: 'inherit', outline: 'none', background: 'white', boxSizing: 'border-box' as const };
 
       return (
         <Modal
           title={estadoModal === 'DEVUELTA_A_COMPRAS' ? 'Cotizaciones — Compra devuelta' : 'Cotizaciones de compra'}
           onClose={cerrarCatalogo}
-          width={1060}
+          width={1100}
         >
           {/* Banner devuelta */}
           {estadoModal === 'DEVUELTA_A_COMPRAS' && (
@@ -1236,292 +955,295 @@ export function Compras() {
             </div>
           )}
 
-          {/* Encabezado con gradiente */}
+          {/* Encabezado */}
           <div style={{ background: 'linear-gradient(135deg, #1E3A8A 0%, #2563EB 100%)', borderRadius: 12, padding: '14px 20px', color: 'white' }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap' as const, gap: 12 }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 28, flexWrap: 'wrap' as const }}>
-                <div>
-                  <div style={{ fontSize: 10, opacity: 0.65, textTransform: 'uppercase' as const, letterSpacing: '0.08em', marginBottom: 2 }}>Folio</div>
-                  <div style={{ fontSize: 16, fontWeight: 800, letterSpacing: '0.02em' }}>{req.folio}</div>
-                </div>
-                <div style={{ width: 1, height: 36, background: 'rgba(255,255,255,0.2)' }} />
-                <div>
-                  <div style={{ fontSize: 10, opacity: 0.65, textTransform: 'uppercase' as const, letterSpacing: '0.08em', marginBottom: 2 }}>Área solicitante</div>
-                  <div style={{ fontSize: 13, fontWeight: 600 }}>{req.areaSolicitante}</div>
-                </div>
-                {req.requisicion && (
-                  <>
-                    <div style={{ width: 1, height: 36, background: 'rgba(255,255,255,0.2)' }} />
-                    <div>
-                      <div style={{ fontSize: 10, opacity: 0.65, textTransform: 'uppercase' as const, letterSpacing: '0.08em', marginBottom: 2 }}>Requisición</div>
-                      <div style={{ fontSize: 13, fontWeight: 600 }}>{req.requisicion.folio}</div>
-                    </div>
-                  </>
-                )}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 28, flexWrap: 'wrap' as const }}>
+              <div>
+                <div style={{ fontSize: 10, opacity: 0.65, textTransform: 'uppercase' as const, letterSpacing: '0.08em', marginBottom: 2 }}>Folio</div>
+                <div style={{ fontSize: 16, fontWeight: 800 }}>{req.folio}</div>
               </div>
-              {detallesReq.length > 0 && (
-                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                  <div style={{ background: 'rgba(255,255,255,0.15)', borderRadius: 20, padding: '6px 14px', fontSize: 12, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6 }}>
-                    <Package size={13} />
-                    {cotizadosCount} / {detallesReq.length} cotizados
+              <div style={{ width: 1, height: 36, background: 'rgba(255,255,255,0.2)' }} />
+              <div>
+                <div style={{ fontSize: 10, opacity: 0.65, textTransform: 'uppercase' as const, letterSpacing: '0.08em', marginBottom: 2 }}>Área</div>
+                <div style={{ fontSize: 13, fontWeight: 600 }}>{req.requisicion?.areaSolicitante || (req.requisicion?.areaSolicitante || req.areaSolicitante) || '—'}</div>
+              </div>
+              {req.requisicion && (
+                <>
+                  <div style={{ width: 1, height: 36, background: 'rgba(255,255,255,0.2)' }} />
+                  <div>
+                    <div style={{ fontSize: 10, opacity: 0.65, textTransform: 'uppercase' as const, letterSpacing: '0.08em', marginBottom: 2 }}>Requisición</div>
+                    <div style={{ fontSize: 13, fontWeight: 600 }}>{req.requisicion.folio}</div>
                   </div>
-                  {todoCompleto && (
-                    <div style={{ background: '#16A34A', borderRadius: 20, padding: '6px 12px', fontSize: 11, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 5 }}>
-                      <CheckCircle size={12} /> Completo
-                    </div>
-                  )}
+                </>
+              )}
+              {esCompraMayor && (
+                <div style={{ marginLeft: 'auto', background: '#FBBF24', color: '#7C2D12', borderRadius: 20, padding: '4px 12px', fontSize: 11, fontWeight: 800 }}>
+                  Compra mayor — requiere {minCots} cotizaciones por artículo
                 </div>
               )}
             </div>
-            {/* Barra de progreso */}
-            {detallesReq.length > 0 && (
-              <div style={{ marginTop: 12 }}>
-                <div style={{ background: 'rgba(255,255,255,0.2)', borderRadius: 4, height: 4, overflow: 'hidden' }}>
-                  <div style={{ background: cotizadosCount === detallesReq.length ? '#4ADE80' : '#60A5FA', height: '100%', width: `${(cotizadosCount / detallesReq.length) * 100}%`, borderRadius: 4, transition: 'width 0.3s ease' }} />
-                </div>
-              </div>
-            )}
           </div>
 
           {/* Sin artículos */}
           {detallesReq.length === 0 && (
-            <div style={{ padding: '32px 24px', textAlign: 'center' as const, color: '#9CA3AF', fontSize: 13, background: '#F9FAFB', borderRadius: 10, border: '1px dashed #E5E7EB' }}>
+            <div style={{ padding: '32px', textAlign: 'center' as const, color: '#9CA3AF', fontSize: 13, background: '#F9FAFB', borderRadius: 10, border: '1px dashed #E5E7EB' }}>
               <Package size={28} style={{ marginBottom: 8, opacity: 0.35 }} />
               <div>Esta compra no tiene artículos de requisición.</div>
-              <div style={{ fontSize: 12, marginTop: 4 }}>No se puede registrar cotización por producto.</div>
             </div>
           )}
 
-          {/* TABLA PRINCIPAL */}
-          {detallesReq.length > 0 && (
-            <div style={{ border: '1px solid #E2E8F0', borderRadius: 12, overflow: 'hidden', boxShadow: '0 1px 3px rgba(0,0,0,0.06)' }}>
-              {/* Cabecera de sección */}
-              <div style={{ padding: '10px 16px', background: '#F8FAFC', borderBottom: '1px solid #E2E8F0', display: 'flex', alignItems: 'center', gap: 8 }}>
-                <Package size={14} style={{ color: '#2563EB' }} />
-                <span style={{ fontWeight: 700, fontSize: 11, color: '#1E293B', textTransform: 'uppercase' as const, letterSpacing: '0.07em' }}>
-                  Artículos a cotizar
-                </span>
-                <span style={{ fontSize: 11, color: '#94A3B8', marginLeft: 4 }}>— asigna proveedor y precio por artículo</span>
-              </div>
+          {/* ── Una sección por artículo ── */}
+          {detallesReq.map(d => {
+            const cots    = cotsDeDetalle(d.id);
+            const addForm = getAddForm(d.id);
+            const faltaCots = cots.length < minCots;
 
-              <div style={{ overflowX: 'auto' as const }}>
-                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
-                  <thead>
-                    <tr style={{ background: '#1E293B' }}>
-                      <th style={{ padding: '9px 10px', textAlign: 'left' as const, fontWeight: 600, color: '#94A3B8', fontSize: 10, textTransform: 'uppercase' as const, letterSpacing: '0.06em', minWidth: 30 }}>#</th>
-                      <th style={{ padding: '9px 10px', textAlign: 'left' as const, fontWeight: 600, color: '#94A3B8', fontSize: 10, textTransform: 'uppercase' as const, letterSpacing: '0.06em', minWidth: 140 }}>Artículo</th>
-                      <th style={{ padding: '9px 10px', textAlign: 'center' as const, fontWeight: 600, color: '#94A3B8', fontSize: 10, textTransform: 'uppercase' as const, letterSpacing: '0.06em', minWidth: 60 }}>Unidad</th>
-                      <th style={{ padding: '9px 10px', textAlign: 'center' as const, fontWeight: 600, color: '#94A3B8', fontSize: 10, textTransform: 'uppercase' as const, letterSpacing: '0.06em', minWidth: 50 }}>Cant.</th>
-                      <th style={{ padding: '9px 10px', textAlign: 'left' as const, fontWeight: 600, color: '#94A3B8', fontSize: 10, textTransform: 'uppercase' as const, letterSpacing: '0.06em', minWidth: 180 }}>Proveedor</th>
-                      <th style={{ padding: '9px 10px', textAlign: 'right' as const, fontWeight: 600, color: '#94A3B8', fontSize: 10, textTransform: 'uppercase' as const, letterSpacing: '0.06em', minWidth: 112 }}>Precio unit.</th>
-                      <th style={{ padding: '9px 10px', textAlign: 'left' as const, fontWeight: 600, color: '#94A3B8', fontSize: 10, textTransform: 'uppercase' as const, letterSpacing: '0.06em', minWidth: 116 }}>T. Entrega</th>
-                      <th style={{ padding: '9px 10px', textAlign: 'left' as const, fontWeight: 600, color: '#94A3B8', fontSize: 10, textTransform: 'uppercase' as const, letterSpacing: '0.06em', minWidth: 150 }}>Forma pago</th>
-                      <th style={{ padding: '9px 10px', textAlign: 'right' as const, fontWeight: 600, color: '#94A3B8', fontSize: 10, textTransform: 'uppercase' as const, letterSpacing: '0.06em', minWidth: 100 }}>Total</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {detallesReq.map((d, idx) => {
-                      const cot        = getCot(d.id);
-                      const totalFila  = cot.precioUnitario * d.cantidadSolicitada;
-                      const incompleto = !cot.proveedorId || cot.precioUnitario <= 0;
-                      return (
-                        <tr
-                          key={d.id}
-                          style={{
-                            borderTop: idx === 0 ? 'none' : '1px solid #F1F5F9',
-                            background: incompleto ? '#FEFCE8' : 'white',
-                            borderLeft: incompleto ? '3px solid #FBBF24' : '3px solid transparent',
-                          }}
-                        >
-                          <td style={{ padding: '7px 10px', color: '#94A3B8', fontWeight: 500 }}>{d.numero}</td>
-                          <td style={{ padding: '7px 10px', fontWeight: 600, color: '#0F172A' }}>{d.productoNombre ?? '—'}</td>
-                          <td style={{ padding: '7px 10px', textAlign: 'center' as const, color: '#64748B' }}>
-                            <span style={{ background: '#F1F5F9', borderRadius: 4, padding: '2px 6px', fontSize: 11 }}>{d.unidadLibre ?? '—'}</span>
-                          </td>
-                          <td style={{ padding: '7px 10px', textAlign: 'center' as const, fontWeight: 700, color: '#1E293B' }}>{d.cantidadSolicitada}</td>
-                          {/* Proveedor */}
-                          <td style={{ padding: '5px 7px' }}>
-                            <select
-                              value={cot.proveedorId ?? ''}
-                              onChange={e => {
-                                const pid  = Number(e.target.value) || null;
-                                const prov = proveedoresCat.find((p: Proveedor) => p.id === pid);
-                                updateCot(d.id, {
-                                  proveedorId:   pid,
-                                  tiempoEntrega: prov?.tiempoEntregaPromedio ?? cot.tiempoEntrega,
-                                  formaPago:     prov?.metodoPago            ?? cot.formaPago,
-                                });
-                              }}
-                              style={{ ...(!cot.proveedorId ? inputWarn : inputBase), width: '100%', minWidth: 166 }}
-                            >
-                              <option value="">Seleccionar proveedor…</option>
-                              {proveedoresCat.map((p: Proveedor) => (
-                                <option key={p.id} value={p.id}>{p.nombre}</option>
-                              ))}
-                            </select>
-                          </td>
-                          {/* Precio unitario */}
-                          <td style={{ padding: '5px 7px' }}>
-                            <input
-                              type="number"
-                              min={0}
-                              step={0.01}
-                              placeholder="0.00"
-                              value={cot.precioUnitario || ''}
-                              onChange={e => updateCot(d.id, { precioUnitario: Number(e.target.value) })}
-                              style={{ ...(cot.precioUnitario <= 0 ? inputWarn : inputBase), width: 100, textAlign: 'right' as const }}
-                            />
-                          </td>
-                          {/* Tiempo entrega */}
-                          <td style={{ padding: '5px 7px' }}>
-                            <input
-                              type="text"
-                              placeholder="Ej. 5 días"
-                              value={cot.tiempoEntrega}
-                              onChange={e => updateCot(d.id, { tiempoEntrega: e.target.value })}
-                              style={{ ...inputBase, width: 103 }}
-                            />
-                          </td>
-                          {/* Forma pago */}
-                          <td style={{ padding: '5px 7px' }}>
-                            <select
-                              value={cot.formaPago}
-                              onChange={e => updateCot(d.id, { formaPago: e.target.value })}
-                              style={{ ...inputBase, width: '100%', minWidth: 138 }}
-                            >
-                              <option value="">—</option>
-                              <option value="Contado">Contado</option>
-                              <option value="Crédito 15 días">Crédito 15 días</option>
-                              <option value="Crédito 30 días">Crédito 30 días</option>
-                              <option value="Crédito 60 días">Crédito 60 días</option>
-                              <option value="Transferencia bancaria">Transferencia bancaria</option>
-                              <option value="Cheque nominativo">Cheque nominativo</option>
-                            </select>
-                          </td>
-                          {/* Total fila */}
-                          <td style={{ padding: '7px 10px', textAlign: 'right' as const, fontWeight: 700, color: totalFila > 0 ? '#0F172A' : '#CBD5E1', fontSize: 12 }}>
-                            {totalFila > 0 ? `$${totalFila.toLocaleString('es-MX', { minimumFractionDigits: 2 })}` : '—'}
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-
-              {/* Totales */}
-              <div style={{ borderTop: '2px solid #E2E8F0', background: '#F8FAFC', padding: '12px 20px', display: 'flex', justifyContent: 'flex-end' as const, alignItems: 'center', gap: 40 }}>
-                <div style={{ display: 'flex', flexDirection: 'column' as const, gap: 5, minWidth: 260 }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between' as const, fontSize: 12, color: '#64748B' }}>
-                    <span>Subtotal</span>
-                    <span style={{ fontWeight: 600, color: '#334155' }}>${subtotal.toLocaleString('es-MX', { minimumFractionDigits: 2 })}</span>
-                  </div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between' as const, fontSize: 12, color: '#64748B' }}>
-                    <span>IVA (16%)</span>
-                    <span style={{ fontWeight: 600, color: '#334155' }}>${iva.toLocaleString('es-MX', { minimumFractionDigits: 2 })}</span>
-                  </div>
-                  <div style={{ height: 1, background: '#E2E8F0', margin: '3px 0' }} />
-                  <div style={{ display: 'flex', justifyContent: 'space-between' as const, alignItems: 'center' }}>
-                    <span style={{ fontSize: 13, fontWeight: 700, color: '#1E293B' }}>Total con IVA</span>
-                    <span style={{ fontSize: 16, fontWeight: 800, color: '#16A34A', letterSpacing: '-0.01em' }}>
-                      ${totalConIva.toLocaleString('es-MX', { minimumFractionDigits: 2 })}
-                    </span>
-                  </div>
+            return (
+              <div key={d.id} style={{ border: `1.5px solid ${faltaCots ? '#FDE68A' : '#BBF7D0'}`, borderRadius: 12, overflow: 'hidden' }}>
+                {/* Cabecera artículo */}
+                <div style={{ padding: '10px 16px', background: '#F8FAFC', borderBottom: '1px solid #E2E8F0', display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' as const }}>
+                  <span style={{ background: '#1E293B', color: 'white', borderRadius: 6, padding: '2px 7px', fontSize: 11, fontWeight: 700 }}>#{d.numero}</span>
+                  <span style={{ fontWeight: 700, fontSize: 14, color: '#0F172A' }}>{d.productoNombre ?? '—'}</span>
+                  <span style={{ background: '#F1F5F9', borderRadius: 4, padding: '2px 6px', fontSize: 11, color: '#64748B' }}>{d.cantidadSolicitada} {d.unidadLibre ?? ''}</span>
+                  <span style={{ marginLeft: 'auto', fontSize: 11, color: faltaCots ? '#D97706' : '#16A34A', fontWeight: 600 }}>
+                    {cots.length}/{minCots} cotiz.
+                  </span>
                 </div>
-              </div>
-            </div>
-          )}
 
-          {/* Agrupación por proveedor */}
-          {gruposProv.length > 0 && (
-            <div style={{ border: '1px solid #BFDBFE', borderRadius: 12, overflow: 'hidden', background: 'white', boxShadow: '0 1px 3px rgba(37,99,235,0.07)' }}>
-              <div style={{ padding: '10px 16px', background: '#EFF6FF', borderBottom: '1px solid #BFDBFE', display: 'flex', alignItems: 'center', gap: 8 }}>
-                <Building2 size={14} style={{ color: '#2563EB' }} />
-                <span style={{ fontWeight: 700, fontSize: 11, color: '#1D4ED8', textTransform: 'uppercase' as const, letterSpacing: '0.07em' }}>
-                  Órdenes de compra que se generarán
-                </span>
-                <span style={{ marginLeft: 'auto', background: '#DBEAFE', color: '#1D4ED8', fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 10 }}>
-                  {gruposProv.length} {gruposProv.length === 1 ? 'proveedor' : 'proveedores'}
-                </span>
-              </div>
-              <div style={{ padding: '12px 16px', display: 'flex', flexWrap: 'wrap' as const, gap: 10 }}>
-                {gruposProv.map((g, i) => (
-                  <div key={i} style={{ flex: '1 1 220px', border: '1px solid #BFDBFE', borderLeft: '4px solid #2563EB', borderRadius: 8, padding: '10px 14px', background: '#F8FBFF' }}>
-                    <div style={{ fontWeight: 700, fontSize: 13, color: '#1E293B', marginBottom: 6, whiteSpace: 'nowrap' as const, overflow: 'hidden', textOverflow: 'ellipsis' }}>{g.nombre}</div>
-                    <div style={{ display: 'flex', justifyContent: 'space-between' as const, alignItems: 'center' }}>
-                      <span style={{ background: '#DBEAFE', color: '#1D4ED8', fontSize: 10, fontWeight: 700, padding: '2px 7px', borderRadius: 10 }}>
-                        {g.cantidad} {g.cantidad === 1 ? 'artículo' : 'artículos'}
-                      </span>
-                      <span style={{ fontSize: 13, fontWeight: 800, color: '#1E293B' }}>
-                        ${g.subtotal.toLocaleString('es-MX', { minimumFractionDigits: 2 })}
-                      </span>
+                {/* Sub-tabla de cotizaciones existentes */}
+                {cots.length > 0 && (
+                  <div style={{ overflowX: 'auto' as const }}>
+                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+                      <thead>
+                        <tr style={{ background: '#1E293B' }}>
+                          {['Proveedor', 'P. Unitario', 'Total', 'Entrega', 'Forma pago', 'Garantía', 'Marca / Modelo', ''].map((h, i) => (
+                            <th key={i} style={{ padding: '7px 10px', textAlign: (i === 1 || i === 2) ? 'right' as const : 'left' as const, fontWeight: 600, color: '#94A3B8', fontSize: 10, textTransform: 'uppercase' as const, letterSpacing: '0.05em', whiteSpace: 'nowrap' as const }}>{h}</th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {cots.map(c => {
+                          const precioUnit = Number(c.precioUnitario ?? c.precio ?? 0);
+                          const totalLinea = precioUnit * d.cantidadSolicitada;
+                          return (
+                            <tr key={c.id} style={{ background: 'white', borderTop: '1px solid #F1F5F9' }}>
+                              <td style={{ padding: '8px 10px', fontWeight: 600, color: '#0F172A' }}>{getCotizacionProveedorNombre(c)}</td>
+                              <td style={{ padding: '8px 10px', textAlign: 'right' as const, fontWeight: 700, color: '#16A34A' }}>
+                                ${precioUnit.toLocaleString('es-MX', { minimumFractionDigits: 2 })}
+                              </td>
+                              <td style={{ padding: '8px 10px', textAlign: 'right' as const, fontWeight: 700, color: '#1E293B' }}>
+                                ${totalLinea.toLocaleString('es-MX', { minimumFractionDigits: 2 })}
+                              </td>
+                              <td style={{ padding: '8px 10px', color: '#64748B' }}>{c.tiempoEntrega ?? '—'}</td>
+                              <td style={{ padding: '8px 10px', color: '#64748B' }}>{c.formaPago ?? '—'}</td>
+                              <td style={{ padding: '8px 10px', color: '#64748B', maxWidth: 120, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const }}>{c.garantia ?? '—'}</td>
+                              <td style={{ padding: '8px 10px', color: '#64748B' }}>
+                                {[c.marca, c.modelo].filter(Boolean).join(' / ') || '—'}
+                              </td>
+                              <td style={{ padding: '8px 10px', textAlign: 'center' as const }}>
+                                <button
+                                  onClick={() => deleteCot.mutate(
+                                    { compraId: req.id, cotizacionId: c.id },
+                                    { onError: (err: unknown) => { const e = err as { response?: { data?: { message?: string } }; message?: string }; notify(`Error: ${e?.response?.data?.message ?? e?.message}`); } }
+                                  )}
+                                  style={{ background: 'none', border: 'none', color: '#EF4444', cursor: 'pointer', padding: 4, borderRadius: 4, display: 'flex', alignItems: 'center' }}
+                                  title="Eliminar cotización"
+                                >
+                                  <X size={13} />
+                                </button>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+
+                {/* Formulario inline: agregar cotización */}
+                {addForm.open ? (
+                  <div style={{ padding: '12px 16px', background: '#F0F9FF', borderTop: cots.length > 0 ? '1px solid #E2E8F0' : 'none' }}>
+                    <div style={{ fontWeight: 700, fontSize: 12, color: '#0369A1', marginBottom: 10, display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <Plus size={13} /> Nueva cotización — {d.productoNombre}
+                    </div>
+                    {/* Fila 1: campos principales */}
+                    <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr 1fr 1fr', gap: 8, marginBottom: 8 }}>
+                      <div>
+                        <label style={{ fontSize: 10, color: '#64748B', fontWeight: 700, display: 'block', marginBottom: 3, textTransform: 'uppercase' as const }}>Proveedor *</label>
+                        <select
+                          value={addForm.proveedorId}
+                          onChange={e => setAddForm(d.id, { proveedorId: e.target.value })}
+                          style={{ ...inpBase, width: '100%' }}
+                        >
+                          <option value="">Seleccionar…</option>
+                          {proveedoresCat.map((p: Proveedor) => (
+                            <option key={p.id} value={p.id}>{p.nombre}</option>
+                          ))}
+                        </select>
+                      </div>
+                      <div>
+                        <label style={{ fontSize: 10, color: '#64748B', fontWeight: 700, display: 'block', marginBottom: 3, textTransform: 'uppercase' as const }}>Precio unit. *</label>
+                        <input type="number" min={0} step={0.01} placeholder="0.00"
+                          value={addForm.precioUnitario}
+                          onChange={e => setAddForm(d.id, { precioUnitario: e.target.value })}
+                          style={{ ...inpBase, width: '100%', textAlign: 'right' as const }}
+                        />
+                      </div>
+                      <div>
+                        <label style={{ fontSize: 10, color: '#64748B', fontWeight: 700, display: 'block', marginBottom: 3, textTransform: 'uppercase' as const }}>T. Entrega</label>
+                        <input type="text" placeholder="Ej. 5 días"
+                          value={addForm.tiempoEntrega}
+                          onChange={e => setAddForm(d.id, { tiempoEntrega: e.target.value })}
+                          style={{ ...inpBase, width: '100%' }}
+                        />
+                      </div>
+                      <div>
+                        <label style={{ fontSize: 10, color: '#64748B', fontWeight: 700, display: 'block', marginBottom: 3, textTransform: 'uppercase' as const }}>Forma pago</label>
+                        <select value={addForm.formaPago} onChange={e => setAddForm(d.id, { formaPago: e.target.value })} style={{ ...inpBase, width: '100%' }}>
+                          <option value="">—</option>
+                          <option>Contado</option>
+                          <option>Crédito 15 días</option>
+                          <option>Crédito 30 días</option>
+                          <option>Crédito 60 días</option>
+                          <option>Transferencia bancaria</option>
+                          <option>Cheque nominativo</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label style={{ fontSize: 10, color: '#64748B', fontWeight: 700, display: 'block', marginBottom: 3, textTransform: 'uppercase' as const }}>Cond. pago</label>
+                        <input type="text" placeholder="Ej. 50% anticipo"
+                          value={addForm.condicionesPago}
+                          onChange={e => setAddForm(d.id, { condicionesPago: e.target.value })}
+                          style={{ ...inpBase, width: '100%' }}
+                        />
+                      </div>
+                    </div>
+                    {/* Fila 2: datos adicionales */}
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 2fr', gap: 8, marginBottom: 10 }}>
+                      <div>
+                        <label style={{ fontSize: 10, color: '#64748B', fontWeight: 700, display: 'block', marginBottom: 3, textTransform: 'uppercase' as const }}>Garantía</label>
+                        <input type="text" placeholder="Ej. 1 año"
+                          value={addForm.garantia}
+                          onChange={e => setAddForm(d.id, { garantia: e.target.value })}
+                          style={{ ...inpBase, width: '100%' }}
+                        />
+                      </div>
+                      <div>
+                        <label style={{ fontSize: 10, color: '#64748B', fontWeight: 700, display: 'block', marginBottom: 3, textTransform: 'uppercase' as const }}>Marca</label>
+                        <input type="text" placeholder="Marca"
+                          value={addForm.marca}
+                          onChange={e => setAddForm(d.id, { marca: e.target.value })}
+                          style={{ ...inpBase, width: '100%' }}
+                        />
+                      </div>
+                      <div>
+                        <label style={{ fontSize: 10, color: '#64748B', fontWeight: 700, display: 'block', marginBottom: 3, textTransform: 'uppercase' as const }}>Modelo</label>
+                        <input type="text" placeholder="Modelo"
+                          value={addForm.modelo}
+                          onChange={e => setAddForm(d.id, { modelo: e.target.value })}
+                          style={{ ...inpBase, width: '100%' }}
+                        />
+                      </div>
+                      <div>
+                        <label style={{ fontSize: 10, color: '#64748B', fontWeight: 700, display: 'block', marginBottom: 3, textTransform: 'uppercase' as const }}>Observaciones</label>
+                        <input type="text" placeholder="Observaciones adicionales"
+                          value={addForm.observaciones}
+                          onChange={e => setAddForm(d.id, { observaciones: e.target.value })}
+                          style={{ ...inpBase, width: '100%' }}
+                        />
+                      </div>
+                    </div>
+                    {addForm.error && (
+                      <div style={{ background: '#FEF2F2', border: '1px solid #FECACA', borderRadius: 6, padding: '6px 10px', fontSize: 12, color: '#B91C1C', marginBottom: 8 }}>{addForm.error}</div>
+                    )}
+                    <div style={{ display: 'flex', gap: 8 }}>
+                      <button
+                        disabled={addCotProducto.isPending}
+                        onClick={() => {
+                          if (!addForm.proveedorId) { setAddForm(d.id, { error: 'Selecciona un proveedor' }); return; }
+                          const precio = parseFloat(addForm.precioUnitario);
+                          if (isNaN(precio) || precio <= 0) { setAddForm(d.id, { error: 'El precio unitario debe ser mayor a 0' }); return; }
+                          setAddForm(d.id, { error: '' });
+                          addCotProducto.mutate(
+                            {
+                              id: req.id,
+                              data: {
+                                requisicionDetalleId: d.id,
+                                proveedorId:    Number(addForm.proveedorId),
+                                precioUnitario: precio,
+                                tiempoEntrega:  addForm.tiempoEntrega  || undefined,
+                                formaPago:      addForm.formaPago      || undefined,
+                                condicionesPago:addForm.condicionesPago|| undefined,
+                                garantia:       addForm.garantia       || undefined,
+                                marca:          addForm.marca          || undefined,
+                                modelo:         addForm.modelo         || undefined,
+                                observaciones:  addForm.observaciones  || undefined,
+                              },
+                            },
+                            {
+                              onSuccess: () => { setAddForm(d.id, emptyAddCotForm()); notify('Cotización agregada'); },
+                              onError:   (err: unknown) => { const e = err as { response?: { data?: { message?: string } }; message?: string }; setAddForm(d.id, { error: e?.response?.data?.message ?? e?.message ?? 'Error' }); },
+                            }
+                          );
+                        }}
+                        style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 14px', background: addCotProducto.isPending ? '#94A3B8' : '#2563EB', color: 'white', border: 'none', borderRadius: 7, fontSize: 12, fontWeight: 600, cursor: addCotProducto.isPending ? 'not-allowed' : 'pointer', fontFamily: 'inherit' }}
+                      >
+                        {addCotProducto.isPending ? <><Loader2 size={12} style={{ animation: 'spin 1s linear infinite' }} /> Guardando…</> : <><Save size={12} /> Guardar cotización</>}
+                      </button>
+                      <button
+                        onClick={() => setAddForm(d.id, { open: false, error: '' })}
+                        style={{ padding: '6px 12px', background: 'white', color: '#64748B', border: '1px solid #E2E8F0', borderRadius: 7, fontSize: 12, cursor: 'pointer', fontFamily: 'inherit' }}
+                      >
+                        Cancelar
+                      </button>
                     </div>
                   </div>
-                ))}
+                ) : (
+                  /* Botón "Agregar cotización" */
+                  <div style={{ padding: '10px 16px', borderTop: cots.length > 0 ? '1px solid #F1F5F9' : 'none' }}>
+                    <button
+                      onClick={() => setAddForm(d.id, { open: true })}
+                      style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '6px 14px', background: '#EFF6FF', color: '#2563EB', border: '1.5px dashed #BFDBFE', borderRadius: 7, fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}
+                    >
+                      <Plus size={13} /> Agregar cotización
+                    </button>
+                    {cots.length < minCots && (
+                      <span style={{ marginLeft: 12, fontSize: 11, color: '#D97706' }}>
+                        Faltan {minCots - cots.length} cotizaci{minCots - cots.length === 1 ? 'ón' : 'ones'}
+                      </span>
+                    )}
+                  </div>
+                )}
               </div>
-            </div>
-          )}
+            );
+          })}
 
-          {/* Barra de acciones */}
+          {/* Acciones */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, borderTop: '1px solid #E2E8F0', paddingTop: 16, flexWrap: 'wrap' as const }}>
-            {detallesReq.length > 0 && (
+            {req.estado === 'COTIZACIONES_CARGADAS' && (
               <button
-                disabled={!todoCompleto || createCotBulk.isPending}
-                onClick={guardarBulk}
-                style={{
-                  display: 'flex', alignItems: 'center', gap: 7, padding: '8px 18px',
-                  background: (!todoCompleto || createCotBulk.isPending) ? '#E2E8F0' : '#2563EB',
-                  color: (!todoCompleto || createCotBulk.isPending) ? '#94A3B8' : 'white',
-                  border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 600,
-                  cursor: (!todoCompleto || createCotBulk.isPending) ? 'not-allowed' : 'pointer',
-                  fontFamily: 'inherit', transition: 'background 0.15s',
-                }}
+                disabled={!todoListo || enviarAdministracion.isPending}
+                onClick={() => enviarAdministracion.mutate(
+                  { id: req.id },
+                  {
+                    onSuccess: () => { cerrarCatalogo(); notify('Compra enviada a revisión administrativa'); },
+                    onError:   (err: unknown) => { const e = err as { response?: { data?: { message?: string } }; message?: string }; notify(`Error: ${e?.response?.data?.message ?? e?.message}`); },
+                  }
+                )}
+                style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '8px 18px', background: !todoListo || enviarAdministracion.isPending ? '#9CA3AF' : '#16A34A', color: 'white', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: !todoListo || enviarAdministracion.isPending ? 'not-allowed' : 'pointer', fontFamily: 'inherit' }}
               >
-                {createCotBulk.isPending
-                  ? <><Loader2 size={14} style={{ animation: 'spin 1s linear infinite' }} /> Guardando…</>
-                  : <><Save size={14} /> Guardar cotizaciones</>}
-              </button>
-            )}
-            {puedeContinuar && (
-              <button
-                disabled={enviarAdministracion.isPending}
-                onClick={() => {
-                  enviarAdministracion.mutate(
-                    { id: req.id },
-                    {
-                      onSuccess: () => { cerrarCatalogo(); notify('Compra enviada a revisión administrativa'); },
-                      onError:   (err: unknown) => {
-                        const e = err as { response?: { data?: { message?: string } }; message?: string };
-                        notify(`Error: ${e?.response?.data?.message ?? e?.message}`);
-                      },
-                    }
-                  );
-                }}
-                style={{
-                  display: 'flex', alignItems: 'center', gap: 7, padding: '8px 18px',
-                  background: enviarAdministracion.isPending ? '#BBF7D0' : '#16A34A',
-                  color: 'white', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 600,
-                  cursor: enviarAdministracion.isPending ? 'not-allowed' : 'pointer',
-                  fontFamily: 'inherit', boxShadow: '0 1px 4px rgba(22,163,74,0.25)',
-                }}
-              >
-                {enviarAdministracion.isPending
-                  ? <><Loader2 size={14} /> Enviando…</>
-                  : <><Send size={14} /> Enviar a Revisión Administrativa</>}
+                {enviarAdministracion.isPending ? <><Loader2 size={14} /> Enviando…</> : <><Send size={14} /> Enviar a Revisión Administrativa</>}
               </button>
             )}
             <div style={{ flex: 1 }} />
-            {!todoCompleto && detallesReq.length > 0 && (
+            {!todoListo && detallesReq.length > 0 && (
               <span style={{ fontSize: 11, color: '#F59E0B', display: 'flex', alignItems: 'center', gap: 4 }}>
                 <AlertCircle size={12} />
-                Completa proveedor y precio en todos los artículos para guardar
+                Cada artículo necesita al menos {minCots} cotizaci{minCots === 1 ? 'ón' : 'ones'}
               </span>
             )}
-            <button
-              onClick={cerrarCatalogo}
-              style={{ padding: '8px 16px', background: 'white', color: '#64748B', border: '1px solid #E2E8F0', borderRadius: 8, fontSize: 13, fontWeight: 500, cursor: 'pointer', fontFamily: 'inherit' }}
-            >
-              Cancelar
+            <button onClick={cerrarCatalogo} style={{ padding: '8px 16px', background: 'white', color: '#64748B', border: '1px solid #E2E8F0', borderRadius: 8, fontSize: 13, cursor: 'pointer', fontFamily: 'inherit' }}>
+              Cerrar
             </button>
           </div>
         </Modal>
@@ -1692,7 +1414,7 @@ export function Compras() {
             Negociación registrada. Envía el expediente a Administración para revisión.
           </div>
           <div style={{ background: '#F9FAFB', borderRadius: 10, padding: 14, fontSize: 13, color: '#374151', display: 'flex', flexDirection: 'column', gap: 4 }}>
-            <div><strong>Folio:</strong> {req.folio} · <strong>Área:</strong> {req.areaSolicitante}</div>
+            <div><strong>Folio:</strong> {req.folio} · <strong>Área:</strong> {(req.requisicion?.areaSolicitante || req.areaSolicitante)}</div>
             <div><strong>Descripción:</strong> {req.descripcion}</div>
             <div><strong>Presupuesto estimado:</strong> ${(req.presupuestoEstimado ?? 0).toLocaleString('es-MX')}</div>
             {cot && <div><strong>Proveedor negociado:</strong> {cot.proveedor} — ${Number(cot.precio).toLocaleString('es-MX', { minimumFractionDigits: 2 })}</div>}
@@ -1720,7 +1442,20 @@ export function Compras() {
 
     // ── 7b. AUTORIZADA — informativo para quienes no generan orden ───────────
     if (estadoModal === 'AUTORIZADA' && !puedeHacer(rol, 'ordenar')) {
-      const cot = req.cotizaciones?.find(c => c.esMejorOpcion) ?? req.cotizaciones?.[0];
+      const todasCotsA  = req.cotizaciones ?? [];
+      const detallesA   = req.requisicion?.detalles ?? [];
+      const gruposA: { nombre: string; cantidad: number; subtotal: number }[] = [];
+      for (const d of detallesA) {
+        const gan = todasCotsA.find(c => c.requisicionDetalleId === d.id && c.esMejorOpcion);
+        if (!gan) continue;
+        const nombre = getCotizacionProveedorNombre(gan) || `Proveedor #${gan.proveedorId}`;
+        const monto  = Number(gan.precioUnitario ?? gan.precio ?? 0) * d.cantidadSolicitada;
+        const ex = gruposA.find(g => g.nombre === nombre);
+        if (ex) { ex.subtotal += monto; ex.cantidad += 1; }
+        else gruposA.push({ nombre, subtotal: monto, cantidad: 1 });
+      }
+      const subtotalA    = gruposA.reduce((s, g) => s + g.subtotal, 0);
+      const totalConIvaA = subtotalA * 1.16;
       return (
         <Modal title="Requisición autorizada" onClose={() => { estadoModalRef.current = null; setProceso(null); }} width={520}>
           <div style={{ background: '#F0FDF4', border: '1px solid #BBF7D0', borderRadius: 12, padding: '20px 22px', display: 'flex', flexDirection: 'column', gap: 10 }}>
@@ -1733,10 +1468,12 @@ export function Compras() {
             </p>
           </div>
           <div style={{ background: '#F9FAFB', borderRadius: 10, padding: 14, fontSize: 13, color: '#374151', display: 'flex', flexDirection: 'column', gap: 4 }}>
-            <div><strong>Folio:</strong> {req.folio} &nbsp;·&nbsp; <strong>Área:</strong> {req.areaSolicitante}</div>
-            <div><strong>Descripción:</strong> {req.descripcion}</div>
-            {cot && (
-              <div><strong>Proveedor seleccionado:</strong> {getCotizacionProveedorNombre(cot)} — ${Number(cot.precio).toLocaleString('es-MX', { minimumFractionDigits: 2 })}</div>
+            <div><strong>Folio:</strong> {req.folio} &nbsp;·&nbsp; <strong>Área:</strong> {(req.requisicion?.areaSolicitante || req.areaSolicitante)}</div>
+            {gruposA.map((g, i) => (
+              <div key={i}><strong>Proveedor ganador:</strong> {g.nombre} — ${g.subtotal.toLocaleString('es-MX', { minimumFractionDigits: 2 })} ({g.cantidad} art.)</div>
+            ))}
+            {totalConIvaA > 0 && (
+              <div style={{ fontWeight: 700, color: '#16A34A' }}><strong style={{ color: '#374151', fontWeight: 600 }}>Total c/IVA:</strong> ${totalConIvaA.toLocaleString('es-MX', { minimumFractionDigits: 2 })}</div>
             )}
           </div>
           <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
@@ -1748,25 +1485,71 @@ export function Compras() {
 
     // ── 8. AUTORIZADA → ORDEN_GENERADA ───────────────────────────────────────
     if (estadoModal === 'AUTORIZADA' && puedeHacer(rol, 'ordenar')) {
-      const cot = req.cotizaciones?.find(c => c.esMejorOpcion) ?? req.cotizaciones?.[0];
-      const montoOrden = cot ? Number(cot.precio) : (req.presupuestoEstimado ?? 0);
-      const nombreProv = cot ? getCotizacionProveedorNombre(cot) : '—';
+      const todasCots8  = req.cotizaciones ?? [];
+      const detalles8   = req.requisicion?.detalles ?? [];
+
+      // Agrupar proveedores ganadores
+      const grupos8: { nombre: string; cantidad: number; subtotal: number }[] = [];
+      for (const d of detalles8) {
+        const gan = todasCots8.find(c => c.requisicionDetalleId === d.id && c.esMejorOpcion);
+        if (!gan) continue;
+        const nombre = getCotizacionProveedorNombre(gan) || `Proveedor #${gan.proveedorId}`;
+        const monto  = Number(gan.precioUnitario ?? gan.precio ?? 0) * d.cantidadSolicitada;
+        const ex = grupos8.find(g => g.nombre === nombre);
+        if (ex) { ex.subtotal += monto; ex.cantidad += 1; }
+        else grupos8.push({ nombre, subtotal: monto, cantidad: 1 });
+      }
+      const subtotal8    = grupos8.reduce((s, g) => s + g.subtotal, 0);
+      const iva8         = subtotal8 * 0.16;
+      const total8       = subtotal8 + iva8;
+
+      // Fallback: cotización legacy
+      const cotLegacy    = todasCots8.find(c => c.esMejorOpcion) ?? todasCots8[0];
+      const hayGanadores = grupos8.length > 0;
+
       return (
-        <Modal title="Generar orden de compra" onClose={() => { estadoModalRef.current = null; setProceso(null); }} width={600}>
+        <Modal title="Generar orden de compra" onClose={() => { estadoModalRef.current = null; setProceso(null); }} width={680}>
           <div style={{ background: '#F0FDF4', border: '1px solid #BBF7D0', borderRadius: 10, padding: '14px 18px', display: 'flex', alignItems: 'center', gap: 10 }}>
             <CheckCircle size={18} color="#16A34A" />
             <span style={{ fontSize: 14, fontWeight: 600, color: '#166534' }}>Requisición autorizada por Dirección General</span>
           </div>
-          {cot ? (
+
+          {/* Proveedores ganadores */}
+          {hayGanadores ? (
+            <div style={{ border: '1px solid #BFDBFE', borderRadius: 12, overflow: 'hidden' }}>
+              <div style={{ padding: '9px 16px', background: '#EFF6FF', borderBottom: '1px solid #BFDBFE', display: 'flex', alignItems: 'center', gap: 8 }}>
+                <Building2 size={13} style={{ color: '#2563EB' }} />
+                <span style={{ fontWeight: 700, fontSize: 11, color: '#1D4ED8', textTransform: 'uppercase' as const, letterSpacing: '0.07em' }}>Proveedores (mejor cotización)</span>
+                <span style={{ marginLeft: 'auto', background: '#DBEAFE', color: '#1D4ED8', fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 10 }}>
+                  {grupos8.length} {grupos8.length === 1 ? 'proveedor' : 'proveedores'}
+                </span>
+              </div>
+              <div style={{ padding: '12px 16px', display: 'flex', flexWrap: 'wrap' as const, gap: 10, alignItems: 'flex-end' }}>
+                {grupos8.map((g, i) => (
+                  <div key={i} style={{ flex: '1 1 160px', border: '1px solid #BFDBFE', borderLeft: '4px solid #2563EB', borderRadius: 8, padding: '10px 14px', background: '#F8FBFF' }}>
+                    <div style={{ fontWeight: 700, fontSize: 13, color: '#1E293B', marginBottom: 5 }}>{g.nombre}</div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between' as const, alignItems: 'center' }}>
+                      <span style={{ background: '#DBEAFE', color: '#1D4ED8', fontSize: 10, fontWeight: 700, padding: '2px 7px', borderRadius: 10 }}>{g.cantidad} art.</span>
+                      <span style={{ fontSize: 13, fontWeight: 800, color: '#1E293B' }}>${g.subtotal.toLocaleString('es-MX', { minimumFractionDigits: 2 })}</span>
+                    </div>
+                  </div>
+                ))}
+                <div style={{ flex: '1 1 160px', background: '#F0FDF4', border: '1px solid #BBF7D0', borderRadius: 8, padding: '10px 14px' }}>
+                  <div style={{ fontSize: 11, color: '#64748B', marginBottom: 3 }}>Subtotal: ${subtotal8.toLocaleString('es-MX', { minimumFractionDigits: 2 })}</div>
+                  <div style={{ fontSize: 11, color: '#64748B', marginBottom: 3 }}>IVA (16%): ${iva8.toLocaleString('es-MX', { minimumFractionDigits: 2 })}</div>
+                  <div style={{ fontSize: 15, fontWeight: 800, color: '#15803D' }}>Total: ${total8.toLocaleString('es-MX', { minimumFractionDigits: 2 })}</div>
+                </div>
+              </div>
+            </div>
+          ) : cotLegacy ? (
             <div style={{ background: '#EFF6FF', border: '1px solid #BFDBFE', borderRadius: 10, padding: '14px 18px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <div>
                 <div style={{ fontSize: 11, color: '#6B7280', fontWeight: 600, marginBottom: 3, textTransform: 'uppercase' as const, letterSpacing: '0.06em' }}>Proveedor (mejor cotización)</div>
-                <div style={{ fontSize: 15, fontWeight: 700, color: '#1E3A5F' }}>{nombreProv}</div>
-                {cot.tiempoEntrega && <div style={{ fontSize: 12, color: '#6B7280', marginTop: 2 }}>Entrega: {cot.tiempoEntrega}</div>}
+                <div style={{ fontSize: 15, fontWeight: 700, color: '#1E3A5F' }}>{getCotizacionProveedorNombre(cotLegacy)}</div>
               </div>
               <div style={{ textAlign: 'right' as const }}>
-                <div style={{ fontSize: 11, color: '#6B7280', fontWeight: 600, marginBottom: 3, textTransform: 'uppercase' as const, letterSpacing: '0.06em' }}>Monto total</div>
-                <div style={{ fontSize: 22, fontWeight: 800, color: '#2563EB' }}>${montoOrden.toLocaleString('es-MX', { minimumFractionDigits: 2 })}</div>
+                <div style={{ fontSize: 11, color: '#6B7280', fontWeight: 600, marginBottom: 3, textTransform: 'uppercase' as const, letterSpacing: '0.06em' }}>Monto</div>
+                <div style={{ fontSize: 20, fontWeight: 800, color: '#2563EB' }}>${Number(cotLegacy.precio).toLocaleString('es-MX', { minimumFractionDigits: 2 })}</div>
               </div>
             </div>
           ) : (
@@ -1774,58 +1557,51 @@ export function Compras() {
               Sin cotizaciones registradas. Verifica el proceso antes de continuar.
             </div>
           )}
-          {(() => {
-            const compraRows = (req.detalles ?? []).map((d: any) => ({
-              id: d.id,
-              nombre: typeof d.producto === 'object' && d.producto !== null ? (d.producto as any).nombre : String(d.producto ?? '—'),
-              unidad: d.unidad,
-              cantidad: d.cantidad,
-            }));
-            const reqRows = compraRows.length === 0
-              ? ((req.requisicion?.detalles ?? []) as any[]).map((d: any, i: number) => ({
-                  id: i,
-                  nombre: d.productoNombre ?? '—',
-                  unidad: d.unidadLibre ?? '—',
-                  cantidad: d.cantidadSolicitada,
-                }))
-              : [];
-            const rows = compraRows.length > 0 ? compraRows : reqRows;
-            if (rows.length === 0) return null;
-            return (
-              <div style={{ border: '1px solid #E8ECF0', borderRadius: 10, overflow: 'hidden' }}>
-                <div style={{ padding: '8px 14px', background: '#F9FAFB', fontWeight: 600, fontSize: 11, color: '#374151', borderBottom: '1px solid #E8ECF0', textTransform: 'uppercase' as const, letterSpacing: '0.06em' }}>
-                  Artículos de la orden
-                </div>
-                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
-                  <thead>
-                    <tr style={{ background: '#F3F4F6' }}>
-                      <th style={{ padding: '8px 12px', textAlign: 'left' as const, fontWeight: 600, color: '#6B7280', fontSize: 12 }}>Producto</th>
-                      <th style={{ padding: '8px 12px', textAlign: 'center' as const, fontWeight: 600, color: '#6B7280', fontSize: 12 }}>Unidad</th>
-                      <th style={{ padding: '8px 12px', textAlign: 'center' as const, fontWeight: 600, color: '#6B7280', fontSize: 12 }}>Cant.</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {rows.map(row => (
-                      <tr key={row.id} style={{ borderTop: '1px solid #E8ECF0' }}>
-                        <td style={{ padding: '8px 12px', color: '#111827', fontWeight: 500 }}>{row.nombre}</td>
-                        <td style={{ padding: '8px 12px', textAlign: 'center' as const, color: '#6B7280' }}>{row.unidad}</td>
-                        <td style={{ padding: '8px 12px', textAlign: 'center' as const, fontWeight: 600 }}>{row.cantidad}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+
+          {/* Tabla de artículos con proveedor ganador */}
+          {detalles8.length > 0 && (
+            <div style={{ border: '1px solid #E8ECF0', borderRadius: 10, overflow: 'hidden' }}>
+              <div style={{ padding: '8px 14px', background: '#F9FAFB', fontWeight: 600, fontSize: 11, color: '#374151', borderBottom: '1px solid #E8ECF0', textTransform: 'uppercase' as const, letterSpacing: '0.06em' }}>
+                Artículos de la orden
               </div>
-            );
-          })()}
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+                <thead>
+                  <tr style={{ background: '#F3F4F6' }}>
+                    {['Artículo', 'Cant.', 'Proveedor', 'P. Unit.', 'Total'].map((h, i) => (
+                      <th key={i} style={{ padding: '8px 12px', textAlign: (i >= 3 ? 'right' : i === 1 ? 'center' : 'left') as React.CSSProperties['textAlign'], fontWeight: 600, color: '#6B7280', fontSize: 11 }}>{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {detalles8.map(d => {
+                    const gan      = todasCots8.find(c => c.requisicionDetalleId === d.id && c.esMejorOpcion);
+                    const precioU  = gan ? Number(gan.precioUnitario ?? gan.precio ?? 0) : 0;
+                    const totalD   = precioU * d.cantidadSolicitada;
+                    return (
+                      <tr key={d.id} style={{ borderTop: '1px solid #E8ECF0' }}>
+                        <td style={{ padding: '8px 12px', color: '#111827', fontWeight: 500 }}>{d.productoNombre ?? '—'}</td>
+                        <td style={{ padding: '8px 12px', textAlign: 'center', fontWeight: 600 }}>{d.cantidadSolicitada} {d.unidadLibre ?? ''}</td>
+                        <td style={{ padding: '8px 12px', color: '#374151' }}>{gan ? getCotizacionProveedorNombre(gan) : <span style={{ color: '#9CA3AF' }}>Sin ganador</span>}</td>
+                        <td style={{ padding: '8px 12px', textAlign: 'right', color: '#374151' }}>{precioU > 0 ? `$${precioU.toLocaleString('es-MX', { minimumFractionDigits: 2 })}` : '—'}</td>
+                        <td style={{ padding: '8px 12px', textAlign: 'right', fontWeight: 700, color: totalD > 0 ? '#0F172A' : '#CBD5E1' }}>{totalD > 0 ? `$${totalD.toLocaleString('es-MX', { minimumFractionDigits: 2 })}` : '—'}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+
           <div style={{ display: 'flex', gap: 10 }}>
             <Btn
               icon={<Package size={15}/>}
-              disabled={!cot || createOrden.isPending}
+              disabled={(!hayGanadores && !cotLegacy) || createOrden.isPending || enviadoOrden}
               onClick={() => {
-                if (!cot) return;
+                if (enviadoOrden) return;
+                setEnviadoOrden(true);
                 createOrden.mutate(req.id, {
                   onSuccess: () => { estadoModalRef.current = null; setProceso(null); notify('Orden de compra generada'); },
-                  onError:   (err: any) => notify(`Error: ${err?.response?.data?.message ?? err?.message}`),
+                  onError:   (err: unknown) => { setEnviadoOrden(false); const e = err as { response?: { data?: { message?: string } }; message?: string }; notify(`Error: ${e?.response?.data?.message ?? e?.message}`); },
                 });
               }}
             >
@@ -1841,22 +1617,22 @@ export function Compras() {
     if (estadoModal === 'ORDEN_GENERADA' && puedeHacer(rol, 'facturas')) {
       return (
         <Modal title="Orden de compra activa" onClose={() => { estadoModalRef.current = null; setProceso(null); }} width={560}>
-          {req.ordenCompra && (
-            <div style={{ background: '#F0FDF4', border: '1px solid #BBF7D0', borderRadius: 10, padding: '14px 18px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          {(req.ordenes ?? []).map(oc => (
+            <div key={oc.id} style={{ background: '#F0FDF4', border: '1px solid #BBF7D0', borderRadius: 10, padding: '14px 18px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <div>
                 <div style={{ fontSize: 11, color: '#6B7280', fontWeight: 600, marginBottom: 2, textTransform: 'uppercase' as const, letterSpacing: '0.06em' }}>Folio OC</div>
-                <div style={{ fontSize: 14, fontWeight: 700, color: '#166534' }}>{req.ordenCompra.folio}</div>
+                <div style={{ fontSize: 14, fontWeight: 700, color: '#166534' }}>{oc.folio}</div>
               </div>
               <div style={{ textAlign: 'center' as const }}>
                 <div style={{ fontSize: 11, color: '#6B7280', fontWeight: 600, marginBottom: 2, textTransform: 'uppercase' as const, letterSpacing: '0.06em' }}>Proveedor</div>
-                <div style={{ fontSize: 14, fontWeight: 600, color: '#111827' }}>{typeof req.ordenCompra.proveedor === 'object' && req.ordenCompra.proveedor !== null ? (req.ordenCompra.proveedor as any).nombre : String(req.ordenCompra.proveedor ?? '—')}</div>
+                <div style={{ fontSize: 14, fontWeight: 600, color: '#111827' }}>{typeof oc.proveedor === 'object' && oc.proveedor !== null ? (oc.proveedor as any).nombre : String(oc.proveedor ?? '—')}</div>
               </div>
               <div style={{ textAlign: 'right' as const }}>
                 <div style={{ fontSize: 11, color: '#6B7280', fontWeight: 600, marginBottom: 2, textTransform: 'uppercase' as const, letterSpacing: '0.06em' }}>Total</div>
-                <div style={{ fontSize: 16, fontWeight: 800, color: '#2563EB' }}>${Number(req.ordenCompra.total).toLocaleString('es-MX', { minimumFractionDigits: 2 })}</div>
+                <div style={{ fontSize: 16, fontWeight: 800, color: '#2563EB' }}>${Number(oc.total).toLocaleString('es-MX', { minimumFractionDigits: 2 })}</div>
               </div>
             </div>
-          )}
+          ))}
           <div style={{ background: '#FFFBEB', border: '1px solid #FDE68A', borderRadius: 10, padding: '12px 16px', fontSize: 13, color: '#92400E' }}>
             <div style={{ fontWeight: 600, marginBottom: 6 }}>Pasos a completar:</div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
@@ -1877,64 +1653,69 @@ export function Compras() {
             </div>
           )}
           <div style={{ background: '#EFF6FF', border: '1px solid #BFDBFE', borderRadius: 10, padding: 12, fontSize: 13, color: '#1D4ED8' }}>
-            Al subir la primera factura el proceso avanzará automáticamente a la siguiente etapa.
+            Sube una factura por cada orden de compra. Una vez registradas todas las facturas, cierra esta ventana y genera el expediente.
           </div>
           {facturaFile ? (
             <div style={{ border: '1px solid #BFDBFE', borderRadius: 12, padding: 16, background: '#EFF6FF', display: 'flex', flexDirection: 'column', gap: 12 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, fontWeight: 600, color: '#1D4ED8' }}>
                 <Receipt size={15} /> {facturaFile.name}
               </div>
+              {(req.ordenes?.length ?? 0) > 1 && (
+                <div>
+                  <label style={{ fontSize: 11, fontWeight: 600, color: '#374151', display: 'block', marginBottom: 4, textTransform: 'uppercase' as const, letterSpacing: '0.05em' }}>Proveedor *</label>
+                  <select
+                    value={facturaProveedorId ?? ''}
+                    onChange={e => setFacturaProveedorId(e.target.value ? Number(e.target.value) : null)}
+                    style={{ width: '100%', height: 34, padding: '0 10px', border: '1px solid #D1D5DB', borderRadius: 8, fontSize: 13, background: 'white', boxSizing: 'border-box' as const }}
+                  >
+                    <option value="">— Selecciona proveedor —</option>
+                    {(req.ordenes ?? []).map(o => {
+                      const pId = o.proveedorId ?? (typeof o.proveedor === 'object' && o.proveedor !== null ? (o.proveedor as { id: number; nombre: string }).id : undefined);
+                      const pNombre = typeof o.proveedor === 'object' && o.proveedor !== null ? (o.proveedor as { id: number; nombre: string }).nombre : String(o.proveedor ?? '—');
+                      return <option key={o.id} value={pId ?? ''}>{pNombre} — {o.folio}</option>;
+                    })}
+                  </select>
+                </div>
+              )}
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
                 <div>
                   <label style={{ fontSize: 11, fontWeight: 600, color: '#374151', display: 'block', marginBottom: 4, textTransform: 'uppercase' as const, letterSpacing: '0.05em' }}>N° Factura *</label>
-                  <input
-                    type="text"
-                    value={facturaNumero}
-                    onChange={e => setFacturaNumero(e.target.value)}
-                    placeholder="Ej. F-001"
-                    style={{ width: '100%', height: 34, padding: '0 10px', border: '1px solid #D1D5DB', borderRadius: 8, fontSize: 13, boxSizing: 'border-box' as const, outline: 'none' }}
-                  />
+                  <input type="text" value={facturaNumero} onChange={e => setFacturaNumero(e.target.value)} placeholder="Ej. F-001"
+                    style={{ width: '100%', height: 34, padding: '0 10px', border: '1px solid #D1D5DB', borderRadius: 8, fontSize: 13, boxSizing: 'border-box' as const, outline: 'none' }} />
                 </div>
                 <div>
                   <label style={{ fontSize: 11, fontWeight: 600, color: '#374151', display: 'block', marginBottom: 4, textTransform: 'uppercase' as const, letterSpacing: '0.05em' }}>Monto (MXN) *</label>
-                  <input
-                    type="number"
-                    min="0"
-                    step="0.01"
-                    value={facturaMonto}
-                    onChange={e => setFacturaMonto(e.target.value)}
-                    placeholder="0.00"
-                    style={{ width: '100%', height: 34, padding: '0 10px', border: '1px solid #D1D5DB', borderRadius: 8, fontSize: 13, boxSizing: 'border-box' as const, outline: 'none' }}
-                  />
+                  <input type="number" min="0" step="0.01" value={facturaMonto} onChange={e => setFacturaMonto(e.target.value)} placeholder="0.00"
+                    style={{ width: '100%', height: 34, padding: '0 10px', border: '1px solid #D1D5DB', borderRadius: 8, fontSize: 13, boxSizing: 'border-box' as const, outline: 'none' }} />
                 </div>
               </div>
-              <div style={{ display: 'flex', gap: 8 }}>
-                <button
-                  onClick={() => { setFacturaFile(null); setFacturaNumero(''); setFacturaMonto(''); }}
-                  style={{ flex: 1, height: 34, borderRadius: 8, border: '1px solid #E5E7EB', background: 'white', cursor: 'pointer', fontSize: 13, color: '#6B7280' }}
-                >Cancelar</button>
-                <button
-                  disabled={!facturaNumero.trim() || !facturaMonto || Number(facturaMonto) <= 0}
-                  onClick={async () => {
-                    try {
-                      await subirFactura(req.id, facturaFile, Number(facturaMonto), facturaNumero.trim());
-                      setFacturaFile(null); setFacturaNumero(''); setFacturaMonto('');
-                      estadoModalRef.current = null;
-                      setProceso(null);
-                      notify('Factura subida — proceso avanzado');
-                    } catch (err: any) {
-                      notify(`Error al subir factura: ${err?.response?.data?.message ?? err?.message}`);
-                    }
-                  }}
-                  style={{ flex: 2, height: 34, borderRadius: 8, border: 'none', background: !facturaNumero.trim() || !facturaMonto || Number(facturaMonto) <= 0 ? '#9CA3AF' : '#2563EB', color: 'white', cursor: !facturaNumero.trim() || !facturaMonto || Number(facturaMonto) <= 0 ? 'not-allowed' : 'pointer', fontSize: 13, fontWeight: 600 }}
-                >Subir factura</button>
-              </div>
+              {(() => {
+                const multiOrd = (req.ordenes?.length ?? 0) > 1;
+                const dis = !facturaNumero.trim() || !facturaMonto || Number(facturaMonto) <= 0 || (multiOrd && !facturaProveedorId);
+                return (
+                  <div style={{ display: 'flex', gap: 8 }}>
+                    <button onClick={() => { setFacturaFile(null); setFacturaNumero(''); setFacturaMonto(''); setFacturaProveedorId(null); }}
+                      style={{ flex: 1, height: 34, borderRadius: 8, border: '1px solid #E5E7EB', background: 'white', cursor: 'pointer', fontSize: 13, color: '#6B7280' }}>Cancelar</button>
+                    <button disabled={dis}
+                      onClick={async () => {
+                        try {
+                          await subirFactura(req.id, facturaFile, Number(facturaMonto), facturaNumero.trim(), facturaProveedorId ?? undefined);
+                          setFacturaFile(null); setFacturaNumero(''); setFacturaMonto(''); setFacturaProveedorId(null);
+                          queryClient.invalidateQueries({ queryKey: ['compras'] });
+                          notify('✅ Factura registrada');
+                        } catch (err: unknown) {
+                          const e = err as { response?: { data?: { message?: string } }; message?: string };
+                          notify(`Error al subir factura: ${e?.response?.data?.message ?? e?.message}`);
+                        }
+                      }}
+                      style={{ flex: 2, height: 34, borderRadius: 8, border: 'none', background: dis ? '#9CA3AF' : '#2563EB', color: 'white', cursor: dis ? 'not-allowed' : 'pointer', fontSize: 13, fontWeight: 600 }}>Subir factura</button>
+                  </div>
+                );
+              })()}
             </div>
           ) : (
-            <div
-              style={{ border: '1.5px dashed #D1D5DB', borderRadius: 12, padding: 32, textAlign: 'center', cursor: 'pointer', background: '#F9FAFB' }}
-              onClick={() => fileRef.current?.click()}
-            >
+            <div style={{ border: '1.5px dashed #D1D5DB', borderRadius: 12, padding: 32, textAlign: 'center', cursor: 'pointer', background: '#F9FAFB' }}
+              onClick={() => fileRef.current?.click()}>
               <Upload size={26} color="#9CA3AF" style={{ margin: '0 auto 8px' }} />
               <p style={{ margin: 0, color: '#6B7280', fontSize: 14 }}>Haz clic para subir factura (XML / PDF)</p>
               <p style={{ margin: '4px 0 0', color: '#9CA3AF', fontSize: 12 }}>Máx. 10 MB</p>
@@ -1956,15 +1737,14 @@ export function Compras() {
     if (estadoModal === 'FACTURAS_RECIBIDAS' && puedeHacer(rol, 'pago')) {
       const facturas = (req as any).facturas ?? [];
       const totalFacturas = facturas.reduce((s: number, f: any) => s + Number(f.monto), 0);
+      const nOrdenes = req.ordenes?.length ?? 1;
       return (
-        <Modal title="Generar expediente de compra" onClose={() => { estadoModalRef.current = null; setProceso(null); }} width={540}>
-          <div style={{ background: '#EEF2FF', border: '1px solid #C7D2FE', borderRadius: 10, padding: '14px 18px', fontSize: 13, color: '#3730A3' }}>
-            <strong>Facturas recibidas.</strong> Genera el expediente para consolidar toda la documentación de esta compra.
-          </div>
+        <Modal title="Facturas de compra" onClose={() => { estadoModalRef.current = null; setProceso(null); }} width={560}>
+          {/* Facturas ya registradas */}
           {facturas.length > 0 && (
             <div style={{ border: '1px solid #E8ECF0', borderRadius: 10, overflow: 'hidden' }}>
               <div style={{ padding: '8px 14px', background: '#F9FAFB', fontWeight: 600, fontSize: 11, color: '#374151', borderBottom: '1px solid #E8ECF0', textTransform: 'uppercase' as const, letterSpacing: '0.06em' }}>
-                Facturas recibidas ({facturas.length})
+                Facturas registradas ({facturas.length}{nOrdenes > 1 ? ` de ${nOrdenes} esperadas` : ''})
               </div>
               <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
                 <thead>
@@ -1995,13 +1775,93 @@ export function Compras() {
               </table>
             </div>
           )}
+
+          {/* Upload form for additional invoices */}
+          {facturaFile ? (
+            <div style={{ border: '1px solid #BFDBFE', borderRadius: 12, padding: 16, background: '#EFF6FF', display: 'flex', flexDirection: 'column', gap: 12 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, fontWeight: 600, color: '#1D4ED8' }}>
+                <Receipt size={15} /> {facturaFile.name}
+              </div>
+              {nOrdenes > 1 && (
+                <div>
+                  <label style={{ fontSize: 11, fontWeight: 600, color: '#374151', display: 'block', marginBottom: 4, textTransform: 'uppercase' as const, letterSpacing: '0.05em' }}>Proveedor *</label>
+                  <select
+                    value={facturaProveedorId ?? ''}
+                    onChange={e => setFacturaProveedorId(e.target.value ? Number(e.target.value) : null)}
+                    style={{ width: '100%', height: 34, padding: '0 10px', border: '1px solid #D1D5DB', borderRadius: 8, fontSize: 13, background: 'white', boxSizing: 'border-box' as const }}
+                  >
+                    <option value="">— Selecciona proveedor —</option>
+                    {(req.ordenes ?? []).map(o => {
+                      const pId = o.proveedorId ?? (typeof o.proveedor === 'object' && o.proveedor !== null ? (o.proveedor as { id: number; nombre: string }).id : undefined);
+                      const pNombre = typeof o.proveedor === 'object' && o.proveedor !== null ? (o.proveedor as { id: number; nombre: string }).nombre : String(o.proveedor ?? '—');
+                      return <option key={o.id} value={pId ?? ''}>{pNombre} — {o.folio}</option>;
+                    })}
+                  </select>
+                </div>
+              )}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                <div>
+                  <label style={{ fontSize: 11, fontWeight: 600, color: '#374151', display: 'block', marginBottom: 4, textTransform: 'uppercase' as const, letterSpacing: '0.05em' }}>N° Factura *</label>
+                  <input type="text" value={facturaNumero} onChange={e => setFacturaNumero(e.target.value)} placeholder="Ej. F-002"
+                    style={{ width: '100%', height: 34, padding: '0 10px', border: '1px solid #D1D5DB', borderRadius: 8, fontSize: 13, boxSizing: 'border-box' as const, outline: 'none' }} />
+                </div>
+                <div>
+                  <label style={{ fontSize: 11, fontWeight: 600, color: '#374151', display: 'block', marginBottom: 4, textTransform: 'uppercase' as const, letterSpacing: '0.05em' }}>Monto (MXN) *</label>
+                  <input type="number" min="0" step="0.01" value={facturaMonto} onChange={e => setFacturaMonto(e.target.value)} placeholder="0.00"
+                    style={{ width: '100%', height: 34, padding: '0 10px', border: '1px solid #D1D5DB', borderRadius: 8, fontSize: 13, boxSizing: 'border-box' as const, outline: 'none' }} />
+                </div>
+              </div>
+              {(() => {
+                const dis = !facturaNumero.trim() || !facturaMonto || Number(facturaMonto) <= 0 || (nOrdenes > 1 && !facturaProveedorId);
+                return (
+                  <div style={{ display: 'flex', gap: 8 }}>
+                    <button onClick={() => { setFacturaFile(null); setFacturaNumero(''); setFacturaMonto(''); setFacturaProveedorId(null); }}
+                      style={{ flex: 1, height: 34, borderRadius: 8, border: '1px solid #E5E7EB', background: 'white', cursor: 'pointer', fontSize: 13, color: '#6B7280' }}>Cancelar</button>
+                    <button disabled={dis}
+                      onClick={async () => {
+                        try {
+                          await subirFactura(req.id, facturaFile, Number(facturaMonto), facturaNumero.trim(), facturaProveedorId ?? undefined);
+                          setFacturaFile(null); setFacturaNumero(''); setFacturaMonto(''); setFacturaProveedorId(null);
+                          queryClient.invalidateQueries({ queryKey: ['compras'] });
+                          notify('✅ Factura registrada');
+                        } catch (err: unknown) {
+                          const e = err as { response?: { data?: { message?: string } }; message?: string };
+                          notify(`Error al subir factura: ${e?.response?.data?.message ?? e?.message}`);
+                        }
+                      }}
+                      style={{ flex: 2, height: 34, borderRadius: 8, border: 'none', background: dis ? '#9CA3AF' : '#2563EB', color: 'white', cursor: dis ? 'not-allowed' : 'pointer', fontSize: 13, fontWeight: 600 }}>Subir factura</button>
+                  </div>
+                );
+              })()}
+            </div>
+          ) : (
+            <div style={{ border: '1.5px dashed #D1D5DB', borderRadius: 12, padding: 24, textAlign: 'center', cursor: 'pointer', background: '#F9FAFB' }}
+              onClick={() => fileRef.current?.click()}>
+              <Upload size={22} color="#9CA3AF" style={{ margin: '0 auto 6px' }} />
+              <p style={{ margin: 0, color: '#6B7280', fontSize: 13 }}>
+                {facturas.length < nOrdenes
+                  ? `Agregar factura ${facturas.length + 1} de ${nOrdenes}`
+                  : 'Agregar factura adicional'}
+              </p>
+            </div>
+          )}
+          <input ref={fileRef} type="file" accept=".pdf,.xml" style={{ display: 'none' }} onChange={(e) => {
+            const file = e.target.files?.[0];
+            if (!file) return;
+            setFacturaFile(file);
+            setFacturaNumero(file.name.replace(/\.[^/.]+$/, ''));
+            setFacturaMonto('');
+            e.target.value = '';
+          }} />
+
+          {/* Generate expediente once all invoices are uploaded */}
           <Btn
             icon={<FileText size={15}/>}
             disabled={genExpediente.isPending || facturas.length === 0}
             onClick={() => {
               genExpediente.mutate({ id: req.id }, {
                 onSuccess: () => { estadoModalRef.current = null; setProceso(null); notify('Expediente generado correctamente'); },
-                onError:   (err: any) => notify(`Error: ${err?.response?.data?.message ?? err?.message}`),
+                onError:   (err: unknown) => { const e = err as { response?: { data?: { message?: string } }; message?: string }; notify(`Error: ${e?.response?.data?.message ?? e?.message}`); },
               });
             }}
           >
@@ -2013,7 +1873,10 @@ export function Compras() {
 
     // ── 10b. EXPEDIENTE_GENERADO — ruta por monto ────────────────────────────
     if (estadoModal === 'EXPEDIENTE_GENERADO' && puedeHacer(rol, 'pago')) {
-      const montoRef = req.presupuestoEstimado ?? 0;
+      const montoOrdenes = (req.ordenes ?? []).reduce((s, o) => s + Number(o.total), 0);
+      const montoRef = montoOrdenes > 0
+        ? montoOrdenes
+        : ((req as any).totalFinal ?? req.presupuestoEstimado ?? 0);
       const esMayorCuantia = montoRef > 50000;
       return (
         <Modal title="Expediente generado" onClose={() => { estadoModalRef.current = null; setProceso(null); }} width={500}>
@@ -2026,7 +1889,7 @@ export function Compras() {
           </div>
           <div style={{ background: '#F9FAFB', borderRadius: 10, padding: '14px 18px', fontSize: 13, color: '#374151', display: 'flex', flexDirection: 'column', gap: 4 }}>
             <div><strong>Requisición:</strong> {req.folio}</div>
-            <div><strong>Área:</strong> {req.areaSolicitante}</div>
+            <div><strong>Área:</strong> {(req.requisicion?.areaSolicitante || req.areaSolicitante)}</div>
             <div><strong>Monto referencia:</strong> ${montoRef.toLocaleString('es-MX', { minimumFractionDigits: 2 })}</div>
             <div style={{ marginTop: 4, padding: '6px 10px', borderRadius: 6, background: esMayorCuantia ? '#FEF2F2' : '#F0FDF4', border: `1px solid ${esMayorCuantia ? '#FECACA' : '#BBF7D0'}`, color: esMayorCuantia ? '#DC2626' : '#166534', fontWeight: 600, fontSize: 12 }}>
               {esMayorCuantia ? 'Mayor cuantía (>$50,000) — requiere envío a Recursos Financieros' : 'Menor cuantía (≤$50,000) — puede finalizarse directamente'}
@@ -2049,11 +1912,13 @@ export function Compras() {
             <Btn
               variant="success"
               icon={finalizar.isPending ? <Loader2 size={15} /> : <CheckCircle size={15}/>}
-              disabled={finalizar.isPending}
+              disabled={finalizar.isPending || enviadoFinalizar}
               onClick={() => {
+                if (enviadoFinalizar) return;
+                setEnviadoFinalizar(true);
                 finalizar.mutate({ id: req.id }, {
                   onSuccess: () => { estadoModalRef.current = null; setProceso(null); notify('Compra finalizada exitosamente'); },
-                  onError:   (err: any) => notify(`Error: ${err?.response?.data?.message ?? err?.message}`),
+                  onError:   (err: any) => { setEnviadoFinalizar(false); notify(`Error: ${err?.response?.data?.message ?? err?.message}`); },
                 });
               }}
             >
@@ -2079,7 +1944,7 @@ export function Compras() {
           </div>
           <div style={{ background: '#F9FAFB', borderRadius: 10, padding: '14px 18px', fontSize: 13, color: '#374151', display: 'flex', flexDirection: 'column', gap: 4 }}>
             <div><strong>Requisición:</strong> {req.folio}</div>
-            <div><strong>Área:</strong> {req.areaSolicitante}</div>
+            <div><strong>Área:</strong> {(req.requisicion?.areaSolicitante || req.areaSolicitante)}</div>
             <div><strong>Descripción:</strong> {req.descripcion}</div>
             <div><strong>Presupuesto:</strong> ${(req.presupuestoEstimado ?? 0).toLocaleString('es-MX', { minimumFractionDigits: 2 })}</div>
           </div>
@@ -2087,11 +1952,13 @@ export function Compras() {
             <Btn
               variant="success"
               icon={finalizar.isPending ? <Loader2 size={15} /> : <CheckCircle size={15}/>}
-              disabled={finalizar.isPending}
+              disabled={finalizar.isPending || enviadoFinalizar}
               onClick={() => {
+                if (enviadoFinalizar) return;
+                setEnviadoFinalizar(true);
                 finalizar.mutate({ id: req.id }, {
                   onSuccess: () => { estadoModalRef.current = null; setProceso(null); notify('Compra finalizada exitosamente'); },
-                  onError:   (err: any) => notify(`Error: ${err?.response?.data?.message ?? err?.message}`),
+                  onError:   (err: any) => { setEnviadoFinalizar(false); notify(`Error: ${err?.response?.data?.message ?? err?.message}`); },
                 });
               }}
             >
@@ -2203,7 +2070,7 @@ export function Compras() {
       <Modal title={`Resumen ${req.folio}`} onClose={() => setDetalle(null)} width={700}>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
           <div style={{ background: '#F9FAFB', borderRadius: 10, padding: 16, fontSize: 13, color: '#374151', display: 'flex', flexDirection: 'column', gap: 6 }}>
-            <div><strong>Área:</strong> {req.areaSolicitante}</div>
+            <div><strong>Área:</strong> {(req.requisicion?.areaSolicitante || req.areaSolicitante)}</div>
             <div><strong>Tipo:</strong> {req.tipo}</div>
             <div><strong>Estado:</strong> {getEstadoCompraUI(req.estado).label}</div>
             <div><strong>Presupuesto:</strong> ${req.presupuestoEstimado?.toLocaleString('es-MX')}</div>
@@ -2258,9 +2125,8 @@ export function Compras() {
   const renderOrdenes = () => {
     if (!ordenesDetalle) return null;
     const req    = requisiciones.find(r => r.id === ordenesDetalle.id) ?? ordenesDetalle;
-    const orden  = req.ordenCompra;
     const op     = (req as any).ordenPago;
-    const hasOC  = !!orden;
+    const hasOC  = !!req.ordenes?.length;
     const hasOP  = !!op;
     if (!hasOC && !hasOP) return null;
 
@@ -2277,14 +2143,88 @@ export function Compras() {
 
     // ── Contenido Orden de Compra ──────────────────────────────────────────────
     const tabCompra = () => {
-      if (!orden) return (
+      const ordenes = req.ordenes ?? [];
+      if (ordenes.length === 0) return (
         <div style={{ padding: 40, textAlign: 'center', color: '#9CA3AF' }}>
           <FileText size={32} style={{ margin: '0 auto 10px', display: 'block' }} />
           <p style={{ margin: 0 }}>La orden de compra aún no ha sido generada.</p>
         </div>
       );
+
+      const idx   = Math.min(selectedOrdenIdx, ordenes.length - 1);
+      const orden = ordenes[idx];
+
+      const ordenPrvId: number | undefined =
+        typeof orden.proveedor === 'object' && orden.proveedor !== null
+          ? (orden.proveedor as { id: number; nombre: string }).id
+          : orden.proveedorId;
+      const ordenPrvNombre: string =
+        typeof orden.proveedor === 'object' && orden.proveedor !== null
+          ? (orden.proveedor as { id: number; nombre: string }).nombre
+          : String(orden.proveedor ?? '—');
+
+      const cotsGan = (req.cotizaciones ?? []).filter(c => c.esMejorOpcion);
+      const reqDets = req.requisicion?.detalles ?? [];
+
+      // Products for this specific order: match via winning cotización's proveedorId
+      const perOrderRows: { nombre: string; unidad: string; cantidad: number }[] =
+        ordenPrvId !== undefined
+          ? reqDets
+              .filter(d => {
+                const gan = cotsGan.find(c => c.requisicionDetalleId === d.id);
+                const ganPrvId = gan?.proveedorId ??
+                  (typeof gan?.proveedor === 'object' && gan?.proveedor !== null
+                    ? (gan.proveedor as { id: number; nombre: string }).id
+                    : undefined);
+                return ganPrvId === ordenPrvId;
+              })
+              .map(d => ({
+                nombre: d.productoNombre ?? '—',
+                unidad: d.unidadLibre ?? '—',
+                cantidad: d.cantidadSolicitada,
+              }))
+          : [];
+
+      // Fallback for legacy single-provider compras (no per-product cotizaciones)
+      const legacyRows = (req.detalles ?? []).map((d: any) => ({
+        nombre: typeof d.producto === 'object' && d.producto !== null ? (d.producto as any).nombre : String(d.producto ?? '—'),
+        unidad: d.unidad,
+        cantidad: d.cantidad,
+      }));
+      const fallbackRows = legacyRows.length > 0
+        ? legacyRows
+        : reqDets.map(d => ({ nombre: d.productoNombre ?? '—', unidad: d.unidadLibre ?? '—', cantidad: d.cantidadSolicitada }));
+
+      const rows = perOrderRows.length > 0 ? perOrderRows : fallbackRows;
+
       return (
         <>
+          {/* Order selector for multi-provider compras */}
+          {ordenes.length > 1 && (
+            <div style={{ display: 'flex', gap: 6, marginBottom: 16, flexWrap: 'wrap' as const }}>
+              {ordenes.map((o, i) => {
+                const pNombre = typeof o.proveedor === 'object' && o.proveedor !== null
+                  ? (o.proveedor as { id: number; nombre: string }).nombre
+                  : String(o.proveedor ?? '—');
+                const isActive = i === idx;
+                return (
+                  <button
+                    key={o.id}
+                    onClick={() => setSelectedOrdenIdx(i)}
+                    style={{
+                      padding: '7px 14px', fontSize: 12, fontWeight: 700, cursor: 'pointer',
+                      borderRadius: 8, fontFamily: 'inherit', transition: 'all 0.15s',
+                      border: isActive ? '2px solid #16A34A' : '2px solid #E5E7EB',
+                      background: isActive ? '#F0FDF4' : 'white',
+                      color: isActive ? '#15803D' : '#6B7280',
+                    }}
+                  >
+                    {o.folio} — {pNombre}
+                  </button>
+                );
+              })}
+            </div>
+          )}
           <div ref={ordenPdfRef} style={{ border: '1px solid #E8ECF0', borderRadius: 12, padding: 28, background: 'white' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 24 }}>
               <div>
@@ -2296,53 +2236,37 @@ export function Compras() {
               </div>
             </div>
             <div style={{ background: '#F9FAFB', borderRadius: 10, padding: 16, marginBottom: 16, fontSize: 13, color: '#374151', display: 'flex', flexDirection: 'column', gap: 4 }}>
-              <div><strong>Proveedor o razón social:</strong> {typeof orden.proveedor === 'object' && orden.proveedor !== null ? (orden.proveedor as any).nombre : String(orden.proveedor ?? '—')}</div>
+              <div><strong>Proveedor o razón social:</strong> {ordenPrvNombre}</div>
               <div><strong>Total:</strong> ${Number(orden.total).toLocaleString('es-MX', { minimumFractionDigits: 2 })}</div>
             </div>
             <div style={{ background: '#F9FAFB', borderRadius: 10, padding: 16, marginBottom: 16 }}>
               <p style={{ marginTop: 0, fontWeight: 600, color: '#111827', fontSize: 13 }}>Justificación</p>
               <p style={{ marginBottom: 0, color: '#374151', lineHeight: 1.6, fontSize: 13 }}>{req.requisicion?.justificacion ?? req.justificacion}</p>
             </div>
-            {(() => {
-              const compraRows = (req.detalles ?? []).map((d: any) => ({
-                nombre: typeof d.producto === 'object' && d.producto !== null ? (d.producto as any).nombre : String(d.producto ?? '—'),
-                unidad: d.unidad,
-                cantidad: d.cantidad,
-              }));
-              const rows = compraRows.length > 0
-                ? compraRows
-                : ((req.requisicion?.detalles ?? []) as any[]).map((d: any) => ({
-                    nombre: d.productoNombre ?? '—',
-                    unidad: d.unidadLibre ?? '—',
-                    cantidad: d.cantidadSolicitada,
-                  }));
-              return (
-                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
-                  <thead>
-                    <tr style={{ background: '#F3F4F6' }}>
-                      {['#', 'Producto', 'Unidad', 'Cantidad'].map((h, i) => (
-                        <th key={i} style={{ padding: '9px 13px', textAlign: 'center', fontWeight: 600, color: '#374151', fontSize: 12 }}>{h}</th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {rows.map((row, index) => (
-                      <tr key={index} style={{ borderTop: '1px solid #E8ECF0' }}>
-                        <td style={{ padding: '9px 13px', textAlign: 'center', color: '#6B7280' }}>{index + 1}</td>
-                        <td style={{ padding: '9px 13px', textAlign: 'center' }}>{row.nombre}</td>
-                        <td style={{ padding: '9px 13px', textAlign: 'center', color: '#6B7280' }}>{row.unidad}</td>
-                        <td style={{ padding: '9px 13px', textAlign: 'center', fontWeight: 600 }}>{row.cantidad}</td>
-                      </tr>
-                    ))}
-                    {rows.length === 0 && (
-                      <tr>
-                        <td colSpan={4} style={{ padding: '16px', textAlign: 'center', color: '#9CA3AF', fontSize: 13 }}>Sin artículos registrados</td>
-                      </tr>
-                    )}
-                  </tbody>
-                </table>
-              );
-            })()}
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+              <thead>
+                <tr style={{ background: '#F3F4F6' }}>
+                  {['#', 'Producto', 'Unidad', 'Cantidad'].map((h, i) => (
+                    <th key={i} style={{ padding: '9px 13px', textAlign: 'center', fontWeight: 600, color: '#374151', fontSize: 12 }}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map((row, index) => (
+                  <tr key={index} style={{ borderTop: '1px solid #E8ECF0' }}>
+                    <td style={{ padding: '9px 13px', textAlign: 'center', color: '#6B7280' }}>{index + 1}</td>
+                    <td style={{ padding: '9px 13px', textAlign: 'center' }}>{row.nombre}</td>
+                    <td style={{ padding: '9px 13px', textAlign: 'center', color: '#6B7280' }}>{row.unidad}</td>
+                    <td style={{ padding: '9px 13px', textAlign: 'center', fontWeight: 600 }}>{row.cantidad}</td>
+                  </tr>
+                ))}
+                {rows.length === 0 && (
+                  <tr>
+                    <td colSpan={4} style={{ padding: '16px', textAlign: 'center', color: '#9CA3AF', fontSize: 13 }}>Sin artículos registrados</td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 20, marginTop: 60 }}>
               {[
                 { label: 'Elaboró',  persona: orden.elaboradoPor },
@@ -2385,11 +2309,11 @@ export function Compras() {
       const filas = detalles.length > 0
         ? detalles
         : (req.facturas ?? []).map((f: any) => ({
-            fechaOrdenCompra: req.ordenCompra?.fecha,
-            folioOrdenCompra: req.ordenCompra?.folio,
+            fechaOrdenCompra: req.ordenes?.[0]?.fecha,
+            folioOrdenCompra: req.ordenes?.map(o => o.folio).join(', ') || null,
             numeroFactura:    f.numero,
-            proveedor:        req.ordenCompra?.proveedor ?? '—',
-            monto:            f.monto > 0 ? f.monto : (req.ordenCompra?.total ?? 0),
+            proveedor:        req.ordenes?.[0]?.proveedor ?? '—',
+            monto:            f.monto > 0 ? f.monto : (req.ordenes?.reduce((s, o) => s + Number(o.total), 0) ?? 0),
           }));
       const totalGeneral: number =
         op.totalGeneral ?? filas.reduce((s: number, d: any) => s + Number(d.monto ?? 0), 0);
@@ -2433,7 +2357,7 @@ export function Compras() {
                 </div>
                 <div style={{ display: 'flex', gap: 8 }}>
                   <span style={{ color: '#6B7280', minWidth: 90, fontWeight: 600, fontSize: 12 }}>Área:</span>
-                  <span style={{ color: '#374151' }}>{req.areaSolicitante}</span>
+                  <span style={{ color: '#374151' }}>{(req.requisicion?.areaSolicitante || req.areaSolicitante)}</span>
                 </div>
                 <div style={{ display: 'flex', gap: 8 }}>
                   <span style={{ color: '#6B7280', minWidth: 90, fontWeight: 600, fontSize: 12 }}>Descripción:</span>
@@ -2536,12 +2460,20 @@ export function Compras() {
   // ─── MODAL DETALLE EXPEDIENTE (read-only) ────────────────────────────────────
   const renderExpedienteDetalle = () => {
     if (!expedienteDetalle) return null;
-    const exp = expedienteDetalle;
+    const exp = requisiciones.find(r => r.id === expedienteDetalle.id) ?? expedienteDetalle;
     const facturas = (exp as any).facturas ?? [];
     const historial = exp.historial ?? [];
     const totalFacturas = facturas.reduce((s: number, f: any) => s + Number(f.monto ?? 0), 0);
-    const proveedores = [...new Set(facturas.map((f: any) => f.proveedor?.nombre).filter(Boolean))];
+    // Proveedores: from facturas proveedor or from ordenes when factura has no linked proveedor
+    const proveedoresFactura = facturas.map((f: any) => f.proveedor?.nombre).filter(Boolean) as string[];
+    const proveedoresOrdenes = (exp.ordenes ?? []).map(o =>
+      typeof o.proveedor === 'object' && o.proveedor !== null
+        ? (o.proveedor as { id: number; nombre: string }).nombre
+        : String(o.proveedor ?? '')
+    ).filter(Boolean);
+    const proveedores = [...new Set(proveedoresFactura.length > 0 ? proveedoresFactura : proveedoresOrdenes)];
     const cotizaciones = exp.cotizaciones ?? [];
+    const montoOrdenesExp = (exp.ordenes ?? []).reduce((s, o) => s + Number(o.total), 0);
 
     const tabBtn = (id: 'datos' | 'documentos' | 'historial', label: string) => (
       <button
@@ -2567,7 +2499,7 @@ export function Compras() {
               <div>
                 <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.1em', opacity: 0.75, marginBottom: 4 }}>Expediente de compra</div>
                 <div style={{ fontSize: 20, fontWeight: 800, letterSpacing: '-0.3px' }}>{exp.folio}</div>
-                <div style={{ fontSize: 13, opacity: 0.85, marginTop: 4 }}>{exp.areaSolicitante}</div>
+                <div style={{ fontSize: 13, opacity: 0.85, marginTop: 4 }}>{(exp.requisicion?.areaSolicitante || exp.areaSolicitante)}</div>
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                 <span style={{ background: estadoStyle.bg, color: estadoStyle.text, border: `1px solid ${estadoStyle.border}`, padding: '4px 12px', borderRadius: 8, fontSize: 12, fontWeight: 700 }}>
@@ -2595,13 +2527,13 @@ export function Compras() {
                     <div style={{ fontSize: 11, fontWeight: 700, color: '#6B7280', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 2 }}>Datos de la compra</div>
                     <div style={{ fontSize: 13, color: '#374151' }}><strong>Folio:</strong> {exp.folio}</div>
                     <div style={{ fontSize: 13, color: '#374151' }}><strong>Tipo:</strong> {exp.tipo}</div>
-                    <div style={{ fontSize: 13, color: '#374151' }}><strong>Área:</strong> {exp.areaSolicitante}</div>
-                    <div style={{ fontSize: 13, color: '#374151' }}><strong>Descripción:</strong> {exp.descripcion}</div>
+                    <div style={{ fontSize: 13, color: '#374151' }}><strong>Área:</strong> {(exp.requisicion?.areaSolicitante || exp.areaSolicitante)}</div>
+                    <div style={{ fontSize: 13, color: '#374151' }}><strong>Descripción:</strong> {exp.requisicion?.descripcion ?? exp.descripcion}</div>
                     <div style={{ fontSize: 13, color: '#374151' }}><strong>Justificación:</strong> {exp.requisicion?.justificacion ?? exp.justificacion}</div>
                   </div>
                   <div style={{ background: '#F9FAFB', borderRadius: 10, padding: 14, display: 'flex', flexDirection: 'column', gap: 6 }}>
                     <div style={{ fontSize: 11, fontWeight: 700, color: '#6B7280', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 2 }}>Finanzas</div>
-                    <div style={{ fontSize: 13, color: '#374151' }}><strong>Presupuesto estimado:</strong> ${(exp.presupuestoEstimado ?? 0).toLocaleString('es-MX', { minimumFractionDigits: 2 })}</div>
+                    <div style={{ fontSize: 13, color: '#374151' }}><strong>Presupuesto estimado:</strong> ${(montoOrdenesExp > 0 ? montoOrdenesExp : ((exp as any).totalFinal ?? exp.presupuestoEstimado ?? 0)).toLocaleString('es-MX', { minimumFractionDigits: 2 })}</div>
                     <div style={{ fontSize: 22, fontWeight: 800, color: '#16A34A', marginTop: 4 }}>${totalFacturas.toLocaleString('es-MX', { minimumFractionDigits: 2 })}</div>
                     <div style={{ fontSize: 11, color: '#6B7280' }}>Total de facturas recibidas</div>
                     {exp.fechaEnvioFinanzas && (
@@ -2666,10 +2598,43 @@ export function Compras() {
                           </tr>
                         </thead>
                         <tbody>
-                          {facturas.map((f: any, i: number) => (
+                          {facturas.map((f: any, i: number) => {
+                            const expOrdenes = exp.ordenes ?? [];
+                            const getOrdProv = (o: typeof expOrdenes[0]) =>
+                              typeof o.proveedor === 'object' && o.proveedor !== null
+                                ? (o.proveedor as { id: number; nombre: string }).nombre
+                                : String(o.proveedor ?? '');
+                            let provNombre: string = f.proveedor?.nombre ?? '';
+                            if (!provNombre) {
+                              if (f.proveedorId) {
+                                const m = expOrdenes.find(o => {
+                                  const oPrvId = typeof o.proveedor === 'object' && o.proveedor !== null
+                                    ? (o.proveedor as { id: number; nombre: string }).id
+                                    : o.proveedorId;
+                                  return oPrvId === f.proveedorId;
+                                });
+                                if (m) provNombre = getOrdProv(m);
+                              }
+                              if (!provNombre) {
+                                // match by folio (user may have used the orden folio as invoice number)
+                                const byFolio = expOrdenes.find(o => o.folio === f.numero);
+                                if (byFolio) {
+                                  provNombre = getOrdProv(byFolio);
+                                }
+                              }
+                              if (!provNombre) {
+                                // match by unique amount
+                                const byMonto = expOrdenes.filter(o => Number(o.total) === Number(f.monto));
+                                if (byMonto.length === 1) provNombre = getOrdProv(byMonto[0]);
+                              }
+                              if (!provNombre && expOrdenes.length === 1) {
+                                provNombre = getOrdProv(expOrdenes[0]);
+                              }
+                            }
+                            return (
                             <tr key={i} style={{ borderTop: '1px solid #E8ECF0' }}>
                               <td style={{ padding: '8px 12px', fontWeight: 600 }}>{f.numero}</td>
-                              <td style={{ padding: '8px 12px', color: '#374151' }}>{f.proveedor?.nombre ?? '—'}</td>
+                              <td style={{ padding: '8px 12px', color: '#374151' }}>{provNombre || '—'}</td>
                               <td style={{ padding: '8px 12px', fontWeight: 700, color: '#16A34A' }}>${Number(f.monto).toLocaleString('es-MX', { minimumFractionDigits: 2 })}</td>
                               <td style={{ padding: '8px 12px' }}>
                                 {f.documentoUrl ? (
@@ -2680,7 +2645,7 @@ export function Compras() {
                                 ) : '—'}
                               </td>
                             </tr>
-                          ))}
+                          ); })}
                           <tr style={{ borderTop: '2px solid #E8ECF0', background: '#F9FAFB' }}>
                             <td colSpan={2} style={{ padding: '8px 12px', fontWeight: 700 }}>Total</td>
                             <td style={{ padding: '8px 12px', fontWeight: 800, color: '#111827' }}>${totalFacturas.toLocaleString('es-MX', { minimumFractionDigits: 2 })}</td>
@@ -2693,14 +2658,14 @@ export function Compras() {
                 ) : (
                   <div style={{ color: '#6B7280', fontSize: 13, textAlign: 'center', padding: 24 }}>Sin facturas registradas</div>
                 )}
-                {exp.ordenCompra && (
-                  <div style={{ background: '#F0FDF4', border: '1px solid #BBF7D0', borderRadius: 10, padding: 14, display: 'flex', flexDirection: 'column', gap: 4 }}>
+                {(exp.ordenes ?? []).map(oc => (
+                  <div key={oc.id} style={{ background: '#F0FDF4', border: '1px solid #BBF7D0', borderRadius: 10, padding: 14, display: 'flex', flexDirection: 'column', gap: 4 }}>
                     <div style={{ fontSize: 11, fontWeight: 700, color: '#166534', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 2 }}>Orden de Compra</div>
-                    <div style={{ fontSize: 13, color: '#374151' }}><strong>Folio OC:</strong> {exp.ordenCompra.folio}</div>
-                    <div style={{ fontSize: 13, color: '#374151' }}><strong>Proveedor:</strong> {typeof exp.ordenCompra.proveedor === 'object' && exp.ordenCompra.proveedor !== null ? (exp.ordenCompra.proveedor as any).nombre : String(exp.ordenCompra.proveedor ?? '—')}</div>
-                    <div style={{ fontSize: 13, color: '#374151' }}><strong>Total OC:</strong> ${Number(exp.ordenCompra.total).toLocaleString('es-MX', { minimumFractionDigits: 2 })}</div>
+                    <div style={{ fontSize: 13, color: '#374151' }}><strong>Folio OC:</strong> {oc.folio}</div>
+                    <div style={{ fontSize: 13, color: '#374151' }}><strong>Proveedor:</strong> {typeof oc.proveedor === 'object' && oc.proveedor !== null ? (oc.proveedor as any).nombre : String(oc.proveedor ?? '—')}</div>
+                    <div style={{ fontSize: 13, color: '#374151' }}><strong>Total OC:</strong> ${Number(oc.total).toLocaleString('es-MX', { minimumFractionDigits: 2 })}</div>
                   </div>
-                )}
+                ))}
                 {cotizaciones.length > 0 && (
                   <div>
                     <div style={{ fontSize: 11, fontWeight: 700, color: '#6B7280', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 8 }}>Cotizaciones ({cotizaciones.length})</div>
@@ -2798,7 +2763,17 @@ export function Compras() {
           {reqFinalizadas.map((req, idx) => {
             const facturas = (req as any).facturas ?? [];
             const totalFact = facturas.reduce((s: number, f: any) => s + Number(f.monto ?? 0), 0);
-            const provs = [...new Set(facturas.map((f: any) => f.proveedor?.nombre).filter(Boolean))];
+            const provsFactura = facturas.map((f: any) => f.proveedor?.nombre).filter(Boolean) as string[];
+            const provsOrdenes = (req.ordenes ?? []).map(o =>
+              typeof o.proveedor === 'object' && o.proveedor !== null
+                ? (o.proveedor as { id: number; nombre: string }).nombre
+                : String(o.proveedor ?? '')
+            ).filter(Boolean) as string[];
+            const provs = [...new Set(provsFactura.length > 0 ? provsFactura : provsOrdenes)];
+            const fechaEnvio = req.fechaEnvioFinanzas
+              ?? (req.historial ?? []).find((h: any) =>
+                  h.estado === 'ENVIADA_A_FINANZAS' || h.estado === 'FINALIZADO'
+                )?.fecha ?? null;
             return (
               <tr
                 key={req.id}
@@ -2813,7 +2788,7 @@ export function Compras() {
                   </div>
                 </td>
                 <td style={{ padding: '1.1rem 1.25rem', verticalAlign: 'middle', maxWidth: 220 }}>
-                  <div style={{ fontSize: 13, color: '#374151', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{req.areaSolicitante}</div>
+                  <div style={{ fontSize: 13, color: '#374151', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{(req.requisicion?.areaSolicitante || req.areaSolicitante)}</div>
                   <div style={{ fontSize: 12, color: '#6B7280', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginTop: 2 }}>{req.descripcion}</div>
                 </td>
                 <td style={{ padding: '1.1rem 1.25rem', verticalAlign: 'middle' }}>
@@ -2835,9 +2810,9 @@ export function Compras() {
                   </div>
                 </td>
                 <td style={{ padding: '1.1rem 1.25rem', verticalAlign: 'middle', whiteSpace: 'nowrap' }}>
-                  {req.fechaEnvioFinanzas ? (
+                  {fechaEnvio ? (
                     <div style={{ fontSize: 13, color: '#374151' }}>
-                      {new Date(req.fechaEnvioFinanzas).toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: 'numeric' })}
+                      {new Date(fechaEnvio).toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: 'numeric' })}
                     </div>
                   ) : <span style={{ color: '#9CA3AF' }}>—</span>}
                 </td>
@@ -3111,7 +3086,7 @@ export function Compras() {
                       <td style={{ padding: '1.25rem 1.5rem', verticalAlign: 'middle' }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
                           <Building2 size={14} color="#94a3b8" style={{ flexShrink: 0 }} />
-                          <span style={{ fontSize: 14, color: '#374151', whiteSpace: 'nowrap' }}>{req.areaSolicitante}</span>
+                          <span style={{ fontSize: 14, color: '#374151', whiteSpace: 'nowrap' }}>{(req.requisicion?.areaSolicitante || req.areaSolicitante)}</span>
                         </div>
                       </td>
                       <td style={{ padding: '1.25rem 1.5rem', verticalAlign: 'middle', whiteSpace: 'nowrap' }}>
@@ -3121,9 +3096,9 @@ export function Compras() {
                       </td>
                       <td style={{ padding: '1rem 1rem', verticalAlign: 'middle' }}>
                         <div style={{ display: 'flex', gap: 4, justifyContent: 'flex-end', flexWrap: 'wrap' }}>
-                          {(req.ordenCompra || (req as any).ordenPago) && (
+                          {(req.ordenes?.length || (req as any).ordenPago) && (
                             <button
-                              onClick={() => { setTabOrdenes(req.ordenCompra ? 'compra' : 'pago'); setOrdenesDetalle(req); }}
+                              onClick={() => { setTabOrdenes(req.ordenes?.length ? 'compra' : 'pago'); setSelectedOrdenIdx(0); setOrdenesDetalle(req); }}
                               style={{ display: 'flex', alignItems: 'center', gap: 4, background: '#F0FDF4', color: '#16A34A', border: '1px solid #BBF7D0', borderRadius: 8, padding: '4px 9px', fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap' }}
                             >
                               <FileText size={12}/> Ver órdenes
@@ -3162,6 +3137,7 @@ export function Compras() {
       {renderProceso()}
       {renderDetalle()}
       {renderOrdenes()}
+      {renderExpedienteDetalle()}
       {notif && <Notif msg={notif} onClose={() => setNotif(null)} />}
     </>
   );

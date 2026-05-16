@@ -11,12 +11,12 @@ import {
   Loader2,
   ClipboardList,
 } from 'lucide-react';
-import { NuevaRequisicionModal } from '../../components/common/NuevaRequisicionModal';
 import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../../stores/authStore';
 import apiClient from '../../services/api';
 import type { Paciente } from '../../types';
 import { CronogramaActividades } from '../../components/medico/CronogramaActividades';
+import { NuevaRequisicionModal } from '../../components/common/NuevaRequisicionModal';
 
 // --- Types ---
 
@@ -263,7 +263,7 @@ export function DashboardMedico() {
   const { usuario } = useAuthStore();
   const navigate = useNavigate();
   const [solicitudOpen, setSolicitudOpen] = useState(false);
-  const [showNuevaRequisicion, setShowNuevaRequisicion] = useState(false);
+  const [requisicionOpen, setRequisicionOpen] = useState(false);
 
   const { data: stats } = useQuery<DashboardStats>({
     queryKey: ['dashboard_stats'],
@@ -346,17 +346,12 @@ export function DashboardMedico() {
 
           <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: '1rem' }}>
             <button
-              onClick={() => setShowNuevaRequisicion(true)}
-              style={{
-                display: 'flex', alignItems: 'center', gap: '0.5rem',
-                padding: '0.6rem 1.2rem', borderRadius: '14px',
-                background: 'rgba(255,255,255,0.1)',
-                border: '1px solid rgba(255,255,255,0.2)',
-                color: 'white', fontWeight: '700', fontSize: '13px',
-                cursor: 'pointer', whiteSpace: 'nowrap',
-              }}
+              onClick={() => setRequisicionOpen(true)}
+              style={{ display: 'flex', alignItems: 'center', padding: '0.8rem 1.5rem', backgroundColor: 'white', color: 'var(--text-h)', border: '1px solid #e2e8f0', borderRadius: '16px', cursor: 'pointer', fontWeight: '700', fontSize: '14px', transition: 'all 0.2s ease', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)', whiteSpace: 'nowrap' }}
+              onMouseEnter={e => e.currentTarget.style.backgroundColor = '#f8fafc'}
+              onMouseLeave={e => e.currentTarget.style.backgroundColor = 'white'}
             >
-              <ClipboardList size={14} /> Nueva requisición
+              <ClipboardList size={18} style={{ marginRight: '0.6rem' }} /> Nueva requisición
             </button>
             <button
               onClick={() => setSolicitudOpen(true)}
@@ -445,8 +440,9 @@ export function DashboardMedico() {
         nombreUsuario={usuario?.nombre}
       />
       <NuevaRequisicionModal
-        isOpen={showNuevaRequisicion}
-        onClose={() => setShowNuevaRequisicion(false)}
+        isOpen={requisicionOpen}
+        onClose={() => setRequisicionOpen(false)}
+        onSuccess={() => {}}
       />
     </div>
   );

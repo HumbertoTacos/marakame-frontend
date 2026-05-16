@@ -98,7 +98,8 @@ function calcularResumen(compra: Requisicion) {
   const detallesReq  = compra.requisicion?.detalles ?? [];
 
   const filasPorProducto = detallesReq.map(d => {
-    const cot        = cotizaciones.find(c => c.requisicionDetalleId === d.id);
+    const cot = cotizaciones.find(c => c.requisicionDetalleId === d.id && c.esMejorOpcion)
+             ?? cotizaciones.find(c => c.requisicionDetalleId === d.id);
     const precioUnit = cot ? Number(cot.precioUnitario ?? cot.precio ?? 0) : 0;
     const total      = precioUnit * d.cantidadSolicitada;
     return { detalle: d, cot, precioUnit, total };
@@ -142,6 +143,7 @@ function ModalDetalle({
   const [observaciones, setObs] = useState('');
   const [motivo, setMotivo]     = useState('');
   const [accion, setAccion]     = useState<'autorizar' | 'rechazar' | null>(null);
+  const [enviado, setEnviado]   = useState(false);
 
   const { filasPorProducto, cotsLegacy, usaFlujoPorProducto, subtotal, iva, totalConIva, gruposProv } = calcularResumen(compra);
   const detallesReq = compra.requisicion?.detalles ?? [];
@@ -179,7 +181,7 @@ function ModalDetalle({
                 <div style={{ width: 1, height: 34, background: 'rgba(255,255,255,0.25)' }} />
                 <div>
                   <div style={{ fontSize: 10, opacity: 0.65, textTransform: 'uppercase' as const, letterSpacing: '0.08em', marginBottom: 2 }}>Área</div>
-                  <div style={{ fontSize: 13, fontWeight: 600 }}>{compra.areaSolicitante}</div>
+                  <div style={{ fontSize: 13, fontWeight: 600 }}>{compra.requisicion?.areaSolicitante || compra.areaSolicitante}</div>
                 </div>
                 <div style={{ width: 1, height: 34, background: 'rgba(255,255,255,0.25)' }} />
                 <div>
@@ -406,8 +408,12 @@ function ModalDetalle({
             onChange={e => setObs(e.target.value)}
           />
           <div style={{ display: 'flex', gap: 10 }}>
-            <Btn variant="success" icon={autorizando ? <Loader2 size={15} /> : <CheckCircle size={15} />} disabled={autorizando}
-              onClick={() => onAutorizar(observaciones.trim() || undefined)}>
+            <Btn variant="success" icon={autorizando ? <Loader2 size={15} /> : <CheckCircle size={15} />} disabled={autorizando || enviado}
+              onClick={() => {
+                if (enviado) return;
+                setEnviado(true);
+                onAutorizar(observaciones.trim() || undefined);
+              }}>
               {autorizando ? 'Autorizando…' : 'Confirmar autorización'}
             </Btn>
             <Btn variant="ghost" onClick={() => setAccion(null)}>Cancelar</Btn>
@@ -470,7 +476,12 @@ export default function DireccionComprasPage() {
       setSelec(null);
       notify('✅ Requisición autorizada por Dirección General');
     },
-    onError: (err: any) => notify(`❌ ${err?.response?.data?.message ?? err?.message}`),
+    onError: (err: unknown) => {
+      queryClient.invalidateQueries({ queryKey: ['compras-direccion'] });
+      queryClient.invalidateQueries({ queryKey: ['compras'] });
+      const e = err as { response?: { data?: { message?: string } }; message?: string };
+      notify(`❌ ${e?.response?.data?.message ?? e?.message ?? 'Error al autorizar'}`);
+    },
   });
 
   const rechazarMut = useMutation({
@@ -482,7 +493,12 @@ export default function DireccionComprasPage() {
       setSelec(null);
       notify('Requisición rechazada por Dirección General');
     },
-    onError: (err: any) => notify(`❌ ${err?.response?.data?.message ?? err?.message}`),
+    onError: (err: unknown) => {
+      queryClient.invalidateQueries({ queryKey: ['compras-direccion'] });
+      queryClient.invalidateQueries({ queryKey: ['compras'] });
+      const e = err as { response?: { data?: { message?: string } }; message?: string };
+      notify(`❌ ${e?.response?.data?.message ?? e?.message ?? 'Error al rechazar'}`);
+    },
   });
 
   const toggle = (id: number) => {
@@ -495,7 +511,7 @@ export default function DireccionComprasPage() {
 
   const filtradas = compras.filter(c =>
     c.folio.toLowerCase().includes(busqueda.toLowerCase()) ||
-    c.areaSolicitante.toLowerCase().includes(busqueda.toLowerCase())
+    (c.requisicion?.areaSolicitante || c.areaSolicitante).toLowerCase().includes(busqueda.toLowerCase())
   );
 
   const pendientes = compras.length;
@@ -624,7 +640,7 @@ export default function DireccionComprasPage() {
                           <span style={{ fontWeight: 700, color: '#2563EB', fontFamily: 'monospace' }}>{c.folio}</span>
                         </div>
                       </td>
-                      <td style={{ padding: '12px 16px', color: '#111827', fontWeight: 500 }}>{c.areaSolicitante}</td>
+                      <td style={{ padding: '12px 16px', color: '#111827', fontWeight: 500 }}>{c.requisicion?.areaSolicitante || c.areaSolicitante}</td>
                       <td style={{ padding: '12px 16px', color: '#6B7280' }}>{responsable || '—'}</td>
                       <td style={{ padding: '12px 16px', color: '#6B7280' }}>
                         {new Date(c.createdAt).toLocaleDateString('es-MX')}

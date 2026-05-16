@@ -166,11 +166,12 @@ export const getComprasRevisionAdmin = async (): Promise<Requisicion[]> => {
 };
 
 // FACTURA
-export const subirFactura = async (id: number, file: File, monto: number, numero: string) => {
+export const subirFactura = async (id: number, file: File, monto: number, numero: string, proveedorId?: number) => {
     const form = new FormData();
     form.append('factura', file);
     form.append('monto', String(monto));
     form.append('numero', numero);
+    if (proveedorId) form.append('proveedorId', String(proveedorId));
     const res = await api.post<{ success: boolean; url: string }>(
         `/compras/${id}/factura-upload`,
         form,
@@ -181,16 +182,16 @@ export const subirFactura = async (id: number, file: File, monto: number, numero
 
 // COTIZACIONES BULK POR PRODUCTO
 export const registrarCotizacionesBulk = async (
-  id: number,
-  items: {
-    requisicionDetalleId: number;
-    proveedorId: number;
-    precioUnitario: number;
-    tiempoEntrega?: string;
-    formaPago?: string;
-  }[]
+    id: number,
+    items: {
+        requisicionDetalleId: number;
+        proveedorId: number;
+        precioUnitario: number;
+        tiempoEntrega?: string;
+        formaPago?: string;
+    }[]
 ): Promise<void> => {
-  await api.post(`/compras/${id}/cotizaciones-bulk`, { items });
+    await api.post(`/compras/${id}/cotizaciones-bulk`, { items });
 };
 
 // GENERAR EXPEDIENTE
@@ -206,4 +207,33 @@ export const enviarAFinanzasCompra = async (id: number, observaciones?: string):
 // FINALIZAR COMPRA
 export const finalizarCompraService = async (id: number, observaciones?: string): Promise<void> => {
     await api.patch(`/compras/${id}/finalizar`, { observaciones });
+};
+
+// AGREGAR COTIZACIÓN INDIVIDUAL POR PRODUCTO
+export interface NuevaCotizacionProductoPayload {
+    requisicionDetalleId: number;
+    proveedorId: number;
+    precioUnitario: number;
+    tiempoEntrega?: string;
+    formaPago?: string;
+    condicionesPago?: string;
+    garantia?: string;
+    marca?: string;
+    modelo?: string;
+    observaciones?: string;
+}
+
+export const agregarCotizacionProducto = async (
+    id: number,
+    data: NuevaCotizacionProductoPayload
+): Promise<void> => {
+    await api.post(`/compras/${id}/cotizacion-producto`, data);
+};
+
+// SELECCIONAR COTIZACIÓN GANADORA POR PRODUCTO
+export const seleccionarCotizacionProducto = async (
+    compraId: number,
+    cotizacionId: number
+): Promise<void> => {
+    await api.patch(`/compras/${compraId}/cotizaciones/${cotizacionId}/seleccionar`);
 };

@@ -11,9 +11,13 @@ import {
     registrarCotizacionCatalogo,
     registrarCotizacionesBulk,
     enviarARevisionAdministrativa,
+    aprobarCompraAdministracion,
     generarExpedienteCompra,
     enviarAFinanzasCompra,
     finalizarCompraService,
+    agregarCotizacionProducto,
+    seleccionarCotizacionProducto,
+    type NuevaCotizacionProductoPayload,
     } from '../services/compras.service';
     import type { EstadoCompra } from '../types';
 
@@ -104,12 +108,18 @@ import {
     const uploadFactura = useMutation({
         mutationFn: ({
             id,
-            file
+            file,
+            monto,
+            numero,
+            proveedorId,
         }: {
             id: number;
             file: File;
+            monto: number;
+            numero: string;
+            proveedorId?: number;
         }) =>
-            subirFactura(id, file),
+            subirFactura(id, file, monto, numero, proveedorId),
 
         onSuccess: () => {
             queryClient.invalidateQueries({
@@ -147,6 +157,14 @@ import {
     const enviarAdministracion = useMutation({
         mutationFn: ({ id, observaciones }: { id: number; observaciones?: string }) =>
             enviarARevisionAdministrativa(id, observaciones),
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ['compras'] });
+        },
+    });
+
+    const aprobarAdministracion = useMutation({
+        mutationFn: ({ id, observaciones }: { id: number; observaciones?: string }) =>
+            aprobarCompraAdministracion(id, observaciones),
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ['compras'] });
         },
@@ -195,6 +213,22 @@ import {
         },
     });
 
+    const addCotProducto = useMutation({
+        mutationFn: ({ id, data }: { id: number; data: NuevaCotizacionProductoPayload }) =>
+            agregarCotizacionProducto(id, data),
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ['compras'] });
+        },
+    });
+
+    const selectCotProducto = useMutation({
+        mutationFn: ({ compraId, cotizacionId }: { compraId: number; cotizacionId: number }) =>
+            seleccionarCotizacionProducto(compraId, cotizacionId),
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ['compras'] });
+        },
+    });
+
     return {
         requisiciones:
             requisicionesQuery.data || [],
@@ -206,7 +240,10 @@ import {
         deleteCot,
         createCotCatalogo,
         createCotBulk,
+        addCotProducto,
+        selectCotProducto,
         enviarAdministracion,
+        aprobarAdministracion,
         createOrden,
         createOrdenPago,
         uploadFactura,

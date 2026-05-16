@@ -410,7 +410,9 @@ export type EstadoRequisicion =
   | 'SIN_EXISTENCIA'
   | 'ENVIADA_A_COMPRAS'
   | 'EN_REVISION_ADMINISTRATIVA'
-  | 'DEVUELTA_A_COMPRAS';
+  | 'DEVUELTA_A_COMPRAS'
+  | 'FINALIZADA'
+  | 'FINALIZADO';
 
 export interface RequisicionDetalleItem {
   id: number;
@@ -457,7 +459,7 @@ export interface Requisicion {
 
   cotizaciones?: Cotizacion[];
 
-  ordenCompra?: OrdenCompra;
+  ordenes?: OrdenCompra[];
 
   facturas?: {
     id: number;
@@ -515,6 +517,11 @@ export interface Cotizacion {
   precio: number;
   tiempoEntrega?: string;
   formaPago?: string;
+  condicionesPago?: string;
+  garantia?: string;
+  marca?: string;
+  modelo?: string;
+  observaciones?: string;
   requisicionId?: number;
   esMejorOpcion?: boolean;
 }
@@ -535,7 +542,9 @@ export interface OrdenCompra {
 
   fecha: string;
 
-  proveedor: string;
+  proveedor: string | { id: number; nombre: string };
+
+  proveedorId?: number;
 
   total: number;
 

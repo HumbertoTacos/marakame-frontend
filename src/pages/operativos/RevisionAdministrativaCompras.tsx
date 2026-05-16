@@ -2,7 +2,7 @@ import { useState } from 'react';
 import React from 'react';
 import {
   ClipboardCheck, Eye, X, Send, RotateCcw, CheckCircle,
-  Clock, AlertCircle, Search, Building2, Package,
+  Clock, AlertCircle, Search, Building2, Package, Loader2,
 } from 'lucide-react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { createPortal } from 'react-dom';
@@ -10,6 +10,7 @@ import {
   getComprasRevisionAdmin,
   aprobarCompraAdministracion,
   devolverCompraACompras,
+  seleccionarCotizacionProducto,
 } from '../../services/compras.service';
 import type { Requisicion, Cotizacion } from '../../types';
 import { getCotizacionProveedorNombre } from '../../types';
@@ -92,41 +93,28 @@ const Textarea = ({ label, ...props }: { label: string } & React.TextareaHTMLAtt
 );
 
 // ─────────────────────────────────────────────
-// HELPER: calcular totales por producto
+// HELPER: resumen por ganadores para tab info
 // ─────────────────────────────────────────────
-function calcularResumen(compra: Requisicion) {
+function calcularResumenGanadores(compra: Requisicion) {
   const cotizaciones = compra.cotizaciones ?? [];
   const detallesReq  = compra.requisicion?.detalles ?? [];
 
-  // Nuevo flujo: cot ligada a un detalle vía requisicionDetalleId
-  const filasPorProducto = detallesReq.map(d => {
-    const cot = cotizaciones.find(c => c.requisicionDetalleId === d.id);
-    const precioUnit = cot ? Number(cot.precioUnitario ?? cot.precio ?? 0) : 0;
-    const total      = precioUnit * d.cantidadSolicitada;
-    return { detalle: d, cot, precioUnit, total };
-  });
+  const gruposGan: { nombre: string; cantidad: number; subtotal: number }[] = [];
+  for (const d of detallesReq) {
+    const ganadora = cotizaciones.find(c => c.requisicionDetalleId === d.id && c.esMejorOpcion);
+    if (!ganadora) continue;
+    const nombre = getCotizacionProveedorNombre(ganadora) || `Proveedor #${ganadora.proveedorId}`;
+    const monto  = Number(ganadora.precioUnitario ?? ganadora.precio ?? 0) * d.cantidadSolicitada;
+    const ex = gruposGan.find(g => g.nombre === nombre);
+    if (ex) { ex.subtotal += monto; ex.cantidad += 1; }
+    else gruposGan.push({ nombre, subtotal: monto, cantidad: 1 });
+  }
 
-  // Cotizaciones legacy (sin requisicionDetalleId — flujo antiguo)
-  const cotsLegacy         = cotizaciones.filter(c => !c.requisicionDetalleId);
-  const usaFlujoPorProducto = filasPorProducto.some(f => f.cot);
-
-  const subtotal = filasPorProducto.reduce((s, f) => s + f.total, 0)
-                 + cotsLegacy.reduce((s, c) => s + Number(c.precio ?? 0), 0);
+  const subtotal    = gruposGan.reduce((s, g) => s + g.subtotal, 0);
   const iva         = subtotal * 0.16;
   const totalConIva = subtotal + iva;
 
-  // Resumen por proveedor
-  const resumenProv: Record<string, { nombre: string; cantidad: number; subtotal: number }> = {};
-  for (const f of filasPorProducto) {
-    if (!f.cot) continue;
-    const nombre = getCotizacionProveedorNombre(f.cot);
-    if (!resumenProv[nombre]) resumenProv[nombre] = { nombre, cantidad: 0, subtotal: 0 };
-    resumenProv[nombre].cantidad += 1;
-    resumenProv[nombre].subtotal += f.total;
-  }
-  const gruposProv = Object.values(resumenProv);
-
-  return { filasPorProducto, cotsLegacy, usaFlujoPorProducto, subtotal, iva, totalConIva, gruposProv };
+  return { gruposGan, subtotal, iva, totalConIva };
 }
 
 // ─────────────────────────────────────────────
@@ -137,23 +125,54 @@ function ModalDetalle({
   onClose,
   onAprobar,
   onDevolver,
+  onSelectGanador,
   aprobando,
   devolviendo,
+  selectingGanador,
 }: {
   compra: Requisicion;
   onClose: () => void;
   onAprobar: (observaciones?: string) => void;
   onDevolver: (motivo: string, observaciones?: string) => void;
+  onSelectGanador: (compraId: number, cotizacionId: number) => void;
   aprobando: boolean;
   devolviendo: boolean;
+  selectingGanador: boolean;
 }) {
   const [tab, setTab] = useState<'info' | 'cotizaciones'>('info');
   const [observaciones, setObservaciones] = useState('');
   const [motivo, setMotivo] = useState('');
   const [accion, setAccion] = useState<'aprobar' | 'devolver' | null>(null);
 
-  const { filasPorProducto, cotsLegacy, usaFlujoPorProducto, subtotal, iva, totalConIva, gruposProv } = calcularResumen(compra);
+  const todasCots   = compra.cotizaciones ?? [];
   const detallesReq = compra.requisicion?.detalles ?? [];
+  const cotsLegacy  = todasCots.filter(c => !c.requisicionDetalleId);
+  const area        = compra.requisicion?.areaSolicitante || compra.areaSolicitante;
+
+  const { gruposGan, subtotal, iva, totalConIva } = calcularResumenGanadores(compra);
+
+  const todoListo = detallesReq.length > 0 && detallesReq.every(d =>
+    todasCots.some(c => c.requisicionDetalleId === d.id && c.esMejorOpcion)
+  );
+
+  const cotsDeDetalle = (detalleId: number): Cotizacion[] =>
+    todasCots.filter(c => c.requisicionDetalleId === detalleId);
+
+  const getBadges = (detalleId: number, cotId: number) => {
+    const cots = cotsDeDetalle(detalleId);
+    if (cots.length < 2) return { mejorPrecio: false, entregaRapida: false, creditoDisponible: false };
+    const precios   = cots.map(c => Number(c.precioUnitario ?? c.precio ?? 0));
+    const minPrecio = Math.min(...precios);
+    const cot       = cots.find(c => c.id === cotId)!;
+    const tiempos   = cots.map(c => parseInt(c.tiempoEntrega ?? '9999')).filter(n => !isNaN(n));
+    const minTiempo = tiempos.length > 0 ? Math.min(...tiempos) : null;
+    const miTiempo  = parseInt(cot.tiempoEntrega ?? '9999');
+    return {
+      mejorPrecio:       Number(cot.precioUnitario ?? cot.precio ?? 0) === minPrecio,
+      entregaRapida:     minTiempo !== null && miTiempo === minTiempo,
+      creditoDisponible: !!(cot.formaPago ?? '').toLowerCase().includes('crédit'),
+    };
+  };
 
   const tabStyle = (active: boolean) => ({
     padding: '8px 18px', fontSize: 13, fontWeight: 600, cursor: 'pointer',
@@ -163,181 +182,106 @@ function ModalDetalle({
   } as React.CSSProperties);
 
   return (
-    <Modal title={`Revisión — ${compra.folio}`} onClose={onClose} width={820}>
+    <Modal title={`Revisión — ${compra.folio}`} onClose={onClose} width={1060}>
       {/* Tabs */}
       <div style={{ display: 'flex', gap: 4, borderBottom: '1px solid #E8ECF0', paddingBottom: 8 }}>
-        <button style={tabStyle(tab === 'info')} onClick={() => setTab('info')}>Información</button>
+        <button style={tabStyle(tab === 'info')} onClick={() => setTab('info')}>Información general</button>
         <button style={tabStyle(tab === 'cotizaciones')} onClick={() => setTab('cotizaciones')}>
-          Mejor opción por artículo ({detallesReq.length || (compra.cotizaciones?.length ?? 0)})
+          Cotizaciones por artículo ({detallesReq.length})
         </button>
       </div>
 
-      {tab === 'info' && (
-        <>
-          {/* Encabezado con gradiente */}
-          <div style={{ background: 'linear-gradient(135deg, #78350F 0%, #D97706 100%)', borderRadius: 12, padding: '14px 20px', color: 'white' }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap' as const, gap: 10 }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 24, flexWrap: 'wrap' as const }}>
-                <div>
-                  <div style={{ fontSize: 10, opacity: 0.65, textTransform: 'uppercase' as const, letterSpacing: '0.08em', marginBottom: 2 }}>Folio</div>
-                  <div style={{ fontSize: 15, fontWeight: 800 }}>{compra.folio}</div>
-                </div>
-                <div style={{ width: 1, height: 34, background: 'rgba(255,255,255,0.25)' }} />
-                <div>
-                  <div style={{ fontSize: 10, opacity: 0.65, textTransform: 'uppercase' as const, letterSpacing: '0.08em', marginBottom: 2 }}>Área</div>
-                  <div style={{ fontSize: 13, fontWeight: 600 }}>{compra.areaSolicitante}</div>
-                </div>
-                <div style={{ width: 1, height: 34, background: 'rgba(255,255,255,0.25)' }} />
-                <div>
-                  <div style={{ fontSize: 10, opacity: 0.65, textTransform: 'uppercase' as const, letterSpacing: '0.08em', marginBottom: 2 }}>Total estimado (c/IVA)</div>
-                  <div style={{ fontSize: 14, fontWeight: 800 }}>${totalConIva.toLocaleString('es-MX', { minimumFractionDigits: 2 })}</div>
-                </div>
-              </div>
-              <div style={{ display: 'flex', gap: 8 }}>
-                <div style={{ background: 'rgba(255,255,255,0.15)', borderRadius: 16, padding: '5px 12px', fontSize: 11, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 5 }}>
-                  <Package size={12} /> {detallesReq.length} artículos
-                </div>
-                <div style={{ background: 'rgba(255,255,255,0.15)', borderRadius: 16, padding: '5px 12px', fontSize: 11, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 5 }}>
-                  <Building2 size={12} /> {gruposProv.length} {gruposProv.length === 1 ? 'proveedor' : 'proveedores'}
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Info general */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-            <div style={{ background: '#F9FAFB', borderRadius: 10, padding: 14, fontSize: 13, color: '#374151', display: 'flex', flexDirection: 'column', gap: 5 }}>
-              {compra.requisicion && <div><strong>Req. origen:</strong> {compra.requisicion.folio}</div>}
-              <div><strong>Tipo:</strong> {compra.tipo}</div>
-              <div><strong>Presupuesto estimado:</strong> ${(compra.presupuestoEstimado ?? 0).toLocaleString('es-MX')}</div>
-              <div><strong>Fecha:</strong> {new Date(compra.createdAt).toLocaleDateString('es-MX')}</div>
-            </div>
-            <div style={{ background: '#F9FAFB', borderRadius: 10, padding: 14, fontSize: 13, color: '#374151', display: 'flex', flexDirection: 'column', gap: 5 }}>
-              <div><strong>Solicitante:</strong> {compra.requisicion?.usuarioSolicita
-                ? `${compra.requisicion.usuarioSolicita.nombre} ${compra.requisicion.usuarioSolicita.apellidos}`
-                : `${compra.usuario?.nombre ?? ''} ${compra.usuario?.apellidos ?? ''}`}
-              </div>
-              <div><strong>Subtotal:</strong> ${subtotal.toLocaleString('es-MX', { minimumFractionDigits: 2 })}</div>
-              <div><strong>IVA (16%):</strong> ${iva.toLocaleString('es-MX', { minimumFractionDigits: 2 })}</div>
-              <div style={{ color: '#16A34A', fontWeight: 700 }}><strong style={{ color: '#374151', fontWeight: 600 }}>Total c/IVA:</strong> ${totalConIva.toLocaleString('es-MX', { minimumFractionDigits: 2 })}</div>
-            </div>
-          </div>
-
-          {compra.requisicion?.justificacion && (
-            <div style={{ background: '#F9FAFB', borderRadius: 10, padding: 14, fontSize: 13 }}>
-              <p style={{ margin: '0 0 6px', fontWeight: 600, color: '#111827' }}>Justificación</p>
-              <p style={{ margin: 0, color: '#374151', lineHeight: 1.6 }}>{compra.requisicion.justificacion}</p>
-            </div>
-          )}
-
-          {/* Resumen por proveedor */}
-          {gruposProv.length > 0 && (
-            <div style={{ border: '1px solid #BFDBFE', borderRadius: 12, overflow: 'hidden', background: 'white' }}>
-              <div style={{ padding: '9px 16px', background: '#EFF6FF', borderBottom: '1px solid #BFDBFE', display: 'flex', alignItems: 'center', gap: 8 }}>
-                <Building2 size={13} style={{ color: '#2563EB' }} />
-                <span style={{ fontWeight: 700, fontSize: 11, color: '#1D4ED8', textTransform: 'uppercase' as const, letterSpacing: '0.07em' }}>
-                  Órdenes que se generarán
-                </span>
-                <span style={{ marginLeft: 'auto', background: '#DBEAFE', color: '#1D4ED8', fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 10 }}>
-                  {gruposProv.length} {gruposProv.length === 1 ? 'proveedor' : 'proveedores'}
-                </span>
-              </div>
-              <div style={{ padding: '12px 16px', display: 'flex', flexWrap: 'wrap' as const, gap: 10 }}>
-                {gruposProv.map((g, i) => (
-                  <div key={i} style={{ flex: '1 1 180px', border: '1px solid #BFDBFE', borderLeft: '4px solid #2563EB', borderRadius: 8, padding: '10px 14px', background: '#F8FBFF' }}>
-                    <div style={{ fontWeight: 700, fontSize: 13, color: '#1E293B', marginBottom: 6 }}>{g.nombre}</div>
-                    <div style={{ display: 'flex', justifyContent: 'space-between' as const, alignItems: 'center' }}>
-                      <span style={{ background: '#DBEAFE', color: '#1D4ED8', fontSize: 10, fontWeight: 700, padding: '2px 7px', borderRadius: 10 }}>
-                        {g.cantidad} {g.cantidad === 1 ? 'artículo' : 'artículos'}
-                      </span>
-                      <span style={{ fontSize: 13, fontWeight: 800, color: '#1E293B' }}>
-                        ${g.subtotal.toLocaleString('es-MX', { minimumFractionDigits: 2 })}
-                      </span>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-        </>
-      )}
-
+      {/* ── TAB: COTIZACIONES ── */}
       {tab === 'cotizaciones' && (
         <>
-          {/* Flujo nuevo: por producto */}
-          {usaFlujoPorProducto && (
-            <div style={{ border: '1px solid #E2E8F0', borderRadius: 12, overflow: 'hidden', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
-              <div style={{ padding: '9px 16px', background: '#F8FAFC', borderBottom: '1px solid #E2E8F0', display: 'flex', alignItems: 'center', gap: 8 }}>
-                <Package size={13} style={{ color: '#D97706' }} />
-                <span style={{ fontWeight: 700, fontSize: 11, color: '#1E293B', textTransform: 'uppercase' as const, letterSpacing: '0.07em' }}>
-                  Mejor opción por artículo
-                </span>
-              </div>
-              <div style={{ overflowX: 'auto' as const }}>
-                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
-                  <thead>
-                    <tr style={{ background: '#1E293B' }}>
-                      {['#', 'Artículo', 'Cant.', 'Proveedor seleccionado', 'P. Unit.', 'Total', 'Entrega', 'Forma pago'].map((h, i) => (
-                        <th key={i} style={{
-                          padding: '8px 12px', fontWeight: 600, color: '#94A3B8', fontSize: 10,
-                          textTransform: 'uppercase' as const, letterSpacing: '0.06em',
-                          textAlign: (i === 4 || i === 5) ? 'right' as const : (i === 2 ? 'center' as const : 'left' as const),
-                        }}>{h}</th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {filasPorProducto.map((f, idx) => (
-                      <tr key={f.detalle.id} style={{
-                        borderTop: idx === 0 ? 'none' : '1px solid #F1F5F9',
-                        background: f.cot ? 'white' : '#FFF8F0',
-                        borderLeft: f.cot ? '3px solid transparent' : '3px solid #FED7AA',
-                      }}>
-                        <td style={{ padding: '9px 12px', color: '#94A3B8', fontWeight: 500 }}>{f.detalle.numero}</td>
-                        <td style={{ padding: '9px 12px', fontWeight: 600, color: '#0F172A' }}>{f.detalle.productoNombre ?? '—'}</td>
-                        <td style={{ padding: '9px 12px', textAlign: 'center' as const, fontWeight: 700, color: '#1E293B' }}>{f.detalle.cantidadSolicitada}</td>
-                        <td style={{ padding: '9px 12px' }}>
-                          {f.cot
-                            ? <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, background: '#F0FDF4', border: '1px solid #BBF7D0', borderRadius: 6, padding: '2px 8px', fontSize: 11, fontWeight: 700, color: '#15803D' }}>
-                                <CheckCircle size={11} /> {getCotizacionProveedorNombre(f.cot)}
-                              </span>
-                            : <span style={{ fontSize: 11, color: '#F97316' }}>Sin cotización</span>}
-                        </td>
-                        <td style={{ padding: '9px 12px', textAlign: 'right' as const, color: '#374151', fontWeight: 600 }}>
-                          {f.precioUnit > 0 ? `$${f.precioUnit.toLocaleString('es-MX', { minimumFractionDigits: 2 })}` : '—'}
-                        </td>
-                        <td style={{ padding: '9px 12px', textAlign: 'right' as const, fontWeight: 700, color: f.total > 0 ? '#0F172A' : '#CBD5E1' }}>
-                          {f.total > 0 ? `$${f.total.toLocaleString('es-MX', { minimumFractionDigits: 2 })}` : '—'}
-                        </td>
-                        <td style={{ padding: '9px 12px', color: '#64748B', fontSize: 11 }}>{f.cot?.tiempoEntrega ?? '—'}</td>
-                        <td style={{ padding: '9px 12px', color: '#64748B', fontSize: 11 }}>{f.cot?.formaPago ?? '—'}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-              {/* Totales */}
-              <div style={{ borderTop: '2px solid #E2E8F0', background: '#F8FAFC', padding: '10px 20px', display: 'flex', justifyContent: 'flex-end' as const }}>
-                <div style={{ display: 'flex', flexDirection: 'column' as const, gap: 4, minWidth: 240 }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between' as const, fontSize: 12, color: '#64748B' }}>
-                    <span>Subtotal</span>
-                    <span style={{ fontWeight: 600, color: '#334155' }}>${subtotal.toLocaleString('es-MX', { minimumFractionDigits: 2 })}</span>
-                  </div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between' as const, fontSize: 12, color: '#64748B' }}>
-                    <span>IVA (16%)</span>
-                    <span style={{ fontWeight: 600, color: '#334155' }}>${iva.toLocaleString('es-MX', { minimumFractionDigits: 2 })}</span>
-                  </div>
-                  <div style={{ height: 1, background: '#E2E8F0', margin: '3px 0' }} />
-                  <div style={{ display: 'flex', justifyContent: 'space-between' as const, alignItems: 'center' }}>
-                    <span style={{ fontSize: 13, fontWeight: 700, color: '#1E293B' }}>Total con IVA</span>
-                    <span style={{ fontSize: 15, fontWeight: 800, color: '#16A34A' }}>${totalConIva.toLocaleString('es-MX', { minimumFractionDigits: 2 })}</span>
+          {/* Banner instrucción */}
+          <div style={{ background: '#FEFCE8', border: '1px solid #FEF08A', borderRadius: 10, padding: '10px 14px', fontSize: 13, color: '#854D0E', display: 'flex', alignItems: 'center', gap: 8 }}>
+            <AlertCircle size={15} style={{ flexShrink: 0 }} />
+            Selecciona el proveedor ganador para cada artículo. Cuando todos estén elegidos podrás aprobar y enviar a Dirección General.
+          </div>
+
+          {/* Sección por artículo */}
+          {detallesReq.map(d => {
+            const cots     = cotsDeDetalle(d.id);
+            const ganadora = cots.find(c => c.esMejorOpcion);
+            return (
+              <div key={d.id} style={{ border: `1.5px solid ${ganadora ? '#BBF7D0' : '#FDE68A'}`, borderRadius: 12, overflow: 'hidden' }}>
+                {/* Cabecera artículo */}
+                <div style={{ padding: '10px 16px', background: '#F8FAFC', borderBottom: '1px solid #E2E8F0', display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' as const }}>
+                  <span style={{ background: '#1E293B', color: 'white', borderRadius: 6, padding: '2px 7px', fontSize: 11, fontWeight: 700 }}>#{d.numero}</span>
+                  <span style={{ fontWeight: 700, fontSize: 14, color: '#0F172A' }}>{d.productoNombre ?? '—'}</span>
+                  <span style={{ background: '#F1F5F9', borderRadius: 4, padding: '2px 6px', fontSize: 11, color: '#64748B' }}>{d.cantidadSolicitada} {d.unidadLibre ?? ''}</span>
+                  <div style={{ marginLeft: 'auto' }}>
+                    {ganadora
+                      ? <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, background: '#F0FDF4', border: '1px solid #BBF7D0', borderRadius: 6, padding: '3px 10px', fontSize: 11, fontWeight: 700, color: '#15803D' }}>
+                          <CheckCircle size={11} /> {getCotizacionProveedorNombre(ganadora)}
+                        </span>
+                      : <span style={{ fontSize: 11, color: '#D97706', fontWeight: 600 }}>⚠ Selecciona el proveedor ganador</span>
+                    }
                   </div>
                 </div>
-              </div>
-            </div>
-          )}
 
-          {/* Flujo legacy */}
+                {/* Tabla cotizaciones del artículo */}
+                {cots.length > 0 ? (
+                  <div style={{ overflowX: 'auto' as const }}>
+                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+                      <thead>
+                        <tr style={{ background: '#1E293B' }}>
+                          {['Proveedor', 'P. Unitario', 'Total', 'Entrega', 'Forma pago', 'Garantía', 'Marca / Modelo', 'Indicadores', 'Elegir'].map((h, i) => (
+                            <th key={i} style={{ padding: '7px 10px', textAlign: (i === 1 || i === 2) ? 'right' as const : 'left' as const, fontWeight: 600, color: '#94A3B8', fontSize: 10, textTransform: 'uppercase' as const, letterSpacing: '0.05em', whiteSpace: 'nowrap' as const }}>{h}</th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {cots.map(c => {
+                          const badges  = getBadges(d.id, c.id);
+                          const esGan   = c.esMejorOpcion;
+                          const precioU = Number(c.precioUnitario ?? c.precio ?? 0);
+                          const totalL  = precioU * d.cantidadSolicitada;
+                          return (
+                            <tr key={c.id} style={{ background: esGan ? '#F0FDF4' : 'white', borderTop: '1px solid #F1F5F9', borderLeft: esGan ? '3px solid #22C55E' : '3px solid transparent' }}>
+                              <td style={{ padding: '8px 10px', fontWeight: 600, color: '#0F172A' }}>{getCotizacionProveedorNombre(c)}</td>
+                              <td style={{ padding: '8px 10px', textAlign: 'right' as const, fontWeight: 700, color: '#16A34A' }}>
+                                ${precioU.toLocaleString('es-MX', { minimumFractionDigits: 2 })}
+                              </td>
+                              <td style={{ padding: '8px 10px', textAlign: 'right' as const, fontWeight: 700, color: '#1E293B' }}>
+                                ${totalL.toLocaleString('es-MX', { minimumFractionDigits: 2 })}
+                              </td>
+                              <td style={{ padding: '8px 10px', color: '#64748B' }}>{c.tiempoEntrega ?? '—'}</td>
+                              <td style={{ padding: '8px 10px', color: '#64748B' }}>{c.formaPago ?? '—'}</td>
+                              <td style={{ padding: '8px 10px', color: '#64748B', maxWidth: 110, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const }}>{c.garantia ?? '—'}</td>
+                              <td style={{ padding: '8px 10px', color: '#64748B' }}>{[c.marca, c.modelo].filter(Boolean).join(' / ') || '—'}</td>
+                              <td style={{ padding: '8px 10px' }}>
+                                <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' as const }}>
+                                  {badges.mejorPrecio && <span style={{ background: '#F0FDF4', color: '#15803D', border: '1px solid #BBF7D0', borderRadius: 4, padding: '1px 6px', fontSize: 10, fontWeight: 700, whiteSpace: 'nowrap' as const }}>💰 Mejor precio</span>}
+                                  {badges.entregaRapida && <span style={{ background: '#EFF6FF', color: '#1D4ED8', border: '1px solid #BFDBFE', borderRadius: 4, padding: '1px 6px', fontSize: 10, fontWeight: 700, whiteSpace: 'nowrap' as const }}>⚡ Entrega rápida</span>}
+                                  {badges.creditoDisponible && <span style={{ background: '#F5F3FF', color: '#7C3AED', border: '1px solid #DDD6FE', borderRadius: 4, padding: '1px 6px', fontSize: 10, fontWeight: 700, whiteSpace: 'nowrap' as const }}>💳 Crédito</span>}
+                                </div>
+                              </td>
+                              <td style={{ padding: '8px 10px', textAlign: 'center' as const }}>
+                                <input
+                                  type="radio"
+                                  name={`ganador-${d.id}`}
+                                  checked={esGan}
+                                  disabled={selectingGanador}
+                                  onChange={() => onSelectGanador(compra.id, c.id)}
+                                  style={{ cursor: selectingGanador ? 'not-allowed' : 'pointer', accentColor: '#16A34A', width: 16, height: 16 }}
+                                />
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                ) : (
+                  <div style={{ padding: '14px 16px', fontSize: 12, color: '#9CA3AF', fontStyle: 'italic' }}>Sin cotizaciones para este artículo.</div>
+                )}
+              </div>
+            );
+          })}
+
+          {/* Cotizaciones legacy */}
           {cotsLegacy.length > 0 && (
             <div style={{ border: '1px solid #E8ECF0', borderRadius: 10, overflow: 'hidden' }}>
               <div style={{ padding: '9px 16px', background: '#F9FAFB', fontWeight: 700, fontSize: 11, color: '#374151', borderBottom: '1px solid #E8ECF0', textTransform: 'uppercase' as const, letterSpacing: '0.06em' }}>
@@ -365,24 +309,117 @@ function ModalDetalle({
             </div>
           )}
 
-          {!usaFlujoPorProducto && cotsLegacy.length === 0 && (
+          {detallesReq.length === 0 && cotsLegacy.length === 0 && (
             <div style={{ padding: 32, textAlign: 'center' as const, color: '#9CA3AF' }}>
               <Building2 size={28} style={{ margin: '0 auto 8px', display: 'block' }} />
               <p style={{ margin: 0 }}>No hay cotizaciones registradas</p>
             </div>
           )}
+
+          {/* Resumen ganadores */}
+          {gruposGan.length > 0 && (
+            <div style={{ border: '1px solid #BFDBFE', borderRadius: 12, overflow: 'hidden' }}>
+              <div style={{ padding: '9px 16px', background: '#EFF6FF', borderBottom: '1px solid #BFDBFE', display: 'flex', alignItems: 'center', gap: 8 }}>
+                <Building2 size={13} style={{ color: '#2563EB' }} />
+                <span style={{ fontWeight: 700, fontSize: 11, color: '#1D4ED8', textTransform: 'uppercase' as const, letterSpacing: '0.07em' }}>Órdenes que se generarán</span>
+                <span style={{ marginLeft: 'auto', background: '#DBEAFE', color: '#1D4ED8', fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 10 }}>{gruposGan.length} {gruposGan.length === 1 ? 'proveedor' : 'proveedores'}</span>
+              </div>
+              <div style={{ padding: '12px 16px', display: 'flex', flexWrap: 'wrap' as const, gap: 10, alignItems: 'flex-end' }}>
+                {gruposGan.map((g, i) => (
+                  <div key={i} style={{ flex: '1 1 170px', border: '1px solid #BFDBFE', borderLeft: '4px solid #2563EB', borderRadius: 8, padding: '10px 14px', background: '#F8FBFF' }}>
+                    <div style={{ fontWeight: 700, fontSize: 13, color: '#1E293B', marginBottom: 5 }}>{g.nombre}</div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between' as const, alignItems: 'center' }}>
+                      <span style={{ background: '#DBEAFE', color: '#1D4ED8', fontSize: 10, fontWeight: 700, padding: '2px 7px', borderRadius: 10 }}>{g.cantidad} art.</span>
+                      <span style={{ fontSize: 13, fontWeight: 800, color: '#1E293B' }}>${g.subtotal.toLocaleString('es-MX', { minimumFractionDigits: 2 })}</span>
+                    </div>
+                  </div>
+                ))}
+                <div style={{ flex: '1 1 170px', background: '#F0FDF4', border: '1px solid #BBF7D0', borderRadius: 8, padding: '10px 14px' }}>
+                  <div style={{ fontSize: 11, color: '#64748B', marginBottom: 3 }}>Subtotal: ${subtotal.toLocaleString('es-MX', { minimumFractionDigits: 2 })}</div>
+                  <div style={{ fontSize: 11, color: '#64748B', marginBottom: 3 }}>IVA (16%): ${iva.toLocaleString('es-MX', { minimumFractionDigits: 2 })}</div>
+                  <div style={{ fontSize: 15, fontWeight: 800, color: '#15803D' }}>Total: ${totalConIva.toLocaleString('es-MX', { minimumFractionDigits: 2 })}</div>
+                </div>
+              </div>
+            </div>
+          )}
         </>
       )}
 
-      {/* Sección de acciones */}
+      {/* ── TAB: INFO ── */}
+      {tab === 'info' && (
+        <>
+          <div style={{ background: 'linear-gradient(135deg, #78350F 0%, #D97706 100%)', borderRadius: 12, padding: '14px 20px', color: 'white' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap' as const, gap: 10 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 24, flexWrap: 'wrap' as const }}>
+                <div>
+                  <div style={{ fontSize: 10, opacity: 0.65, textTransform: 'uppercase' as const, letterSpacing: '0.08em', marginBottom: 2 }}>Folio</div>
+                  <div style={{ fontSize: 15, fontWeight: 800 }}>{compra.folio}</div>
+                </div>
+                <div style={{ width: 1, height: 34, background: 'rgba(255,255,255,0.25)' }} />
+                <div>
+                  <div style={{ fontSize: 10, opacity: 0.65, textTransform: 'uppercase' as const, letterSpacing: '0.08em', marginBottom: 2 }}>Área</div>
+                  <div style={{ fontSize: 13, fontWeight: 600 }}>{area}</div>
+                </div>
+                <div style={{ width: 1, height: 34, background: 'rgba(255,255,255,0.25)' }} />
+                <div>
+                  <div style={{ fontSize: 10, opacity: 0.65, textTransform: 'uppercase' as const, letterSpacing: '0.08em', marginBottom: 2 }}>Total c/IVA</div>
+                  <div style={{ fontSize: 14, fontWeight: 800 }}>{totalConIva > 0 ? `$${totalConIva.toLocaleString('es-MX', { minimumFractionDigits: 2 })}` : 'Pendiente'}</div>
+                </div>
+              </div>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <div style={{ background: 'rgba(255,255,255,0.15)', borderRadius: 16, padding: '5px 12px', fontSize: 11, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 5 }}>
+                  <Package size={12} /> {detallesReq.length} artículos
+                </div>
+                <div style={{ background: 'rgba(255,255,255,0.15)', borderRadius: 16, padding: '5px 12px', fontSize: 11, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 5 }}>
+                  <Building2 size={12} /> {gruposGan.length} {gruposGan.length === 1 ? 'proveedor' : 'proveedores'}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+            <div style={{ background: '#F9FAFB', borderRadius: 10, padding: 14, fontSize: 13, color: '#374151', display: 'flex', flexDirection: 'column', gap: 5 }}>
+              {compra.requisicion && <div><strong>Req. origen:</strong> {compra.requisicion.folio}</div>}
+              <div><strong>Tipo:</strong> {compra.tipo}</div>
+              <div><strong>Presupuesto estimado:</strong> ${(compra.presupuestoEstimado ?? 0).toLocaleString('es-MX')}</div>
+              <div><strong>Fecha:</strong> {new Date(compra.createdAt).toLocaleDateString('es-MX')}</div>
+            </div>
+            <div style={{ background: '#F9FAFB', borderRadius: 10, padding: 14, fontSize: 13, color: '#374151', display: 'flex', flexDirection: 'column', gap: 5 }}>
+              <div><strong>Solicitante:</strong> {compra.requisicion?.usuarioSolicita
+                ? `${compra.requisicion.usuarioSolicita.nombre} ${compra.requisicion.usuarioSolicita.apellidos}`
+                : `${compra.usuario?.nombre ?? ''} ${compra.usuario?.apellidos ?? ''}`}
+              </div>
+              {totalConIva > 0 && <>
+                <div><strong>Subtotal:</strong> ${subtotal.toLocaleString('es-MX', { minimumFractionDigits: 2 })}</div>
+                <div><strong>IVA (16%):</strong> ${iva.toLocaleString('es-MX', { minimumFractionDigits: 2 })}</div>
+                <div style={{ color: '#16A34A', fontWeight: 700 }}><strong style={{ color: '#374151', fontWeight: 600 }}>Total c/IVA:</strong> ${totalConIva.toLocaleString('es-MX', { minimumFractionDigits: 2 })}</div>
+              </>}
+            </div>
+          </div>
+
+          {compra.requisicion?.justificacion && (
+            <div style={{ background: '#F9FAFB', borderRadius: 10, padding: 14, fontSize: 13 }}>
+              <p style={{ margin: '0 0 6px', fontWeight: 600, color: '#111827' }}>Justificación</p>
+              <p style={{ margin: 0, color: '#374151', lineHeight: 1.6 }}>{compra.requisicion.justificacion}</p>
+            </div>
+          )}
+        </>
+      )}
+
+      {/* ── ACCIONES ── */}
       {!accion && (
-        <div style={{ borderTop: '1px solid #E8ECF0', paddingTop: 16, display: 'flex', gap: 10, flexWrap: 'wrap' as const }}>
-          <Btn variant="success" icon={<CheckCircle size={15} />} onClick={() => setAccion('aprobar')}>
+        <div style={{ borderTop: '1px solid #E8ECF0', paddingTop: 16, display: 'flex', gap: 10, flexWrap: 'wrap' as const, alignItems: 'center' }}>
+          <Btn variant="success" icon={<CheckCircle size={15} />} disabled={!todoListo} onClick={() => setAccion('aprobar')}>
             Aprobar y enviar a Dirección
           </Btn>
           <Btn variant="danger" icon={<RotateCcw size={15} />} onClick={() => setAccion('devolver')}>
             Devolver a Compras
           </Btn>
+          {!todoListo && detallesReq.length > 0 && (
+            <span style={{ fontSize: 11, color: '#F59E0B', display: 'flex', alignItems: 'center', gap: 4 }}>
+              <AlertCircle size={12} /> Selecciona el proveedor ganador en cada artículo
+            </span>
+          )}
           <div style={{ flex: 1 }} />
           <Btn variant="ghost" onClick={onClose}>Cerrar</Btn>
         </div>
@@ -434,7 +471,7 @@ function ModalDetalle({
 export default function RevisionAdministrativaCompras() {
   const { usuario } = useAuthStore();
   const queryClient = useQueryClient();
-  const [seleccionada, setSeleccionada] = useState<Requisicion | null>(null);
+  const [selectedId, setSelectedId] = useState<number | null>(null);
   const [busqueda, setBusqueda] = useState('');
   const [notif, setNotif] = useState<string | null>(null);
 
@@ -455,10 +492,13 @@ export default function RevisionAdministrativaCompras() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['compras-admin-revision'] });
       queryClient.invalidateQueries({ queryKey: ['compras'] });
-      setSeleccionada(null);
+      setSelectedId(null);
       notify('Compra aprobada — enviada a Dirección General');
     },
-    onError: (err: any) => notify(`Error: ${err?.response?.data?.message ?? err?.message}`),
+    onError: (err: unknown) => {
+      const e = err as { response?: { data?: { message?: string } }; message?: string };
+      notify(`Error: ${e?.response?.data?.message ?? e?.message}`);
+    },
   });
 
   const devolverMut = useMutation({
@@ -467,16 +507,38 @@ export default function RevisionAdministrativaCompras() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['compras-admin-revision'] });
       queryClient.invalidateQueries({ queryKey: ['compras'] });
-      setSeleccionada(null);
+      setSelectedId(null);
       notify('Compra devuelta al área de compras');
     },
-    onError: (err: any) => notify(`Error: ${err?.response?.data?.message ?? err?.message}`),
+    onError: (err: unknown) => {
+      const e = err as { response?: { data?: { message?: string } }; message?: string };
+      notify(`Error: ${e?.response?.data?.message ?? e?.message}`);
+    },
   });
 
-  const filtradas = compras.filter(c =>
-    c.folio.toLowerCase().includes(busqueda.toLowerCase()) ||
-    c.areaSolicitante.toLowerCase().includes(busqueda.toLowerCase())
-  );
+  const selectGanadorMut = useMutation({
+    mutationFn: ({ compraId, cotizacionId }: { compraId: number; cotizacionId: number }) =>
+      seleccionarCotizacionProducto(compraId, cotizacionId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['compras-admin-revision'] });
+      queryClient.invalidateQueries({ queryKey: ['compras'] });
+    },
+    onError: (err: unknown) => {
+      const e = err as { response?: { data?: { message?: string } }; message?: string };
+      notify(`Error: ${e?.response?.data?.message ?? e?.message}`);
+    },
+  });
+
+  // Derivar la compra seleccionada desde datos frescos
+  const seleccionada = selectedId !== null ? (compras.find(c => c.id === selectedId) ?? null) : null;
+
+  const filtradas = compras.filter(c => {
+    const area = c.requisicion?.areaSolicitante || c.areaSolicitante;
+    return (
+      c.folio.toLowerCase().includes(busqueda.toLowerCase()) ||
+      area.toLowerCase().includes(busqueda.toLowerCase())
+    );
+  });
 
   return (
     <>
@@ -523,7 +585,7 @@ export default function RevisionAdministrativaCompras() {
 
           {isLoading ? (
             <div style={{ padding: '5rem', textAlign: 'center', color: '#94a3b8' }}>
-              <Clock size={32} style={{ margin: '0 auto 12px', display: 'block' }} />
+              <Loader2 size={32} style={{ margin: '0 auto 12px', display: 'block' }} />
               <span>Cargando...</span>
             </div>
           ) : filtradas.length === 0 ? (
@@ -536,7 +598,7 @@ export default function RevisionAdministrativaCompras() {
             <table style={{ width: '100%', borderCollapse: 'separate', borderSpacing: 0 }}>
               <thead>
                 <tr style={{ background: '#f8fafc' }}>
-                  {['Folio', 'Área', 'Requisición origen', 'Artículos', 'Proveedores', 'Total estimado', 'Fecha', ''].map((h, i) => (
+                  {['Folio', 'Área', 'Requisición origen', 'Artículos', 'Estado cotizaciones', 'Total (ganadores)', 'Fecha', ''].map((h, i) => (
                     <th key={i} style={{
                       padding: '1rem 1.5rem', textAlign: i === 7 ? 'right' as const : 'left' as const,
                       fontSize: 12, fontWeight: 700, color: '#64748b',
@@ -547,10 +609,13 @@ export default function RevisionAdministrativaCompras() {
               </thead>
               <tbody>
                 {filtradas.map((compra, idx) => {
-                  const { gruposProv, totalConIva } = calcularResumen(compra);
-                  const detalles = compra.requisicion?.detalles ?? [];
-                  const nArticulos = detalles.length || (compra.cotizaciones?.length ?? 0);
-                  const nProveedores = gruposProv.length;
+                  const detalles   = compra.requisicion?.detalles ?? [];
+                  const todasCots  = compra.cotizaciones ?? [];
+                  const nArticulos = detalles.length;
+                  const conGanador = detalles.filter(d => todasCots.some(c => c.requisicionDetalleId === d.id && c.esMejorOpcion)).length;
+                  const area       = compra.requisicion?.areaSolicitante || compra.areaSolicitante;
+                  const { gruposGan, totalConIva } = calcularResumenGanadores(compra);
+                  const todoListo  = nArticulos > 0 && conGanador === nArticulos;
 
                   return (
                     <tr
@@ -565,7 +630,7 @@ export default function RevisionAdministrativaCompras() {
                         </span>
                       </td>
                       <td style={{ padding: '1.1rem 1.5rem', verticalAlign: 'middle', fontSize: 14, color: '#374151', fontWeight: 500 }}>
-                        {compra.areaSolicitante}
+                        {area}
                       </td>
                       <td style={{ padding: '1.1rem 1.5rem', verticalAlign: 'middle', fontSize: 13, color: '#6B7280' }}>
                         {compra.requisicion ? (
@@ -574,30 +639,27 @@ export default function RevisionAdministrativaCompras() {
                           </span>
                         ) : '—'}
                       </td>
-                      {/* Artículos */}
                       <td style={{ padding: '1.1rem 1.5rem', verticalAlign: 'middle' }}>
                         <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, background: '#F0F9FF', color: '#0369A1', border: '1px solid #BAE6FD', borderRadius: 6, padding: '3px 10px', fontSize: 12, fontWeight: 600 }}>
                           <Package size={12} /> {nArticulos}
                         </span>
                       </td>
-                      {/* Proveedores */}
                       <td style={{ padding: '1.1rem 1.5rem', verticalAlign: 'middle' }}>
-                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, background: nProveedores > 0 ? '#F0FDF4' : '#FEF2F2', color: nProveedores > 0 ? '#16A34A' : '#DC2626', border: `1px solid ${nProveedores > 0 ? '#BBF7D0' : '#FECACA'}`, borderRadius: 6, padding: '3px 10px', fontSize: 12, fontWeight: 600 }}>
-                          {nProveedores > 0 ? <CheckCircle size={12} /> : <AlertCircle size={12} />}
-                          {nProveedores > 0 ? `${nProveedores} ${nProveedores === 1 ? 'proveedor' : 'proveedores'}` : 'Sin cotizar'}
+                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, background: todoListo ? '#F0FDF4' : '#FEFCE8', color: todoListo ? '#16A34A' : '#92400E', border: `1px solid ${todoListo ? '#BBF7D0' : '#FEF08A'}`, borderRadius: 6, padding: '3px 10px', fontSize: 12, fontWeight: 600 }}>
+                          {todoListo ? <CheckCircle size={12} /> : <AlertCircle size={12} />}
+                          {todoListo ? `${gruposGan.length} prov. elegidos` : `${conGanador}/${nArticulos} elegidos`}
                         </span>
                       </td>
-                      {/* Total estimado */}
                       <td style={{ padding: '1.1rem 1.5rem', verticalAlign: 'middle' }}>
                         {totalConIva > 0 ? (
                           <>
                             <div style={{ fontSize: 14, fontWeight: 800, color: '#16A34A' }}>
                               ${totalConIva.toLocaleString('es-MX', { minimumFractionDigits: 2 })}
                             </div>
-                            <div style={{ fontSize: 11, color: '#9CA3AF', fontWeight: 400 }}>IVA incluido</div>
+                            <div style={{ fontSize: 11, color: '#9CA3AF' }}>IVA incluido</div>
                           </>
                         ) : (
-                          <span style={{ color: '#CBD5E1', fontSize: 13 }}>—</span>
+                          <span style={{ color: '#CBD5E1', fontSize: 13 }}>Pendiente selección</span>
                         )}
                       </td>
                       <td style={{ padding: '1.1rem 1.5rem', verticalAlign: 'middle', fontSize: 13, color: '#6B7280' }}>
@@ -605,7 +667,7 @@ export default function RevisionAdministrativaCompras() {
                       </td>
                       <td style={{ padding: '1.1rem 1.5rem', verticalAlign: 'middle', textAlign: 'right' }}>
                         <button
-                          onClick={() => setSeleccionada(compra)}
+                          onClick={() => setSelectedId(compra.id)}
                           style={{
                             display: 'inline-flex', alignItems: 'center', gap: 6,
                             background: '#2563EB', color: 'white', border: 'none', borderRadius: 8,
@@ -627,11 +689,13 @@ export default function RevisionAdministrativaCompras() {
         {seleccionada && (
           <ModalDetalle
             compra={seleccionada}
-            onClose={() => setSeleccionada(null)}
+            onClose={() => setSelectedId(null)}
             onAprobar={(obs) => aprobarMut.mutate({ id: seleccionada.id, observaciones: obs })}
             onDevolver={(motivo, obs) => devolverMut.mutate({ id: seleccionada.id, motivoRechazo: motivo, observaciones: obs })}
+            onSelectGanador={(compraId, cotizacionId) => selectGanadorMut.mutate({ compraId, cotizacionId })}
             aprobando={aprobarMut.isPending}
             devolviendo={devolverMut.isPending}
+            selectingGanador={selectGanadorMut.isPending}
           />
         )}
 

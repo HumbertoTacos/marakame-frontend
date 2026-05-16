@@ -65,7 +65,7 @@ export function RequisicionAlmacenModal({ req, isOpen, productos, onClose, onSal
   const [activeSalidaIdx, setActiveSalidaIdx] = useState<number | null>(null);
   const [salidaForm, setSalidaForm] = useState<SalidaFormState>(emptyForm());
   const [localState, setLocalState] = useState<Record<number, ProductoLocalState>>({});
-  const [enviandoCompras, setEnviandoCompras] = useState(false);
+  const [enviandoComprasRows, setEnviandoComprasRows] = useState<Record<number, boolean>>({});
   const [errorCompras, setErrorCompras] = useState<string | null>(null);
 
   const rows = useMemo((): ProductoRow[] => {
@@ -149,28 +149,29 @@ export function RequisicionAlmacenModal({ req, isOpen, productos, onClose, onSal
     }
   };
 
-  const handleEnviarCompras = async () => {
+  const handleEnviarComprasRow = async (rowId: number) => {
     if (!req) return;
-    setEnviandoCompras(true);
+    setEnviandoComprasRows(prev => ({ ...prev, [rowId]: true }));
     setErrorCompras(null);
+
+    const yaEnviada =
+      req.estado === 'ENVIADA_A_COMPRAS' ||
+      Object.values(localState).some(s => s.enviadoCompras);
+
     try {
-      await enviarACompras(req.id);
-      // Mark all non-delivered rows as sent to compras in local state
-      setLocalState(prev => {
-        const next = { ...prev };
-        rows.forEach(r => {
-          if (!next[r.id]?.entregado) {
-            next[r.id] = { entregado: false, cantidadEntregada: 0, enviadoCompras: true };
-          }
-        });
-        return next;
-      });
-      onEnviadoACompras?.();
+      if (!yaEnviada) {
+        await enviarACompras(req.id);
+        onEnviadoACompras?.();
+      }
+      setLocalState(prev => ({
+        ...prev,
+        [rowId]: { entregado: false, cantidadEntregada: 0, enviadoCompras: true },
+      }));
     } catch (err: unknown) {
       const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message;
       setErrorCompras(msg || 'Error al enviar a compras');
     } finally {
-      setEnviandoCompras(false);
+      setEnviandoComprasRows(prev => ({ ...prev, [rowId]: false }));
     }
   };
 
@@ -368,6 +369,9 @@ export function RequisicionAlmacenModal({ req, isOpen, productos, onClose, onSal
                       const ls = localState[row.id];
                       const entregado    = ls?.entregado     ?? false;
                       const aCompras     = ls?.enviadoCompras ?? false;
+                      const reqEstado    = req?.estado ?? '';
+                      const compraEnCurso = aCompras || reqEstado === 'ENVIADA_A_COMPRAS';
+                      const compraTerminada = reqEstado === 'FINALIZADA' || reqEstado === 'FINALIZADO';
                       const salidaOpen   = activeSalidaIdx === idx;
                       const rowBg        = entregado ? '#f0fdf4' : aCompras ? '#eef2ff' : 'white';
 
@@ -433,7 +437,11 @@ export function RequisicionAlmacenModal({ req, isOpen, productos, onClose, onSal
                                 <span style={badge('#15803d', '#f0fdf4', '#86efac')}>
                                   <CheckCircle2 size={11} /> Entregado
                                 </span>
-                              ) : (aCompras || req?.estado === 'ENVIADA_A_COMPRAS') ? (
+                              ) : compraTerminada ? (
+                                <span style={badge('#15803d', '#f0fdf4', '#86efac')}>
+                                  <CheckCircle2 size={11} /> Finalizado
+                                </span>
+                              ) : compraEnCurso ? (
                                 <span style={badge('#4338ca', '#eef2ff', '#c7d2fe')}>
                                   <ArrowUpRight size={11} /> En compras
                                 </span>
@@ -452,8 +460,10 @@ export function RequisicionAlmacenModal({ req, isOpen, productos, onClose, onSal
                             <td style={{ padding: '1rem' }}>
                               {entregado ? (
                                 <span style={{ fontSize: '12px', color: '#15803d', fontWeight: '700' }}>✓ Completado</span>
-                              ) : aCompras ? (
-                                <span style={{ fontSize: '12px', color: '#4338ca', fontWeight: '700' }}>→ Compras</span>
+                              ) : compraTerminada ? (
+                                <span style={{ fontSize: '12px', color: '#15803d', fontWeight: '700' }}>✓ Finalizado</span>
+                              ) : compraEnCurso ? (
+                                <span style={{ fontSize: '12px', color: '#4338ca', fontWeight: '700' }}>→ En compras</span>
                               ) : row.stockSuficiente ? (
                                 <button
                                   onClick={() => {
@@ -472,23 +482,21 @@ export function RequisicionAlmacenModal({ req, isOpen, productos, onClose, onSal
                                   <ArrowUpRight size={12} />
                                   {salidaOpen ? 'Cerrar' : 'Registrar salida'}
                                 </button>
-                              ) : req?.estado === 'ENVIADA_A_COMPRAS' ? (
-                                <span style={{ fontSize: '12px', color: '#4338ca', fontWeight: '700' }}>→ En compras</span>
                               ) : (
                                 <button
-                                  onClick={handleEnviarCompras}
-                                  disabled={enviandoCompras}
+                                  onClick={() => handleEnviarComprasRow(row.id)}
+                                  disabled={!!enviandoComprasRows[row.id]}
                                   style={{
                                     display: 'inline-flex', alignItems: 'center', gap: '5px',
-                                    background: enviandoCompras ? '#94a3b8' : '#4338ca',
+                                    background: enviandoComprasRows[row.id] ? '#94a3b8' : '#4338ca',
                                     color: 'white', border: 'none',
                                     borderRadius: '8px', padding: '6px 11px',
                                     fontSize: '12px', fontWeight: '700',
-                                    cursor: enviandoCompras ? 'not-allowed' : 'pointer',
+                                    cursor: enviandoComprasRows[row.id] ? 'not-allowed' : 'pointer',
                                     whiteSpace: 'nowrap',
                                   }}
                                 >
-                                  <Send size={12} /> {enviandoCompras ? 'Enviando…' : 'Enviar a compras'}
+                                  <Send size={12} /> {enviandoComprasRows[row.id] ? 'Enviando…' : 'Enviar a compras'}
                                 </button>
                               )}
                             </td>

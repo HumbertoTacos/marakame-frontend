@@ -1,9 +1,18 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { X, Plus, Trash2, ClipboardList, CheckCircle2, Loader2 } from 'lucide-react';
+import { X, Plus, Trash2, ClipboardList, CheckCircle2, Loader2, Search, Package } from 'lucide-react';
 import { createRequisicion } from '../../services/requisiciones.service';
+import apiClient from '../../services/api';
 
 // ─── Tipos ────────────────────────────────────────────────────────────────────
+
+interface ProductoCatalogo {
+  id: number;
+  codigo: string;
+  nombre: string;
+  unidad: string;
+  stockActual: number;
+}
 
 interface ArticuloForm {
   articulo: string;
@@ -18,6 +27,7 @@ interface ArticuloForm {
 interface RequisicionForm {
   fecha: string;
   areaSolicitante: string;
+  tipo: 'ORDINARIA' | 'EXTRAORDINARIA';
   quienSolicita: string;
   responsableArea: string;
   justificacion: string;
@@ -49,6 +59,7 @@ const emptyArticulo = (): ArticuloForm => ({
 const emptyForm = (): RequisicionForm => ({
   fecha: new Date().toISOString().split('T')[0],
   areaSolicitante: '',
+  tipo: 'ORDINARIA',
   quienSolicita: '',
   responsableArea: '',
   justificacion: '',
@@ -58,6 +69,20 @@ const emptyForm = (): RequisicionForm => ({
   firmaDirector: '',
   articulos: [emptyArticulo()],
 });
+
+// Coincidencia difusa: tokens de la búsqueda presentes en el nombre del producto
+function matchScore(nombre: string, query: string): number {
+  const n = nombre.toLowerCase();
+  const q = query.toLowerCase().trim();
+  if (!q) return 0;
+  if (n === q) return 3;
+  if (n.startsWith(q)) return 2;
+  if (n.includes(q)) return 1;
+  // coincidencia por palabras individuales
+  const words = q.split(/\s+/).filter(Boolean);
+  const hits = words.filter(w => n.includes(w)).length;
+  return hits / words.length;
+}
 
 // ─── Estilos reutilizables ────────────────────────────────────────────────────
 
@@ -105,7 +130,105 @@ const inp = (hasError = false): React.CSSProperties => ({
   backgroundColor: 'white',
 });
 
-// ─── Componente ───────────────────────────────────────────────────────────────
+// ─── Componente ArticuloInput (autocomplete) ──────────────────────────────────
+
+interface ArticuloInputProps {
+  value: string;
+  hasError: boolean;
+  productos: ProductoCatalogo[];
+  onChange: (value: string) => void;
+  onSelectProducto: (p: ProductoCatalogo) => void;
+}
+
+function ArticuloInput({ value, hasError, productos, onChange, onSelectProducto }: ArticuloInputProps) {
+  const [open, setOpen] = useState(false);
+  const wrapRef = useRef<HTMLDivElement>(null);
+
+  const sugerencias = value.trim().length >= 1
+    ? productos
+        .map(p => ({ p, score: matchScore(p.nombre, value) }))
+        .filter(x => x.score > 0)
+        .sort((a, b) => b.score - a.score)
+        .slice(0, 8)
+        .map(x => x.p)
+    : [];
+
+  // Cierra el dropdown al hacer clic fuera
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (wrapRef.current && !wrapRef.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
+
+  // Producto exactamente encontrado en catálogo
+  const enCatalogo = productos.some(p => p.nombre.toLowerCase() === value.toLowerCase().trim());
+
+  return (
+    <div ref={wrapRef} style={{ position: 'relative' }}>
+      <div style={{ position: 'relative' }}>
+        <Search size={13} color="#94a3b8" style={{ position: 'absolute', top: '50%', left: '0.7rem', transform: 'translateY(-50%)', pointerEvents: 'none' }} />
+        <input
+          placeholder="Nombre del artículo (escribe para buscar en catálogo)"
+          value={value}
+          onChange={e => { onChange(e.target.value); setOpen(true); }}
+          onFocus={() => setOpen(true)}
+          style={{ ...inp(hasError), paddingLeft: '2rem', paddingRight: enCatalogo ? '2.2rem' : '0.85rem' }}
+        />
+        {enCatalogo && (
+          <CheckCircle2 size={14} color="#16a34a" style={{ position: 'absolute', top: '50%', right: '0.6rem', transform: 'translateY(-50%)', pointerEvents: 'none' }} />
+        )}
+      </div>
+
+      {open && sugerencias.length > 0 && (
+        <div style={{
+          position: 'absolute', top: 'calc(100% + 4px)', left: 0, right: 0,
+          background: 'white', border: '1.5px solid #e2e8f0', borderRadius: '12px',
+          boxShadow: '0 8px 24px rgba(0,0,0,0.12)', zIndex: 1000,
+          overflow: 'hidden', maxHeight: '220px', overflowY: 'auto',
+        }}>
+          {sugerencias.map(p => (
+            <button
+              key={p.id}
+              type="button"
+              onMouseDown={e => {
+                e.preventDefault();
+                onSelectProducto(p);
+                setOpen(false);
+              }}
+              style={{
+                display: 'flex', alignItems: 'center', gap: '0.5rem',
+                width: '100%', padding: '0.55rem 0.85rem', border: 'none',
+                background: 'white', cursor: 'pointer', textAlign: 'left',
+                borderBottom: '1px solid #f1f5f9', fontFamily: 'inherit',
+              }}
+              onMouseEnter={e => (e.currentTarget.style.background = '#f8fafc')}
+              onMouseLeave={e => (e.currentTarget.style.background = 'white')}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flex: 1, minWidth: 0 }}>
+                <Package size={13} color="#64748b" style={{ flexShrink: 0 }} />
+                <span style={{ fontSize: '13px', fontWeight: '600', color: '#1e293b' }}>
+                  {p.nombre}
+                </span>
+              </div>
+              <span style={{ fontSize: '11px', color: '#94a3b8', fontFamily: 'monospace', flexShrink: 0, marginLeft: '0.5rem' }}>{p.codigo}</span>
+            </button>
+          ))}
+        </div>
+      )}
+
+      {/* Indicador bajo el input */}
+      {value.trim().length > 0 && (
+        <p style={{ margin: '3px 0 0', fontSize: '11px', fontWeight: '600', color: enCatalogo ? '#16a34a' : '#f59e0b' }}>
+          {enCatalogo ? '✓ Producto encontrado en catálogo de almacén' : '⚠ No encontrado en catálogo — se creará al registrar la entrada'}
+        </p>
+      )}
+    </div>
+  );
+}
+
+// ─── Componente principal ─────────────────────────────────────────────────────
 
 export function NuevaRequisicionModal({ isOpen, onClose, onSuccess }: Props) {
   const [form, setForm] = useState<RequisicionForm>(emptyForm());
@@ -113,6 +236,15 @@ export function NuevaRequisicionModal({ isOpen, onClose, onSuccess }: Props) {
   const [exito, setExito] = useState(false);
   const [loading, setLoading] = useState(false);
   const [apiError, setApiError] = useState<string | null>(null);
+  const [productos, setProductos] = useState<ProductoCatalogo[]>([]);
+
+  // Cargar catálogo de almacén al abrir
+  useEffect(() => {
+    if (!isOpen) return;
+    apiClient.get<{ success: boolean; data: ProductoCatalogo[] }>('/almacen/productos')
+      .then(res => setProductos(res.data.data ?? []))
+      .catch(() => setProductos([]));
+  }, [isOpen]);
 
   if (!isOpen) return null;
 
@@ -128,7 +260,6 @@ export function NuevaRequisicionModal({ isOpen, onClose, onSuccess }: Props) {
       const articulos = [...prev.articulos];
       articulos[idx] = { ...articulos[idx], [field]: value };
 
-      // Calcular cantidad pendiente automáticamente
       if (field === 'cantidadSolicitada' || field === 'cantidadEntregada') {
         const sol = parseFloat(field === 'cantidadSolicitada' ? value : articulos[idx].cantidadSolicitada);
         const ent = parseFloat(field === 'cantidadEntregada' ? value : articulos[idx].cantidadEntregada);
@@ -140,6 +271,21 @@ export function NuevaRequisicionModal({ isOpen, onClose, onSuccess }: Props) {
     });
     const key = `art_${idx}_${field}`;
     if (errors[key]) setErrors(prev => { const n = { ...prev }; delete n[key]; return n; });
+  };
+
+  const seleccionarProducto = (idx: number, p: ProductoCatalogo) => {
+    setForm(prev => {
+      const articulos = [...prev.articulos];
+      articulos[idx] = { ...articulos[idx], articulo: p.nombre, unidad: p.unidad };
+      return { ...prev, articulos };
+    });
+    // Limpiar errores de ese artículo
+    setErrors(prev => {
+      const n = { ...prev };
+      delete n[`art_${idx}_articulo`];
+      delete n[`art_${idx}_unidad`];
+      return n;
+    });
   };
 
   const agregarArticulo = () =>
@@ -185,6 +331,7 @@ export function NuevaRequisicionModal({ isOpen, onClose, onSuccess }: Props) {
       await createRequisicion({
         areaSolicitante: form.areaSolicitante.trim(),
         justificacion: form.justificacion.trim(),
+        tipo: form.tipo,
         descripcion: form.responsableArea.trim() ? `Responsable: ${form.responsableArea.trim()}` : undefined,
         detalles: form.articulos.map(a => ({
           productoNombre: a.articulo.trim(),
@@ -270,7 +417,6 @@ export function NuevaRequisicionModal({ isOpen, onClose, onSuccess }: Props) {
         {/* ── Contenido scrolleable ── */}
         <div style={{ overflowY: 'auto', flex: 1, padding: '1.75rem 2rem' }}>
 
-          {/* Error de API */}
           {apiError && (
             <div style={{
               backgroundColor: '#fef2f2', border: '1.5px solid #fecaca', borderRadius: '14px',
@@ -284,7 +430,6 @@ export function NuevaRequisicionModal({ isOpen, onClose, onSuccess }: Props) {
             </div>
           )}
 
-          {/* Estado de éxito */}
           {exito && (
             <div style={{
               backgroundColor: '#f0fdf4', border: '1.5px solid #86efac', borderRadius: '14px',
@@ -299,6 +444,62 @@ export function NuevaRequisicionModal({ isOpen, onClose, onSuccess }: Props) {
             </div>
           )}
 
+          {/* ── Tipo de Requisición ── */}
+          <div style={{ marginBottom: '1.75rem' }}>
+            <label style={{ ...sLabel, fontSize: '12px', marginBottom: '0.75rem' }}>
+              Tipo de Requisición <span style={{ color: '#ef4444' }}>*</span>
+            </label>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.85rem' }}>
+              <button
+                type="button"
+                onClick={() => setForm(prev => ({ ...prev, tipo: 'ORDINARIA' }))}
+                style={{
+                  padding: '1.1rem 1.25rem', borderRadius: '16px',
+                  border: form.tipo === 'ORDINARIA' ? '2.5px solid #3b82f6' : '2px solid #e2e8f0',
+                  backgroundColor: form.tipo === 'ORDINARIA' ? '#eff6ff' : 'white',
+                  cursor: 'pointer', textAlign: 'left', transition: 'all 0.15s',
+                  boxShadow: form.tipo === 'ORDINARIA' ? '0 0 0 4px rgba(59,130,246,0.1)' : 'none',
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', marginBottom: '0.4rem' }}>
+                  <div style={{
+                    width: '14px', height: '14px', borderRadius: '50%', flexShrink: 0,
+                    border: form.tipo === 'ORDINARIA' ? '4px solid #3b82f6' : '2px solid #cbd5e1',
+                    backgroundColor: form.tipo === 'ORDINARIA' ? 'white' : 'transparent',
+                  }} />
+                  <span style={{ fontSize: '14px', fontWeight: '800', color: form.tipo === 'ORDINARIA' ? '#1d4ed8' : '#475569' }}>Ordinaria</span>
+                </div>
+                <p style={{ margin: 0, fontSize: '12px', color: form.tipo === 'ORDINARIA' ? '#3b82f6' : '#94a3b8', lineHeight: '1.5', paddingLeft: '1.35rem' }}>
+                  Compra planificada dentro del presupuesto regular. Sigue el flujo estándar de aprobación.
+                </p>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setForm(prev => ({ ...prev, tipo: 'EXTRAORDINARIA' }))}
+                style={{
+                  padding: '1.1rem 1.25rem', borderRadius: '16px',
+                  border: form.tipo === 'EXTRAORDINARIA' ? '2.5px solid #f59e0b' : '2px solid #e2e8f0',
+                  backgroundColor: form.tipo === 'EXTRAORDINARIA' ? '#fffbeb' : 'white',
+                  cursor: 'pointer', textAlign: 'left', transition: 'all 0.15s',
+                  boxShadow: form.tipo === 'EXTRAORDINARIA' ? '0 0 0 4px rgba(245,158,11,0.1)' : 'none',
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', marginBottom: '0.4rem' }}>
+                  <div style={{
+                    width: '14px', height: '14px', borderRadius: '50%', flexShrink: 0,
+                    border: form.tipo === 'EXTRAORDINARIA' ? '4px solid #f59e0b' : '2px solid #cbd5e1',
+                    backgroundColor: form.tipo === 'EXTRAORDINARIA' ? 'white' : 'transparent',
+                  }} />
+                  <span style={{ fontSize: '14px', fontWeight: '800', color: form.tipo === 'EXTRAORDINARIA' ? '#b45309' : '#475569' }}>Extraordinaria</span>
+                </div>
+                <p style={{ margin: 0, fontSize: '12px', color: form.tipo === 'EXTRAORDINARIA' ? '#d97706' : '#94a3b8', lineHeight: '1.5', paddingLeft: '1.35rem' }}>
+                  Compra urgente o fuera de presupuesto. Requiere justificación y autorización directa de Dirección.
+                </p>
+              </button>
+            </div>
+          </div>
+
           {/* ── Datos generales ── */}
           <p style={sSectionTitle}>
             <span style={{ width: 6, height: 6, backgroundColor: '#3b82f6', borderRadius: '50%', flexShrink: 0 }} />
@@ -308,42 +509,31 @@ export function NuevaRequisicionModal({ isOpen, onClose, onSuccess }: Props) {
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '1.25rem' }}>
             <div>
               <label style={sLabel}>Fecha de la Requisición *</label>
-              <input
-                type="date"
-                value={form.fecha}
-                onChange={e => setField('fecha', e.target.value)}
-                style={inp(!!errors.fecha)}
-              />
+              <input type="date" value={form.fecha} onChange={e => setField('fecha', e.target.value)} style={inp(!!errors.fecha)} />
               {errors.fecha && <p style={sErrorMsg}>{errors.fecha}</p>}
             </div>
             <div>
               <label style={sLabel}>Área Solicitante *</label>
-              <input
-                placeholder="Ej: Área Médica, Cocina, Admisiones…"
-                value={form.areaSolicitante}
-                onChange={e => setField('areaSolicitante', e.target.value)}
-                style={inp(!!errors.areaSolicitante)}
-              />
+              <select value={form.areaSolicitante} onChange={e => setField('areaSolicitante', e.target.value)} style={inp(!!errors.areaSolicitante)}>
+                <option value="">— Seleccionar área —</option>
+                <option>Dirección General</option>
+                <option>Unidad de Transparencia</option>
+                <option>Departamento Clínico</option>
+                <option>Departamento Médico</option>
+                <option>Departamento de Admisiones</option>
+                <option>Departamento de Administración</option>
+                <option>Oficina de Recursos Materiales</option>
+              </select>
               {errors.areaSolicitante && <p style={sErrorMsg}>{errors.areaSolicitante}</p>}
             </div>
             <div>
               <label style={sLabel}>Quién Solicita *</label>
-              <input
-                placeholder="Nombre completo del solicitante"
-                value={form.quienSolicita}
-                onChange={e => setField('quienSolicita', e.target.value)}
-                style={inp(!!errors.quienSolicita)}
-              />
+              <input placeholder="Nombre completo del solicitante" value={form.quienSolicita} onChange={e => setField('quienSolicita', e.target.value)} style={inp(!!errors.quienSolicita)} />
               {errors.quienSolicita && <p style={sErrorMsg}>{errors.quienSolicita}</p>}
             </div>
             <div>
               <label style={sLabel}>Responsable del Área *</label>
-              <input
-                placeholder="Nombre del responsable del área"
-                value={form.responsableArea}
-                onChange={e => setField('responsableArea', e.target.value)}
-                style={inp(!!errors.responsableArea)}
-              />
+              <input placeholder="Nombre del responsable del área" value={form.responsableArea} onChange={e => setField('responsableArea', e.target.value)} style={inp(!!errors.responsableArea)} />
               {errors.responsableArea && <p style={sErrorMsg}>{errors.responsableArea}</p>}
             </div>
           </div>
@@ -368,13 +558,7 @@ export function NuevaRequisicionModal({ isOpen, onClose, onSuccess }: Props) {
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem', marginBottom: '0.85rem' }}>
             {form.articulos.map((art, idx) => (
-              <div key={idx} style={{
-                backgroundColor: '#f8fafc',
-                border: '1px solid #e2e8f0',
-                borderRadius: '14px',
-                padding: '1.1rem 1.25rem',
-              }}>
-                {/* Encabezado del artículo */}
+              <div key={idx} style={{ backgroundColor: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '14px', padding: '1.1rem 1.25rem' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.85rem' }}>
                   <span style={{ fontSize: '11px', fontWeight: '800', color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
                     Artículo #{idx + 1}
@@ -382,13 +566,7 @@ export function NuevaRequisicionModal({ isOpen, onClose, onSuccess }: Props) {
                   {form.articulos.length > 1 && (
                     <button
                       onClick={() => eliminarArticulo(idx)}
-                      style={{
-                        background: '#fef2f2', border: '1px solid #fecaca',
-                        color: '#ef4444', borderRadius: '8px',
-                        padding: '0.25rem 0.6rem', cursor: 'pointer',
-                        display: 'flex', alignItems: 'center', gap: '0.3rem',
-                        fontSize: '11px', fontWeight: '700',
-                      }}
+                      style={{ background: '#fef2f2', border: '1px solid #fecaca', color: '#ef4444', borderRadius: '8px', padding: '0.25rem 0.6rem', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.3rem', fontSize: '11px', fontWeight: '700' }}
                     >
                       <Trash2 size={11} /> Eliminar
                     </button>
@@ -399,11 +577,12 @@ export function NuevaRequisicionModal({ isOpen, onClose, onSuccess }: Props) {
                 <div style={{ display: 'grid', gridTemplateColumns: '2fr 2fr 1fr', gap: '0.75rem', marginBottom: '0.75rem' }}>
                   <div>
                     <label style={sLabel}>Artículo *</label>
-                    <input
-                      placeholder="Nombre del artículo"
+                    <ArticuloInput
                       value={art.articulo}
-                      onChange={e => setArticuloField(idx, 'articulo', e.target.value)}
-                      style={inp(!!errors[`art_${idx}_articulo`])}
+                      hasError={!!errors[`art_${idx}_articulo`]}
+                      productos={productos}
+                      onChange={val => setArticuloField(idx, 'articulo', val)}
+                      onSelectProducto={p => seleccionarProducto(idx, p)}
                     />
                     {errors[`art_${idx}_articulo`] && <p style={sErrorMsg}>{errors[`art_${idx}_articulo`]}</p>}
                   </div>
@@ -421,7 +600,7 @@ export function NuevaRequisicionModal({ isOpen, onClose, onSuccess }: Props) {
                     <select
                       value={art.unidad}
                       onChange={e => setArticuloField(idx, 'unidad', e.target.value)}
-                      style={{ ...inp(!!errors[`art_${idx}_unidad`]) }}
+                      style={inp(!!errors[`art_${idx}_unidad`])}
                     >
                       <option value="">—</option>
                       <option>Piezas</option>
@@ -473,22 +652,10 @@ export function NuevaRequisicionModal({ isOpen, onClose, onSuccess }: Props) {
                     />
                   </div>
                 </div>
-
-                {/* Fila 3: Justificación individual */}
-                <div>
-                  <label style={sLabel}>Justificación del Artículo</label>
-                  <input
-                    placeholder="¿Por qué se necesita este artículo?"
-                    value={art.justificacion}
-                    onChange={e => setArticuloField(idx, 'justificacion', e.target.value)}
-                    style={inp()}
-                  />
-                </div>
               </div>
             ))}
           </div>
 
-          {/* Botón agregar artículo */}
           <button
             onClick={agregarArticulo}
             style={{
@@ -496,8 +663,7 @@ export function NuevaRequisicionModal({ isOpen, onClose, onSuccess }: Props) {
               width: '100%', padding: '0.7rem',
               backgroundColor: '#eff6ff', color: '#3b82f6',
               border: '1.5px dashed #bfdbfe', borderRadius: '12px',
-              fontWeight: '700', fontSize: '13px', cursor: 'pointer',
-              marginBottom: '1.75rem',
+              fontWeight: '700', fontSize: '13px', cursor: 'pointer', marginBottom: '1.75rem',
             }}
           >
             <Plus size={15} /> Agregar artículo
@@ -512,57 +678,32 @@ export function NuevaRequisicionModal({ isOpen, onClose, onSuccess }: Props) {
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
             <div>
               <label style={sLabel}>Sello de Recibido — Área Encargada</label>
-              <input
-                placeholder="Nombre / sello del área encargada"
-                value={form.selloRecibido}
-                onChange={e => setField('selloRecibido', e.target.value)}
-                style={inp()}
-              />
+              <input placeholder="Nombre / sello del área encargada" value={form.selloRecibido} onChange={e => setField('selloRecibido', e.target.value)} style={inp()} />
             </div>
             <div>
               <label style={sLabel}>Firma del Responsable del Área</label>
-              <input
-                placeholder="Nombre del responsable"
-                value={form.firmaResponsable}
-                onChange={e => setField('firmaResponsable', e.target.value)}
-                style={inp()}
-              />
+              <input placeholder="Nombre del responsable" value={form.firmaResponsable} onChange={e => setField('firmaResponsable', e.target.value)} style={inp()} />
             </div>
             <div>
               <label style={sLabel}>Firma de la Administradora del Instituto</label>
-              <input
-                placeholder="Nombre de la administradora"
-                value={form.firmaAdministradora}
-                onChange={e => setField('firmaAdministradora', e.target.value)}
-                style={inp()}
-              />
+              <input placeholder="Nombre de la administradora" value={form.firmaAdministradora} onChange={e => setField('firmaAdministradora', e.target.value)} style={inp()} />
             </div>
             <div>
               <label style={sLabel}>Autorización — Dirección General</label>
-              <input
-                placeholder="Nombre del Director General"
-                value={form.firmaDirector}
-                onChange={e => setField('firmaDirector', e.target.value)}
-                style={inp()}
-              />
+              <input placeholder="Nombre del Director General" value={form.firmaDirector} onChange={e => setField('firmaDirector', e.target.value)} style={inp()} />
             </div>
           </div>
         </div>
 
         {/* ── Footer ── */}
         <div style={{
-          padding: '1.25rem 2rem',
-          borderTop: '1px solid #f1f5f9',
+          padding: '1.25rem 2rem', borderTop: '1px solid #f1f5f9',
           display: 'flex', justifyContent: 'flex-end', gap: '0.75rem',
           flexShrink: 0, backgroundColor: 'white',
         }}>
           <button
             onClick={handleClose}
-            style={{
-              padding: '0.7rem 1.5rem', borderRadius: '12px',
-              border: '1px solid #e2e8f0', backgroundColor: 'white',
-              color: '#475569', fontWeight: '700', fontSize: '14px', cursor: 'pointer',
-            }}
+            style={{ padding: '0.7rem 1.5rem', borderRadius: '12px', border: '1px solid #e2e8f0', backgroundColor: 'white', color: '#475569', fontWeight: '700', fontSize: '14px', cursor: 'pointer' }}
           >
             Cancelar
           </button>
@@ -570,8 +711,7 @@ export function NuevaRequisicionModal({ isOpen, onClose, onSuccess }: Props) {
             onClick={handleSubmit}
             disabled={exito || loading}
             style={{
-              padding: '0.7rem 1.75rem', borderRadius: '12px',
-              border: 'none',
+              padding: '0.7rem 1.75rem', borderRadius: '12px', border: 'none',
               backgroundColor: exito ? '#16a34a' : loading ? '#64748b' : '#3b82f6',
               color: 'white', fontWeight: '700', fontSize: '14px',
               cursor: exito || loading ? 'not-allowed' : 'pointer',

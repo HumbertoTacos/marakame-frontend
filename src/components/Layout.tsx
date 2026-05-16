@@ -96,9 +96,14 @@ export function Layout() {
     return '/dashboard';
   };
 
-  const getNavItemClass = (path: string) => {
-    const isActive = location.pathname.includes(path);
-    return `nav-item ${isActive ? 'active' : ''}`;
+  const getNavItemClass = (path: string, navKey?: string) => {
+    const pathMatch = location.pathname === `/${path}` || location.pathname.startsWith(`/${path}/`);
+    if (!pathMatch) return 'nav-item';
+    if (navKey) {
+      const stateKey = (location.state as { navKey?: string } | null)?.navKey;
+      return `nav-item ${stateKey === navKey ? 'active' : ''}`;
+    }
+    return 'nav-item active';
   };
 
   return (
@@ -203,7 +208,7 @@ export function Layout() {
             <>
               <div className="sidebar-section-title">Logística</div>
               <div className={getNavItemClass('almacen')} onClick={() => navigate('/almacen')}>
-                <PackageOpen size={20} style={{ marginRight: '1rem' }}/> Almacén General
+                <PackageOpen size={20} style={{ marginRight: '1rem' }}/> Inventario General
               </div>
             </>
           )}
@@ -212,8 +217,24 @@ export function Layout() {
           {(['RRHH_FINANZAS', 'RECURSOS_HUMANOS', 'ADMIN_GENERAL'].includes(usuario?.rol || '')) && (
             <>
               <div className="sidebar-section-title">Recursos Humanos</div>
-              <div className={getNavItemClass('nominas')} onClick={() => navigate('/nominas')}>
+              <div className={getNavItemClass('nominas', 'rrhh-nominas')} onClick={() => navigate('/nominas', { state: { navKey: 'rrhh-nominas' } })}>
                 <Banknote size={20} style={{ marginRight: '1rem' }}/> Nóminas y Personal
+              </div>
+            </>
+          )}
+
+          {/* Jefatura Administrativa: paso intermedio del flujo de nómina antes de Dirección */}
+          {(['JEFE_ADMINISTRATIVO', 'ADMIN_GENERAL'].includes(usuario?.rol || '')) && (
+            <>
+              <div className="sidebar-section-title">Jefatura Administrativa</div>
+              <div className={getNavItemClass('administracion')} onClick={() => navigate('/administracion')}>
+                <ClipboardCheck size={20} style={{ marginRight: '1rem' }}/> Revisión de Pre-Nóminas
+              </div>
+              <div className={getNavItemClass('nominas', 'jefatura-nominas')} onClick={() => navigate('/nominas', { state: { navKey: 'jefatura-nominas' } })}>
+                <Banknote size={20} style={{ marginRight: '1rem' }}/> Nóminas y RRHH
+              </div>
+              <div className={getNavItemClass('revision-compras')} onClick={() => navigate('/revision-compras')}>
+                <ShoppingCart size={20} style={{ marginRight: '1rem' }}/> Revisión Adm. de Compras
               </div>
             </>
           )}
@@ -230,12 +251,11 @@ export function Layout() {
               <div className={getNavItemClass('compras')} onClick={() => navigate('/compras')}>
                 <ShoppingCart size={20} style={{ marginRight: '1rem' }}/> Control de Compras
               </div>
-              <div className={getNavItemClass('pagos')} onClick={() => navigate('/pagos')}>
-                <Wallet size={20} style={{ marginRight: '1rem' }}/> Pagos de Pacientes
-              </div>
-
               <div className={getNavItemClass('proveedores')} onClick={() => navigate('/proveedores')}>
                 <Building2 size={20} style={{ marginRight: '1rem' }}/> Catálogo de Proveedores
+              </div>
+              <div className={getNavItemClass('pagos')} onClick={() => navigate('/pagos')}>
+                <Wallet size={20} style={{ marginRight: '1rem' }}/> Pagos de Pacientes
               </div>
             </>
           )}
@@ -273,7 +293,6 @@ export function Layout() {
                   <Banknote size={20} style={{ marginRight: '1rem' }}/> Firma de Nóminas
                 </div>
               )}
-
               <div className={getNavItemClass('autorizacion-compras')} onClick={() => navigate('/autorizacion-compras')}>
                 <ShieldCheck size={20} style={{ marginRight: '1rem' }}/> Autorización de Compras
               </div>

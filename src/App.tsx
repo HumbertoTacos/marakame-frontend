@@ -62,10 +62,12 @@ const WizardPertenencias = lazy(() => import('./pages/admisiones/WizardPertenenc
 
 const UsuariosPage = lazy(() => import('./pages/admin/UsuariosPage'));
 const DashboardDirectora = lazy(() => import('./pages/admin/DashboardDirectora'));
+
 const DireccionComprasPage = lazy(() => import('./pages/admin/DireccionComprasPage'));
-const PagosPacientePage = lazy(() => import('./pages/operativos/PagosPacientePage'));
 const ProveedoresPage = lazy(() => import('./pages/operativos/ProveedoresPage'));
 const RevisionAdministrativaCompras = lazy(() => import('./pages/operativos/RevisionAdministrativaCompras'));
+
+const PagosPacientePage = lazy(() => import('./pages/operativos/PagosPacientePage'));
 
 // Paneles de jefatura (solo lectura/resumen)
 const DashboardJefeClinico = lazy(() => import('./pages/jefes/DashboardJefeClinico'));
@@ -223,10 +225,11 @@ function App() {
 
             {/* Justificaciones de Asistencia — solo jefes departamentales y RH/Dirección */}
             <Route path="asistencias" element={
-              <ProtectedRoute allowedRoles={['ADMIN_GENERAL', 'RRHH_FINANZAS', 'RECURSOS_HUMANOS', 'JEFE_ADMINISTRATIVO', 'JEFE_MEDICO', 'JEFE_CLINICO', 'JEFE_ADMISIONES']}>
+              <ProtectedRoute allowedRoles={['ADMIN_GENERAL', 'RRHH_FINANZAS', 'RECURSOS_HUMANOS', 'JEFE_ADMINISTRATIVO', 'JEFE_MEDICO', 'AREA_MEDICA', 'ADMISIONES', 'ALMACEN', 'PSICOLOGIA', 'NUTRICION', 'ENFERMERIA']}>
                 <ControlAsistencias />
               </ProtectedRoute>
             } />
+
 
             {/* Módulo de Nóminas — Dirección General firma el paso 3; admin tiene acceso total */}
             <Route path="nominas" element={
