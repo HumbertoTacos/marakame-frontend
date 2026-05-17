@@ -145,9 +145,10 @@ function ModalDetalle({
   const [accion, setAccion]     = useState<'autorizar' | 'rechazar' | null>(null);
   const [enviado, setEnviado]   = useState(false);
 
+  const esExtraordinaria = compra.tipo === 'EXTRAORDINARIA';
   const { filasPorProducto, cotsLegacy, usaFlujoPorProducto, subtotal, iva, totalConIva, gruposProv } = calcularResumen(compra);
   const detallesReq = compra.requisicion?.detalles ?? [];
-  const presupuesto = compra.presupuestoEstimado;
+  const presupuesto = compra.presupuestoEstimado ?? compra.totalFinal;
 
   const tabStyle = (active: boolean): React.CSSProperties => ({
     padding: '8px 18px', fontSize: 13, fontWeight: 600, cursor: 'pointer',
@@ -204,11 +205,21 @@ function ModalDetalle({
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
             <div style={{ background: '#F9FAFB', borderRadius: 10, padding: 14, fontSize: 13, color: '#374151', display: 'flex', flexDirection: 'column', gap: 5 }}>
               {compra.requisicion && <div><strong>Req. origen:</strong> {compra.requisicion.folio}</div>}
-              <div><strong>Tipo:</strong> {compra.tipo}</div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <strong>Tipo:</strong>
+                <span style={{
+                  background: esExtraordinaria ? '#EFF6FF' : '#F0FDF4',
+                  color: esExtraordinaria ? '#1D4ED8' : '#15803D',
+                  border: `1px solid ${esExtraordinaria ? '#BFDBFE' : '#BBF7D0'}`,
+                  borderRadius: 6, padding: '2px 10px', fontSize: 12, fontWeight: 700,
+                }}>
+                  {esExtraordinaria ? 'Extraordinaria' : 'Ordinaria'}
+                </span>
+              </div>
               <div>
-                <strong>Presupuesto estimado:</strong>{' '}
-                {presupuesto && presupuesto > 0
-                  ? `$${presupuesto.toLocaleString('es-MX', { minimumFractionDigits: 2 })}`
+                <strong>Presupuesto:</strong>{' '}
+                {presupuesto && Number(presupuesto) > 0
+                  ? `$${Number(presupuesto).toLocaleString('es-MX', { minimumFractionDigits: 2 })}`
                   : <span style={{ color: '#9CA3AF' }}>No especificado</span>}
               </div>
               <div><strong>Fecha:</strong> {new Date(compra.createdAt).toLocaleDateString('es-MX')}</div>
@@ -271,6 +282,14 @@ function ModalDetalle({
       {/* TAB: MEJOR OPCIÓN POR ARTÍCULO */}
       {tab === 'cotizaciones' && (
         <>
+          {/* Banner informativo */}
+          <div style={{ background: esExtraordinaria ? '#EFF6FF' : '#F0FDF4', border: `1px solid ${esExtraordinaria ? '#BFDBFE' : '#BBF7D0'}`, borderRadius: 10, padding: '10px 14px', fontSize: 13, color: esExtraordinaria ? '#1D4ED8' : '#166534', display: 'flex', alignItems: 'center', gap: 8 }}>
+            <AlertCircle size={15} style={{ flexShrink: 0 }} />
+            {esExtraordinaria
+              ? 'Compra extraordinaria — las cotizaciones y el proveedor fueron gestionados por almacén. Revisa la información y autoriza o rechaza.'
+              : 'Cotizaciones evaluadas por el área de compras. El proveedor ganador fue seleccionado previo a esta etapa.'}
+          </div>
+
           {/* Flujo nuevo: por producto */}
           {usaFlujoPorProducto && (
             <div style={{ border: '1px solid #E2E8F0', borderRadius: 12, overflow: 'hidden', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
@@ -608,7 +627,7 @@ export default function DireccionComprasPage() {
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
             <thead>
               <tr style={{ background: '#F3F4F6' }}>
-                {['Folio', 'Área solicitante', 'Responsable', 'Fecha', 'Artículos', 'Proveedores', 'Total estimado', 'Acciones'].map(h => (
+                {['Folio', 'Tipo', 'Área solicitante', 'Responsable', 'Fecha', 'Artículos', 'Total estimado', 'Acciones'].map(h => (
                   <th key={h} style={{
                     padding: '11px 16px', textAlign: 'left',
                     fontWeight: 700, color: '#374151', fontSize: 11,
@@ -620,14 +639,16 @@ export default function DireccionComprasPage() {
             </thead>
             <tbody>
               {filtradas.map((c) => {
-                const { gruposProv, totalConIva } = calcularResumen(c);
-                const detalles    = c.requisicion?.detalles ?? [];
-                const nArticulos  = detalles.length || (c.cotizaciones?.length ?? 0);
-                const nProveedores = gruposProv.length;
+                const { totalConIva } = calcularResumen(c);
+                const detalles   = c.requisicion?.detalles ?? [];
+                const nArticulos = detalles.length || (c.cotizaciones?.length ?? 0);
                 const responsable = c.requisicion?.usuarioSolicita
                   ? `${c.requisicion.usuarioSolicita.nombre} ${c.requisicion.usuarioSolicita.apellidos}`
                   : `${c.usuario?.nombre ?? ''} ${c.usuario?.apellidos ?? ''}`.trim();
                 const expanded = expandidas.has(c.id);
+                const esExtr = c.tipo === 'EXTRAORDINARIA';
+                const montoOrdenes = (c.ordenes ?? []).reduce((s, o) => s + Number(o.total), 0);
+                const montoMostrar = totalConIva > 0 ? totalConIva : (Number(c.totalFinal ?? c.presupuestoEstimado ?? 0) || montoOrdenes || 0);
 
                 return (
                   <React.Fragment key={c.id}>
@@ -640,6 +661,11 @@ export default function DireccionComprasPage() {
                           <span style={{ fontWeight: 700, color: '#2563EB', fontFamily: 'monospace' }}>{c.folio}</span>
                         </div>
                       </td>
+                      <td style={{ padding: '12px 16px' }}>
+                        <span style={{ background: esExtr ? '#EFF6FF' : '#F0FDF4', color: esExtr ? '#1D4ED8' : '#15803D', border: `1px solid ${esExtr ? '#BFDBFE' : '#BBF7D0'}`, borderRadius: 6, padding: '3px 10px', fontSize: 11, fontWeight: 700 }}>
+                          {esExtr ? 'Extraordinaria' : 'Ordinaria'}
+                        </span>
+                      </td>
                       <td style={{ padding: '12px 16px', color: '#111827', fontWeight: 500 }}>{c.requisicion?.areaSolicitante || c.areaSolicitante}</td>
                       <td style={{ padding: '12px 16px', color: '#6B7280' }}>{responsable || '—'}</td>
                       <td style={{ padding: '12px 16px', color: '#6B7280' }}>
@@ -651,21 +677,14 @@ export default function DireccionComprasPage() {
                           <Package size={11} /> {nArticulos}
                         </span>
                       </td>
-                      {/* Proveedores */}
+                      {/* Total */}
                       <td style={{ padding: '12px 16px' }}>
-                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, background: nProveedores > 0 ? '#F0FDF4' : '#FEF2F2', color: nProveedores > 0 ? '#16A34A' : '#DC2626', border: `1px solid ${nProveedores > 0 ? '#BBF7D0' : '#FECACA'}`, borderRadius: 6, padding: '3px 9px', fontSize: 12, fontWeight: 600 }}>
-                          {nProveedores > 0 ? <CheckCircle size={11} /> : <AlertCircle size={11} />}
-                          {nProveedores > 0 ? `${nProveedores}` : '—'}
-                        </span>
-                      </td>
-                      {/* Total estimado */}
-                      <td style={{ padding: '12px 16px' }}>
-                        {totalConIva > 0 ? (
+                        {montoMostrar > 0 ? (
                           <>
                             <div style={{ fontSize: 13, fontWeight: 800, color: '#16A34A' }}>
-                              ${totalConIva.toLocaleString('es-MX', { minimumFractionDigits: 2 })}
+                              ${montoMostrar.toLocaleString('es-MX', { minimumFractionDigits: 2 })}
                             </div>
-                            <div style={{ fontSize: 11, color: '#9CA3AF' }}>IVA incluido</div>
+                            <div style={{ fontSize: 11, color: '#9CA3AF' }}>{totalConIva > 0 ? 'IVA incluido' : 'estimado'}</div>
                           </>
                         ) : (
                           <span style={{ color: '#CBD5E1', fontSize: 13 }}>—</span>

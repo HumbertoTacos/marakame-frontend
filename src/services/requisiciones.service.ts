@@ -34,6 +34,7 @@ export const getRequisiciones = async (params?: {
   return res.data.data;
 };
 
-export const enviarACompras = async (id: number): Promise<void> => {
-  await api.patch(`/requisiciones/${id}/enviar-compras`);
+export const enviarACompras = async (id: number): Promise<{ id: number; folio: string; estado: string }> => {
+  const res = await api.patch(`/requisiciones/${id}/enviar-compras`);
+  return res.data.data;
 };

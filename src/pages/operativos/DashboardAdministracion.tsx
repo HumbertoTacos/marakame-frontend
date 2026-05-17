@@ -1,9 +1,11 @@
 import React, { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Briefcase, FileText, ChevronRight, AlertCircle, FileSignature } from 'lucide-react';
+import { Briefcase, FileText, ChevronRight, AlertCircle, FileSignature, ShoppingCart, ArrowRight } from 'lucide-react';
 import { useNominaStore } from '../../stores/nominaStore';
 import { useAuthStore } from '../../stores/authStore';
-import type { Nomina } from '../../types';
+import { useQuery } from '@tanstack/react-query';
+import { getComprasRevisionAdmin } from '../../services/compras.service';
+import type { Nomina, Requisicion } from '../../types';
 
 const getEstadoConfig = (estado: string) => {
   switch (estado) {
@@ -22,6 +24,11 @@ const DashboardAdministracion: React.FC = () => {
   const { nominas, fetchNominas, isLoading } = useNominaStore();
 
   useEffect(() => { fetchNominas(); }, [fetchNominas]);
+
+  const { data: comprasPendientes = [] } = useQuery<Requisicion[]>({
+    queryKey: ['compras-revision-admin'],
+    queryFn: getComprasRevisionAdmin,
+  });
 
   // JEFE_ADMINISTRATIVO solo observa (sin firma). ADMIN_GENERAL puede entrar al detalle.
   const soloLectura = usuario?.rol === 'JEFE_ADMINISTRATIVO';
@@ -44,6 +51,35 @@ const DashboardAdministracion: React.FC = () => {
             ? 'Resumen del flujo de nómina (vista de solo lectura para Jefatura Administrativa).'
             : 'Revisión y firma intermedia del flujo de nómina antes de pasar a Dirección General.'}
         </p>
+      </div>
+
+      {/* Compras pendientes de revisión */}
+      <div
+        onClick={() => navigate('/revision-compras')}
+        style={{
+          display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+          backgroundColor: comprasPendientes.length > 0 ? '#FFF7ED' : 'white',
+          border: `1px solid ${comprasPendientes.length > 0 ? '#FDE68A' : '#e2e8f0'}`,
+          borderRadius: '16px', padding: '1.25rem 1.5rem', marginBottom: '2rem',
+          cursor: 'pointer', transition: 'background 0.15s',
+        }}
+        onMouseEnter={e => (e.currentTarget.style.backgroundColor = comprasPendientes.length > 0 ? '#FEF3C7' : '#F8FAFC')}
+        onMouseLeave={e => (e.currentTarget.style.backgroundColor = comprasPendientes.length > 0 ? '#FFF7ED' : 'white')}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+          <div style={{ background: comprasPendientes.length > 0 ? '#FDE68A' : '#F1F5F9', borderRadius: '10px', padding: '10px', display: 'flex' }}>
+            <ShoppingCart size={20} color={comprasPendientes.length > 0 ? '#D97706' : '#94a3b8'} />
+          </div>
+          <div>
+            <p style={{ margin: 0, fontWeight: '800', color: '#1e293b', fontSize: '15px' }}>Revisión Administrativa de Compras</p>
+            <p style={{ margin: '2px 0 0', color: comprasPendientes.length > 0 ? '#D97706' : '#94a3b8', fontSize: '13px', fontWeight: 600 }}>
+              {comprasPendientes.length > 0
+                ? `${comprasPendientes.length} requisición${comprasPendientes.length !== 1 ? 'es' : ''} esperando tu revisión`
+                : 'Sin compras pendientes de revisión'}
+            </p>
+          </div>
+        </div>
+        <ArrowRight size={18} color="#94a3b8" />
       </div>
 
       {/* Pendientes de mi firma */}

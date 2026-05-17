@@ -336,12 +336,12 @@ export default function DashboardDirectora() {
                   </div>
                 ))}
                 <div
-                  onClick={() => navigate('/compras')}
+                  onClick={() => navigate('/autorizacion-compras')}
                   style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '1rem 1.25rem', backgroundColor: data.alertas.comprasPendientes > 0 ? '#fff7ed' : '#f8fafc', borderRadius: '14px', border: `1px solid ${data.alertas.comprasPendientes > 0 ? '#fed7aa' : '#f1f5f9'}`, cursor: 'pointer' }}
                 >
                   <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
                     <ShoppingCart size={16} color="#f59e0b" />
-                    <span style={{ fontSize: '13px', fontWeight: '600', color: '#475569' }}>Compras pendientes de VoBo</span>
+                    <span style={{ fontSize: '13px', fontWeight: '600', color: '#475569' }}>Compras pendientes de autorización</span>
                   </div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
                     <span style={{ fontSize: '18px', fontWeight: '800', color: '#f59e0b' }}>{data.alertas.comprasPendientes}</span>

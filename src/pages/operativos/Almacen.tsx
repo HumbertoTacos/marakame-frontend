@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
@@ -8,6 +8,7 @@ import {
 } from 'lucide-react';
 import { NuevaRequisicionModal } from '../../components/common/NuevaRequisicionModal';
 import { RequisicionAlmacenModal } from '../../components/almacen/RequisicionAlmacenModal';
+import { RequisicionExtraordinariaModal } from '../../components/almacen/RequisicionExtraordinariaModal';
 import apiClient from '../../services/api';
 import type { Producto, Movimiento, Requisicion, RequisicionDept, EstadoCompra, Cotizacion } from '../../types';
 import { getRequisiciones as fetchRequisicionesDept } from '../../services/requisiciones.service';
@@ -253,7 +254,7 @@ const getNow = () => Date.now();
 
 export function Almacen() {
   const queryClient = useQueryClient();
-  const [activeTab, setActiveTab] = useState<'INVENTARIO' | 'REQUISICIONES' | 'KARDEX'>('INVENTARIO');
+  const [activeTab, setActiveTab] = useState<'INVENTARIO' | 'REQUISICIONES' | 'REQUISICIONES_EXTRAORDINARIAS' | 'KARDEX'>('INVENTARIO');
   const [showModal, setShowModal] = useState<string | null>(null);
   const [showCreate, setShowCreate] = useState(false);
   const [showNuevaRequisicion, setShowNuevaRequisicion] = useState(false);
@@ -262,12 +263,32 @@ export function Almacen() {
   const [notif, setNotif] = useState<string | null>(null);
   const [reqSeleccionada, setReqSeleccionada] = useState<Requisicion | null>(null);
   const [reqAlmacenDetalle, setReqAlmacenDetalle] = useState<RequisicionDept | null>(null);
+  const [reqAlmacenExtraordinariaDetalle, setReqAlmacenExtraordinariaDetalle] = useState<RequisicionDept | null>(null);
   const [busquedaReq, setBusquedaReq] = useState('');
   const [busquedaInventario, setBusquedaInventario] = useState('');
-  const [showFinalizadas, setShowFinalizadas] = useState(false);
+  const [filtroRequisiciones, setFiltroRequisiciones] = useState<'PENDIENTES' | 'FINALIZADAS'>('PENDIENTES');
   const [filtroStock, setFiltroStock] = useState<'' | 'NORMAL' | 'BAJO' | 'CRITICO'>('');
+  const [filtroKardex, setFiltroKardex] = useState<'' | 'ENTRADA' | 'SALIDA'>('');
   const [showFilterMenu, setShowFilterMenu] = useState(false);
+  const [showKardexFilterMenu, setShowKardexFilterMenu] = useState(false);
   const [showMoreMenu, setShowMoreMenu] = useState(false);
+  const [hoveredTab, setHoveredTab] = useState<string | null>(null);
+
+  const kardexFilterRef = useRef<HTMLDivElement>(null);
+  const stockFilterRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (kardexFilterRef.current && !kardexFilterRef.current.contains(e.target as Node)) {
+        setShowKardexFilterMenu(false);
+      }
+      if (stockFilterRef.current && !stockFilterRef.current.contains(e.target as Node)) {
+        setShowFilterMenu(false);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
 
   // States para nuevos registros
   const [productoData, setProductoData] = useState({
@@ -865,24 +886,65 @@ export function Almacen() {
       </div>
 
       {/* Tabs */}
-      <div style={{ display: 'flex', gap: '0.5rem', background: 'rgba(241, 245, 249, 0.5)', padding: '0.5rem', borderRadius: '20px', width: 'fit-content', marginBottom: '2.5rem' }}>
-        {(['INVENTARIO', 'REQUISICIONES', 'KARDEX'] as const).map(tab => (
-          <button
-            key={tab}
-            onClick={() => setActiveTab(tab)}
-            style={{
-              padding: '0.75rem 2rem', border: 'none', borderRadius: '15px',
-              backgroundColor: activeTab === tab ? 'white' : 'transparent',
-              fontWeight: '700',
-              color: activeTab === tab ? 'var(--primary)' : '#64748b',
-              cursor: 'pointer', fontSize: '14px', transition: 'all 0.2s ease',
-              boxShadow: activeTab === tab ? '0 4px 6px -1px rgba(0,0,0,0.1)' : 'none'
-            }}>
-            {tab === 'INVENTARIO' ? 'Inventario Actual'
-              : tab === 'REQUISICIONES' ? 'Requisiciones de Inventario'
-              : 'Kardex (Histórico)'}
-          </button>
-        ))}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '2.5rem' }}>
+        {/* Grupo principal */}
+        <div style={{ display: 'flex', gap: '0.5rem', background: 'rgba(241, 245, 249, 0.5)', padding: '0.5rem', borderRadius: '20px' }}>
+          {(['INVENTARIO', 'REQUISICIONES', 'KARDEX'] as const).map(tab => (
+            <button
+              key={tab}
+              onClick={() => setActiveTab(tab)}
+              onMouseEnter={() => setHoveredTab(tab)}
+              onMouseLeave={() => setHoveredTab(null)}
+              style={{
+                padding: '0.75rem 2rem', border: 'none', borderRadius: '15px',
+                backgroundColor: activeTab === tab ? 'white' : hoveredTab === tab ? '#e5e7eb' : 'transparent',
+                fontWeight: '700',
+                color: activeTab === tab ? 'var(--primary)' : '#64748b',
+                cursor: 'pointer', fontSize: '14px', transition: 'all 0.2s ease',
+                boxShadow: activeTab === tab ? '0 4px 6px -1px rgba(0,0,0,0.1)' : 'none'
+              }}>
+              {tab === 'INVENTARIO' ? 'Inventario Actual'
+                : tab === 'REQUISICIONES' ? 'Requisiciones de Inventario'
+                : 'Kardex (Histórico)'}
+            </button>
+          ))}
+        </div>
+
+        {/* Pestaña extraordinaria — extremo derecho */}
+        {(() => {
+          const pendientesExtr = requisicionesDept.filter(r => r.tipo === 'EXTRAORDINARIA' && r.estado !== 'FINALIZADA').length;
+          return (
+            <button
+              onClick={() => setActiveTab('REQUISICIONES_EXTRAORDINARIAS')}
+              onMouseEnter={() => setHoveredTab('REQUISICIONES_EXTRAORDINARIAS')}
+              onMouseLeave={() => setHoveredTab(null)}
+              style={{
+                position: 'relative',
+                padding: '0.75rem 1.25rem', border: 'none', borderRadius: '15px',
+                backgroundColor: activeTab === 'REQUISICIONES_EXTRAORDINARIAS' ? 'white' : hoveredTab === 'REQUISICIONES_EXTRAORDINARIAS' ? '#e5e7eb' : '#f1f3f5',
+                fontWeight: '700',
+                color: activeTab === 'REQUISICIONES_EXTRAORDINARIAS' ? '#D97706' : '#64748b',
+                cursor: 'pointer', fontSize: '14px', transition: 'all 0.2s ease',
+                boxShadow: activeTab === 'REQUISICIONES_EXTRAORDINARIAS' ? '0 4px 6px -1px rgba(0,0,0,0.1)' : 'none',
+                whiteSpace: 'nowrap',
+              }}>
+              Req. Extraordinarias
+              {pendientesExtr > 0 && (
+                <span style={{
+                  position: 'absolute', top: -6, right: -6,
+                  background: '#D97706', color: 'white',
+                  fontSize: 10, fontWeight: 800, lineHeight: 1,
+                  minWidth: 18, height: 18,
+                  borderRadius: 9, padding: '0 4px',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  boxShadow: '0 1px 4px rgba(0,0,0,0.18)',
+                }}>
+                  {pendientesExtr}
+                </span>
+              )}
+            </button>
+          );
+        })()}
       </div>
 
       {/* Content Area */}
@@ -895,42 +957,102 @@ export function Almacen() {
               <Search size={18} color="#94a3b8" style={{ position: 'absolute', top: '50%', left: '1rem', transform: 'translateY(-50%)' }} />
               <input
                 type="text"
-                placeholder={activeTab === 'REQUISICIONES' ? 'Buscar por folio o descripción...' : 'Buscar por código o nombre...'}
-                value={activeTab === 'REQUISICIONES' ? busquedaReq : activeTab === 'INVENTARIO' ? busquedaInventario : ''}
-                onChange={activeTab === 'REQUISICIONES' ? e => setBusquedaReq(e.target.value) : activeTab === 'INVENTARIO' ? e => setBusquedaInventario(e.target.value) : undefined}
+                placeholder={activeTab === 'REQUISICIONES' || activeTab === 'REQUISICIONES_EXTRAORDINARIAS' ? 'Buscar por folio o descripción...' : 'Buscar por código o nombre...'}
+                value={activeTab === 'REQUISICIONES' || activeTab === 'REQUISICIONES_EXTRAORDINARIAS' ? busquedaReq : activeTab === 'INVENTARIO' ? busquedaInventario : ''}
+                onChange={activeTab === 'REQUISICIONES' || activeTab === 'REQUISICIONES_EXTRAORDINARIAS' ? e => setBusquedaReq(e.target.value) : activeTab === 'INVENTARIO' ? e => setBusquedaInventario(e.target.value) : undefined}
                 style={{ width: '100%', padding: '0.75rem 1rem 0.75rem 3rem', borderRadius: '14px', border: '1px solid #e2e8f0', outline: 'none', fontSize: '14px' }}
               />
             </div>
-            {activeTab === 'REQUISICIONES' && (
-              <button
-                onClick={() => setShowFinalizadas(v => !v)}
-                style={{
-                  display: 'flex', alignItems: 'center', gap: 6,
-                  padding: '0.65rem 1.1rem', borderRadius: '12px', border: 'none', cursor: 'pointer',
-                  background: showFinalizadas ? 'linear-gradient(135deg, #15803D, #22C55E)' : '#F0FDF4',
-                  color: showFinalizadas ? 'white' : '#15803D',
-                  fontWeight: 700, fontSize: 13, fontFamily: 'inherit',
-                  boxShadow: showFinalizadas ? '0 2px 8px rgba(21,128,61,0.25)' : 'none',
-                  transition: 'all 0.15s ease', whiteSpace: 'nowrap',
-                }}
-              >
-                <CheckCircle2 size={15} />
-                Finalizadas
-              </button>
-            )}
           </div>
           <div style={{ display: 'flex', gap: '0.75rem' }}>
+            {/* Filtro por estado para REQUISICIONES y REQUISICIONES_EXTRAORDINARIAS */}
+            {(activeTab === 'REQUISICIONES' || activeTab === 'REQUISICIONES_EXTRAORDINARIAS') && (
+              <>
+                <button
+                  onClick={() => setFiltroRequisiciones('PENDIENTES')}
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: 6,
+                    padding: '0.65rem 1.1rem', borderRadius: '12px', border: 'none', cursor: 'pointer',
+                    background: filtroRequisiciones === 'PENDIENTES' ? 'linear-gradient(135deg, #3B82F6, #60A5FA)' : '#F0F9FF',
+                    color: filtroRequisiciones === 'PENDIENTES' ? 'white' : '#3B82F6',
+                    fontWeight: 700, fontSize: 13, fontFamily: 'inherit',
+                    boxShadow: filtroRequisiciones === 'PENDIENTES' ? '0 2px 8px rgba(59,130,246,0.25)' : 'none',
+                    transition: 'all 0.15s ease', whiteSpace: 'nowrap',
+                  }}
+                >
+                  <Clock size={15} />
+                  Pendientes
+                </button>
+                <button
+                  onClick={() => setFiltroRequisiciones('FINALIZADAS')}
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: 6,
+                    padding: '0.65rem 1.1rem', borderRadius: '12px', border: 'none', cursor: 'pointer',
+                    background: filtroRequisiciones === 'FINALIZADAS' ? '#16A34A' : '#F0FDF4',
+                    color: filtroRequisiciones === 'FINALIZADAS' ? 'white' : '#15803D',
+                    fontWeight: 700, fontSize: 13, fontFamily: 'inherit',
+                    boxShadow: filtroRequisiciones === 'FINALIZADAS' ? '0 2px 8px rgba(74,222,128,0.3)' : 'none',
+                    transition: 'all 0.15s ease', whiteSpace: 'nowrap',
+                  }}
+                >
+                  <CheckCircle2 size={15} />
+                  Finalizadas
+                </button>
+              </>
+            )}
+            {/* Filtro tipo movimiento para KARDEX */}
+            {activeTab === 'KARDEX' && (
+              <div ref={kardexFilterRef} style={{ position: 'relative' }}>
+                {(() => {
+                  const kColor = filtroKardex === 'ENTRADA' ? '#16A34A' : filtroKardex === 'SALIDA' ? '#DC2626' : null;
+                  const kBg    = filtroKardex === 'ENTRADA' ? '#F0FDF4' : filtroKardex === 'SALIDA' ? '#FEF2F2' : 'white';
+                  return (
+                    <button
+                      onClick={() => { setShowKardexFilterMenu(p => !p); setShowMoreMenu(false); }}
+                      style={{ padding: '0.75rem', borderRadius: '12px', border: `1px solid ${kColor ?? '#e2e8f0'}`, background: kBg, display: 'flex', alignItems: 'center', cursor: 'pointer', gap: 6 }}
+                      title="Filtrar por tipo de movimiento"
+                    >
+                      <Filter size={18} color={kColor ?? '#64748b'} />
+                      {filtroKardex && <span style={{ fontSize: 11, fontWeight: 700, color: kColor! }}>{filtroKardex === 'ENTRADA' ? 'Entradas' : 'Salidas'}</span>}
+                    </button>
+                  );
+                })()}
+                {showKardexFilterMenu && (
+                  <div style={{ position: 'absolute', right: 0, top: 'calc(100% + 6px)', background: 'white', border: '1px solid #e2e8f0', borderRadius: 12, boxShadow: '0 8px 24px rgba(0,0,0,0.12)', zIndex: 100, minWidth: 160, overflow: 'hidden' }}>
+                    {(['', 'ENTRADA', 'SALIDA'] as const).map(op => {
+                      const Icon = op === '' ? Filter : op === 'ENTRADA' ? ArrowDownRight : ArrowUpRight;
+                      const color = op === '' ? '#6366F1' : op === 'ENTRADA' ? '#16A34A' : '#DC2626';
+                      const label = op === '' ? 'Todos' : op === 'ENTRADA' ? 'Entradas' : 'Salidas';
+                      return (
+                        <button key={op} onClick={() => { setFiltroKardex(op); setShowKardexFilterMenu(false); }}
+                          style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', padding: '0.65rem 1rem', textAlign: 'left', border: 'none', background: filtroKardex === op ? '#EEF2FF' : 'white', color: filtroKardex === op ? '#6366F1' : '#374151', fontSize: 13, fontWeight: filtroKardex === op ? 700 : 500, cursor: 'pointer', fontFamily: 'inherit' }}>
+                          <Icon size={14} color={filtroKardex === op ? '#6366F1' : color} />
+                          {label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            )}
             {/* Filter button — stock status filter for INVENTARIO */}
             {activeTab === 'INVENTARIO' && (
-              <div style={{ position: 'relative' }}>
-                <button
-                  onClick={() => { setShowFilterMenu(p => !p); setShowMoreMenu(false); }}
-                  style={{ padding: '0.75rem', borderRadius: '12px', border: `1px solid ${filtroStock ? '#6366F1' : '#e2e8f0'}`, background: filtroStock ? '#EEF2FF' : 'white', display: 'flex', alignItems: 'center', cursor: 'pointer', gap: 6 }}
-                  title="Filtrar por estado de stock"
-                >
-                  <Filter size={18} color={filtroStock ? '#6366F1' : '#64748b'} />
-                  {filtroStock && <span style={{ fontSize: 11, fontWeight: 700, color: '#6366F1' }}>{filtroStock}</span>}
-                </button>
+              <div ref={stockFilterRef} style={{ position: 'relative' }}>
+                {(() => {
+                  const sColor = filtroStock === 'NORMAL' ? '#16A34A' : filtroStock === 'BAJO' ? '#CA8A04' : filtroStock === 'CRITICO' ? '#DC2626' : null;
+                  const sBg    = filtroStock === 'NORMAL' ? '#F0FDF4' : filtroStock === 'BAJO' ? '#FFFBEB' : filtroStock === 'CRITICO' ? '#FEF2F2' : 'white';
+                  const sLabel = filtroStock === 'NORMAL' ? 'Normal' : filtroStock === 'BAJO' ? 'Bajo stock' : filtroStock === 'CRITICO' ? 'Crítico' : '';
+                  return (
+                    <button
+                      onClick={() => { setShowFilterMenu(p => !p); setShowMoreMenu(false); }}
+                      style={{ padding: '0.75rem', borderRadius: '12px', border: `1px solid ${sColor ?? '#e2e8f0'}`, background: sBg, display: 'flex', alignItems: 'center', cursor: 'pointer', gap: 6 }}
+                      title="Filtrar por estado de stock"
+                    >
+                      <Filter size={18} color={sColor ?? '#64748b'} />
+                      {filtroStock && <span style={{ fontSize: 11, fontWeight: 700, color: sColor! }}>{sLabel}</span>}
+                    </button>
+                  );
+                })()}
                 {showFilterMenu && (
                   <div style={{ position: 'absolute', right: 0, top: 'calc(100% + 6px)', background: 'white', border: '1px solid #e2e8f0', borderRadius: 12, boxShadow: '0 8px 24px rgba(0,0,0,0.12)', zIndex: 100, minWidth: 160, overflow: 'hidden' }}>
                     {(['', 'NORMAL', 'BAJO', 'CRITICO'] as const).map(op => {
@@ -1058,8 +1180,15 @@ export function Almacen() {
         {/* ── REQUISICIONES ── */}
         {activeTab === 'REQUISICIONES' ? (() => {
           const q = busquedaReq.toLowerCase();
-          const reqFiltradas = requisicionesDept.filter(r =>
-            (showFinalizadas ? r.estado === 'FINALIZADA' : r.estado !== 'FINALIZADA') &&
+          const ordinary = requisicionesDept.filter(r => r.tipo !== 'EXTRAORDINARIA');
+          const reqPendientes = ordinary.filter(r =>
+            r.estado !== 'FINALIZADA' &&
+            (r.folio.toLowerCase().includes(q) ||
+            (r.descripcion ?? '').toLowerCase().includes(q) ||
+            r.areaSolicitante.toLowerCase().includes(q))
+          );
+          const reqFinalizadas = ordinary.filter(r =>
+            r.estado === 'FINALIZADA' &&
             (r.folio.toLowerCase().includes(q) ||
             (r.descripcion ?? '').toLowerCase().includes(q) ||
             r.areaSolicitante.toLowerCase().includes(q))
@@ -1070,81 +1199,232 @@ export function Almacen() {
               <span style={{ fontSize: 15 }}>Cargando requisiciones...</span>
             </div>
           );
-          if (reqFiltradas.length === 0) return (
+          if (reqPendientes.length === 0 && reqFinalizadas.length === 0) return (
             <div style={{ padding: '5rem', textAlign: 'center', color: '#94a3b8' }}>
-              <CheckCircle2 size={36} style={{ margin: '0 auto 12px', display: 'block', color: showFinalizadas ? '#16A34A' : undefined }} />
-              <p style={{ margin: 0, fontWeight: 700, color: '#374151', fontSize: 15 }}>
-                {showFinalizadas ? 'Sin requisiciones finalizadas' : 'Sin requisiciones activas'}
-              </p>
-              <p style={{ margin: '6px 0 0', fontSize: 14 }}>
-                {showFinalizadas ? 'Aún no hay requisiciones con estado FINALIZADA.' : 'No hay requisiciones activas registradas.'}
-              </p>
+              <CheckCircle2 size={36} style={{ margin: '0 auto 12px', display: 'block' }} />
+              <p style={{ margin: 0, fontWeight: 700, color: '#374151', fontSize: 15 }}>No hay requisiciones registradas</p>
+              <p style={{ margin: '6px 0 0', fontSize: 14 }}>Crea una nueva requisición para comenzar.</p>
             </div>
           );
-          return (
-            <>
-            {showFinalizadas && (
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 24px', background: '#F0FDF4', borderBottom: '1px solid #BBF7D0' }}>
-                <CheckCircle2 size={14} color="#15803D" />
-                <span style={{ fontSize: 13, fontWeight: 600, color: '#15803D' }}>Requisiciones Finalizadas — {reqFiltradas.length} registro{reqFiltradas.length !== 1 ? 's' : ''}</span>
+
+          const renderSection = (reqs: typeof requisicionesDept, isFinalized: boolean) => (
+            <div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '12px 24px', background: isFinalized ? '#F0FDF4' : '#F0F9FF', borderBottom: `1px solid ${isFinalized ? '#BBF7D0' : '#BFDBFE'}`, borderTopLeftRadius: '12px', borderTopRightRadius: '12px' }}>
+                {isFinalized ? (
+                  <>
+                    <CheckCircle2 size={14} color="#15803D" />
+                    <span style={{ fontSize: 13, fontWeight: 700, color: '#15803D', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Requisiciones Finalizadas</span>
+                    <span style={{ fontSize: 12, fontWeight: 600, color: '#15803D', marginLeft: 'auto' }}>({reqs.length})</span>
+                  </>
+                ) : (
+                  <>
+                    <Clock size={14} color="#3B82F6" />
+                    <span style={{ fontSize: 13, fontWeight: 700, color: '#3B82F6', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Requisiciones Pendientes o en Progreso</span>
+                    <span style={{ fontSize: 12, fontWeight: 600, color: '#3B82F6', marginLeft: 'auto' }}>({reqs.length})</span>
+                  </>
+                )}
               </div>
-            )}
-            <table style={{ width: '100%', borderCollapse: 'separate', borderSpacing: 0 }}>
-              <thead>
-                <tr style={{ backgroundColor: '#f8fafc' }}>
-                  {['Fecha', 'Folio', 'Área', 'Quién solicita', 'Arts.', 'Estado', ''].map((h, i) => (
-                    <th key={i} style={{ padding: '1.1rem 1.5rem', textAlign: i === 6 ? 'right' : 'left', color: '#64748b', fontSize: '12px', fontWeight: '800', textTransform: 'uppercase', letterSpacing: '0.5px', borderBottom: '1px solid #e2e8f0', whiteSpace: 'nowrap' }}>{h}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {reqFiltradas.map((req, idx) => {
-                  const style = ESTADO_REQ_STYLES[req.estado] ?? { bg: '#F8FAFC', text: '#64748B', dot: '#94A3B8' };
-                  return (
-                    <tr key={req.id} style={{ borderBottom: idx < reqFiltradas.length - 1 ? '1px solid #f1f5f9' : 'none' }}
-                      onMouseEnter={e => (e.currentTarget.style.background = '#fafafa')}
-                      onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}>
-                      <td style={{ padding: '1.25rem 1.5rem', verticalAlign: 'middle', whiteSpace: 'nowrap' }}>
-                        <div style={{ fontSize: 13, fontWeight: 600, color: '#374151' }}>{new Date(req.createdAt).toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: 'numeric' })}</div>
-                        <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 2 }}>{new Date(req.createdAt).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' })}</div>
-                      </td>
-                      <td style={{ padding: '1.25rem 1.5rem', verticalAlign: 'middle', maxWidth: 300 }}>
-                        <div style={{ fontWeight: 700, fontSize: 14, color: '#111827', marginBottom: 2 }}>{req.folio}</div>
-                        {req.descripcion && <div style={{ fontSize: 12, color: '#64748b', lineHeight: 1.4 }}>{req.descripcion}</div>}
-                        {req.justificacion && <div style={{ fontSize: 12, color: '#94a3b8', lineHeight: 1.4, marginTop: 2 }}>{req.justificacion.slice(0, 80)}{req.justificacion.length > 80 ? '…' : ''}</div>}
-                      </td>
-                      <td style={{ padding: '1.25rem 1.5rem', verticalAlign: 'middle', maxWidth: 200 }}>
-                        <span style={{ fontSize: 13, color: '#374151', lineHeight: 1.4, display: 'block', wordBreak: 'break-word' }}>{req.areaSolicitante}</span>
-                      </td>
-                      <td style={{ padding: '1.25rem 1.5rem', verticalAlign: 'middle', whiteSpace: 'nowrap' }}>
-                        <span style={{ fontSize: 13, color: '#374151' }}>
-                          {req.usuarioSolicita ? `${req.usuarioSolicita.nombre} ${req.usuarioSolicita.apellidos}` : '—'}
-                        </span>
-                      </td>
-                      <td style={{ padding: '1.25rem 1.5rem', verticalAlign: 'middle', textAlign: 'center' }}>
-                        <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', background: '#f1f5f9', color: '#475569', fontWeight: 700, fontSize: 13, borderRadius: 8, padding: '3px 10px', minWidth: 28 }}>
-                          {req.detalles.length}
-                        </span>
-                      </td>
-                      <td style={{ padding: '1.25rem 1.5rem', verticalAlign: 'middle' }}>
-                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, background: style.bg, color: style.text, border: `1px solid ${style.dot}33`, padding: '4px 10px', borderRadius: 8, fontSize: 12, fontWeight: 600, whiteSpace: 'nowrap' }}>
-                          <span style={{ width: 6, height: 6, borderRadius: '50%', background: style.dot, flexShrink: 0 }} />
-                          {req.estado.replace(/_/g, ' ')}
-                        </span>
-                      </td>
-                      <td style={{ padding: '1.25rem 1.5rem', verticalAlign: 'middle', textAlign: 'right' }}>
-                        <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
-                          <button onClick={() => setReqAlmacenDetalle(req)} style={{ display: 'flex', alignItems: 'center', gap: 5, background: 'white', color: '#374151', border: '1px solid #e2e8f0', borderRadius: 10, padding: '7px 12px', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
-                            <Eye size={14} /> Detalles
-                          </button>
-                        </div>
-                      </td>
+              {reqs.length === 0 ? (
+                <div style={{ padding: '2rem', textAlign: 'center', color: '#94a3b8', background: 'white', borderBottomLeftRadius: '12px', borderBottomRightRadius: '12px' }}>
+                  <p style={{ margin: 0, fontSize: 13, color: '#64748b' }}>
+                    {isFinalized ? 'No hay requisiciones finalizadas' : 'No hay requisiciones pendientes o en progreso'}
+                  </p>
+                </div>
+              ) : (
+                <table style={{ width: '100%', borderCollapse: 'separate', borderSpacing: 0, borderBottomLeftRadius: '12px', borderBottomRightRadius: '12px', overflow: 'hidden' }}>
+                  <thead>
+                    <tr style={{ backgroundColor: '#f8fafc' }}>
+                      {['Fecha', 'Folio', 'Área', 'Quién solicita', 'Arts.', 'Estado', ''].map((h, i) => (
+                        <th key={i} style={{ padding: '1.1rem 1.5rem', textAlign: i === 6 ? 'right' : 'left', color: '#64748b', fontSize: '12px', fontWeight: '800', textTransform: 'uppercase', letterSpacing: '0.5px', borderBottom: '1px solid #e2e8f0', whiteSpace: 'nowrap' }}>{h}</th>
+                      ))}
                     </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-            </>
+                  </thead>
+                  <tbody>
+                    {reqs.map((req, idx) => {
+                      const style = ESTADO_REQ_STYLES[req.estado] ?? { bg: '#F8FAFC', text: '#64748B', dot: '#94A3B8' };
+                      return (
+                        <tr key={req.id} style={{ borderBottom: idx < reqs.length - 1 ? '1px solid #f1f5f9' : 'none' }}
+                          onMouseEnter={e => (e.currentTarget.style.background = '#fafafa')}
+                          onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}>
+                          <td style={{ padding: '1.25rem 1.5rem', verticalAlign: 'middle', whiteSpace: 'nowrap' }}>
+                            <div style={{ fontSize: 13, fontWeight: 600, color: '#374151' }}>{new Date(req.createdAt).toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: 'numeric' })}</div>
+                            <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 2 }}>{new Date(req.createdAt).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' })}</div>
+                          </td>
+                          <td style={{ padding: '1.25rem 1.5rem', verticalAlign: 'middle', maxWidth: 300 }}>
+                            <div style={{ fontWeight: 700, fontSize: 14, color: '#111827', marginBottom: 2 }}>{req.folio}</div>
+                            {req.descripcion && <div style={{ fontSize: 12, color: '#64748b', lineHeight: 1.4 }}>{req.descripcion}</div>}
+                            {req.justificacion && <div style={{ fontSize: 12, color: '#94a3b8', lineHeight: 1.4, marginTop: 2 }}>{req.justificacion.slice(0, 80)}{req.justificacion.length > 80 ? '…' : ''}</div>}
+                          </td>
+                          <td style={{ padding: '1.25rem 1.5rem', verticalAlign: 'middle', maxWidth: 200 }}>
+                            <span style={{ fontSize: 13, color: '#374151', lineHeight: 1.4, display: 'block', wordBreak: 'break-word' }}>{req.areaSolicitante}</span>
+                          </td>
+                          <td style={{ padding: '1.25rem 1.5rem', verticalAlign: 'middle', whiteSpace: 'nowrap' }}>
+                            <span style={{ fontSize: 13, color: '#374151' }}>
+                              {req.usuarioSolicita ? `${req.usuarioSolicita.nombre} ${req.usuarioSolicita.apellidos}` : '—'}
+                            </span>
+                          </td>
+                          <td style={{ padding: '1.25rem 1.5rem', verticalAlign: 'middle', textAlign: 'center' }}>
+                            <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', background: '#f1f5f9', color: '#475569', fontWeight: 700, fontSize: 13, borderRadius: 8, padding: '3px 10px', minWidth: 28 }}>
+                              {req.detalles.length}
+                            </span>
+                          </td>
+                          <td style={{ padding: '1.25rem 1.5rem', verticalAlign: 'middle' }}>
+                            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, background: style.bg, color: style.text, border: `1px solid ${style.dot}33`, padding: '4px 10px', borderRadius: 8, fontSize: 12, fontWeight: 600, whiteSpace: 'nowrap' }}>
+                              <span style={{ width: 6, height: 6, borderRadius: '50%', background: style.dot, flexShrink: 0 }} />
+                              {req.estado.replace(/_/g, ' ')}
+                            </span>
+                          </td>
+                          <td style={{ padding: '1.25rem 1.5rem', verticalAlign: 'middle', textAlign: 'right' }}>
+                            <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
+                              <button onClick={() => setReqAlmacenDetalle(req)} style={{ display: 'flex', alignItems: 'center', gap: 5, background: 'white', color: '#374151', border: '1px solid #e2e8f0', borderRadius: 10, padding: '7px 12px', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
+                                <Eye size={14} /> Detalles
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              )}
+            </div>
+          );
+
+          return (
+            renderSection(filtroRequisiciones === 'PENDIENTES' ? reqPendientes : reqFinalizadas, filtroRequisiciones === 'FINALIZADAS')
+          );
+        })()
+
+        /* ── REQUISICIONES EXTRAORDINARIAS ── */
+        : activeTab === 'REQUISICIONES_EXTRAORDINARIAS' ? (() => {
+          const q = busquedaReq.toLowerCase();
+          const extraordinary = requisicionesDept.filter(r => r.tipo === 'EXTRAORDINARIA');
+          const reqPendientes = extraordinary.filter(r =>
+            r.estado !== 'FINALIZADA' &&
+            (r.folio.toLowerCase().includes(q) ||
+            (r.descripcion ?? '').toLowerCase().includes(q) ||
+            r.areaSolicitante.toLowerCase().includes(q))
+          );
+          const reqFinalizadas = extraordinary.filter(r =>
+            r.estado === 'FINALIZADA' &&
+            (r.folio.toLowerCase().includes(q) ||
+            (r.descripcion ?? '').toLowerCase().includes(q) ||
+            r.areaSolicitante.toLowerCase().includes(q))
+          );
+          if (isLoadingReqs) return (
+            <div style={{ padding: '5rem', textAlign: 'center', color: '#94a3b8' }}>
+              <Clock size={32} style={{ margin: '0 auto 12px', display: 'block' }} />
+              <span style={{ fontSize: 15 }}>Cargando requisiciones...</span>
+            </div>
+          );
+          if (reqPendientes.length === 0 && reqFinalizadas.length === 0) return (
+            <div style={{ padding: '5rem', textAlign: 'center', color: '#94a3b8' }}>
+              <CheckCircle2 size={36} style={{ margin: '0 auto 12px', display: 'block' }} />
+              <p style={{ margin: 0, fontWeight: 700, color: '#374151', fontSize: 15 }}>No hay requisiciones extraordinarias registradas</p>
+              <p style={{ margin: '6px 0 0', fontSize: 14 }}>Crea una nueva requisición con tipo Extraordinaria para comenzar.</p>
+            </div>
+          );
+
+          const renderExtSection = (reqs: typeof requisicionesDept, isFinalized: boolean) => (
+            <div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '12px 24px', background: isFinalized ? '#F0FDF4' : '#FFFBEB', borderBottom: `1px solid ${isFinalized ? '#BBF7D0' : '#FDE68A'}`, borderTopLeftRadius: '12px', borderTopRightRadius: '12px' }}>
+                {isFinalized ? (
+                  <>
+                    <CheckCircle2 size={14} color="#15803D" />
+                    <span style={{ fontSize: 13, fontWeight: 700, color: '#15803D', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Requisiciones Finalizadas</span>
+                    <span style={{ fontSize: 12, fontWeight: 600, color: '#15803D', marginLeft: 'auto' }}>({reqs.length})</span>
+                  </>
+                ) : (
+                  <>
+                    <Clock size={14} color="#D97706" />
+                    <span style={{ fontSize: 13, fontWeight: 700, color: '#D97706', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Requisiciones Pendientes o en Progreso</span>
+                    <span style={{ fontSize: 12, fontWeight: 600, color: '#D97706', marginLeft: 'auto' }}>({reqs.length})</span>
+                  </>
+                )}
+              </div>
+              {reqs.length === 0 ? (
+                <div style={{ padding: '2rem', textAlign: 'center', color: '#94a3b8', background: 'white', borderBottomLeftRadius: '12px', borderBottomRightRadius: '12px' }}>
+                  <p style={{ margin: 0, fontSize: 13, color: '#64748b' }}>
+                    {isFinalized ? 'No hay requisiciones extraordinarias finalizadas' : 'No hay requisiciones extraordinarias pendientes o en progreso'}
+                  </p>
+                </div>
+              ) : (
+                <table style={{ width: '100%', borderCollapse: 'separate', borderSpacing: 0, borderBottomLeftRadius: '12px', borderBottomRightRadius: '12px', overflow: 'hidden' }}>
+                  <thead>
+                    <tr style={{ backgroundColor: '#f8fafc' }}>
+                      {['Fecha', 'Folio', 'Área', 'Quién solicita', 'Arts.', 'Estado', ''].map((h, i) => (
+                        <th key={i} style={{ padding: '1.1rem 1.5rem', textAlign: i === 6 ? 'right' : 'left', color: '#64748b', fontSize: '12px', fontWeight: '800', textTransform: 'uppercase', letterSpacing: '0.5px', borderBottom: '1px solid #e2e8f0', whiteSpace: 'nowrap' }}>{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {reqs.map((req, idx) => {
+                      const style = ESTADO_REQ_STYLES[req.estado] ?? { bg: '#F8FAFC', text: '#64748B', dot: '#94A3B8' };
+                      return (
+                        <tr key={req.id} style={{ borderBottom: idx < reqs.length - 1 ? '1px solid #f1f5f9' : 'none' }}
+                          onMouseEnter={e => (e.currentTarget.style.background = '#fafafa')}
+                          onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}>
+                          <td style={{ padding: '1.25rem 1.5rem', verticalAlign: 'middle', whiteSpace: 'nowrap' }}>
+                            <div style={{ fontSize: 13, fontWeight: 600, color: '#374151' }}>{new Date(req.createdAt).toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: 'numeric' })}</div>
+                            <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 2 }}>{new Date(req.createdAt).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' })}</div>
+                          </td>
+                          <td style={{ padding: '1.25rem 1.5rem', verticalAlign: 'middle', maxWidth: 300 }}>
+                            <div style={{ fontWeight: 700, fontSize: 14, color: '#111827', marginBottom: 2 }}>{req.folio}</div>
+                            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, background: '#FFF7ED', color: '#D97706', border: '1px solid #FDE68A', borderRadius: 6, padding: '2px 7px', fontSize: 10, fontWeight: 700, marginBottom: 2 }}>
+                              EXTRAORDINARIA
+                            </span>
+                            {req.descripcion && <div style={{ fontSize: 12, color: '#64748b', lineHeight: 1.4 }}>{req.descripcion}</div>}
+                            {req.justificacion && <div style={{ fontSize: 12, color: '#94a3b8', lineHeight: 1.4, marginTop: 2 }}>{req.justificacion.slice(0, 80)}{req.justificacion.length > 80 ? '…' : ''}</div>}
+                          </td>
+                          <td style={{ padding: '1.25rem 1.5rem', verticalAlign: 'middle', maxWidth: 200 }}>
+                            <span style={{ fontSize: 13, color: '#374151', lineHeight: 1.4, display: 'block', wordBreak: 'break-word' }}>{req.areaSolicitante}</span>
+                          </td>
+                          <td style={{ padding: '1.25rem 1.5rem', verticalAlign: 'middle', whiteSpace: 'nowrap' }}>
+                            <span style={{ fontSize: 13, color: '#374151' }}>
+                              {req.usuarioSolicita ? `${req.usuarioSolicita.nombre} ${req.usuarioSolicita.apellidos}` : '—'}
+                            </span>
+                          </td>
+                          <td style={{ padding: '1.25rem 1.5rem', verticalAlign: 'middle', textAlign: 'center' }}>
+                            <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', background: '#fff7ed', color: '#d97706', fontWeight: 700, fontSize: 13, borderRadius: 8, padding: '3px 10px', minWidth: 28 }}>
+                              {req.detalles.length}
+                            </span>
+                          </td>
+                          <td style={{ padding: '1.25rem 1.5rem', verticalAlign: 'middle' }}>
+                            {(() => {
+                              const EXTR_LABELS: Record<string, string> = {
+                                CREADA: 'Pendiente',
+                                ENVIADA_A_COMPRAS: 'En cotización',
+                                FINALIZADA: 'Finalizada',
+                              };
+                              const label = EXTR_LABELS[req.estado] ?? req.estado.replace(/_/g, ' ');
+                              return (
+                                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, background: style.bg, color: style.text, border: `1px solid ${style.dot}33`, padding: '4px 10px', borderRadius: 8, fontSize: 12, fontWeight: 600, whiteSpace: 'nowrap' }}>
+                                  <span style={{ width: 6, height: 6, borderRadius: '50%', background: style.dot, flexShrink: 0 }} />
+                                  {label}
+                                </span>
+                              );
+                            })()}
+                          </td>
+                          <td style={{ padding: '1.25rem 1.5rem', verticalAlign: 'middle', textAlign: 'right' }}>
+                            <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
+                              <button
+                                onClick={() => setReqAlmacenExtraordinariaDetalle(req)}
+                                style={{ display: 'flex', alignItems: 'center', gap: 5, background: req.estado === 'FINALIZADA' ? '#F1F5F9' : '#FFF7ED', color: req.estado === 'FINALIZADA' ? '#64748B' : '#D97706', border: `1px solid ${req.estado === 'FINALIZADA' ? '#E2E8F0' : '#FDE68A'}`, borderRadius: 10, padding: '7px 12px', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
+                                <Eye size={14} /> {req.estado === 'FINALIZADA' ? 'Ver detalle' : 'Gestionar'}
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              )}
+            </div>
+          );
+
+          return (
+            renderExtSection(filtroRequisiciones === 'PENDIENTES' ? reqPendientes : reqFinalizadas, filtroRequisiciones === 'FINALIZADAS')
           );
         })()
 
@@ -1309,12 +1589,14 @@ export function Almacen() {
               <tbody>
                 {isLoadingMovimientos ? (
                   <tr><td colSpan={8} style={{ padding: '4rem', textAlign: 'center', color: '#94a3b8' }}>Consultando kardex clínico...</td></tr>
-                ) : movimientosData?.map((mov) => {
+                ) : (movimientosData ?? []).filter(m => !filtroKardex || m.tipo === filtroKardex).map((mov) => {
                   const recBadge = mov.estadoRecepcion ? RECEPCION_BADGE[mov.estadoRecepcion] : null;
                   const salBadge = mov.estadoSalida ? SALIDA_BADGE[mov.estadoSalida] : null;
                   const cr = mov.contraRecibo;
                   return (
-                    <tr key={mov.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
+                    <tr key={mov.id} style={{ borderBottom: '1px solid #f1f5f9', transition: 'background 0.15s' }}
+                      onMouseEnter={e => (e.currentTarget.style.background = '#fafafa')}
+                      onMouseLeave={e => (e.currentTarget.style.background = '')}>
                       <td style={{ padding: '1.25rem 1.5rem', whiteSpace: 'nowrap' }}>
                         <div style={{ fontSize: '14px', fontWeight: '700', color: 'var(--text-h)' }}>{new Date(mov.createdAt).toLocaleDateString('es-MX')}</div>
                         <div style={{ fontSize: '12px', color: '#94a3b8' }}>{new Date(mov.createdAt).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' })}</div>
@@ -2031,6 +2313,16 @@ export function Almacen() {
           queryClient.invalidateQueries({ queryKey: ['movimientos'] });
         }}
         onEnviadoACompras={() => {
+          queryClient.invalidateQueries({ queryKey: ['requisiciones'] });
+          queryClient.invalidateQueries({ queryKey: ['compras'] });
+        }}
+      />
+      <RequisicionExtraordinariaModal
+        key={reqAlmacenExtraordinariaDetalle?.id}
+        req={reqAlmacenExtraordinariaDetalle}
+        isOpen={reqAlmacenExtraordinariaDetalle !== null}
+        onClose={() => setReqAlmacenExtraordinariaDetalle(null)}
+        onRefresh={() => {
           queryClient.invalidateQueries({ queryKey: ['requisiciones'] });
           queryClient.invalidateQueries({ queryKey: ['compras'] });
         }}

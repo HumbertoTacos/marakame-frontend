@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { X, Plus, Trash2, ClipboardList, CheckCircle2, Loader2, Search, Package } from 'lucide-react';
 import { createRequisicion } from '../../services/requisiciones.service';
 import apiClient from '../../services/api';
+import { useAuthStore } from '../../stores/authStore';
 
 // ─── Tipos ────────────────────────────────────────────────────────────────────
 
@@ -162,9 +163,6 @@ function ArticuloInput({ value, hasError, productos, onChange, onSelectProducto 
     return () => document.removeEventListener('mousedown', handler);
   }, []);
 
-  // Producto exactamente encontrado en catálogo
-  const enCatalogo = productos.some(p => p.nombre.toLowerCase() === value.toLowerCase().trim());
-
   return (
     <div ref={wrapRef} style={{ position: 'relative' }}>
       <div style={{ position: 'relative' }}>
@@ -174,11 +172,8 @@ function ArticuloInput({ value, hasError, productos, onChange, onSelectProducto 
           value={value}
           onChange={e => { onChange(e.target.value); setOpen(true); }}
           onFocus={() => setOpen(true)}
-          style={{ ...inp(hasError), paddingLeft: '2rem', paddingRight: enCatalogo ? '2.2rem' : '0.85rem' }}
+          style={{ ...inp(hasError), paddingLeft: '2rem' }}
         />
-        {enCatalogo && (
-          <CheckCircle2 size={14} color="#16a34a" style={{ position: 'absolute', top: '50%', right: '0.6rem', transform: 'translateY(-50%)', pointerEvents: 'none' }} />
-        )}
       </div>
 
       {open && sugerencias.length > 0 && (
@@ -218,12 +213,6 @@ function ArticuloInput({ value, hasError, productos, onChange, onSelectProducto 
         </div>
       )}
 
-      {/* Indicador bajo el input */}
-      {value.trim().length > 0 && (
-        <p style={{ margin: '3px 0 0', fontSize: '11px', fontWeight: '600', color: enCatalogo ? '#16a34a' : '#f59e0b' }}>
-          {enCatalogo ? '✓ Producto encontrado en catálogo de almacén' : '⚠ No encontrado en catálogo — se creará al registrar la entrada'}
-        </p>
-      )}
     </div>
   );
 }
@@ -231,7 +220,9 @@ function ArticuloInput({ value, hasError, productos, onChange, onSelectProducto 
 // ─── Componente principal ─────────────────────────────────────────────────────
 
 export function NuevaRequisicionModal({ isOpen, onClose, onSuccess }: Props) {
-  const [form, setForm] = useState<RequisicionForm>(emptyForm());
+  const { usuario } = useAuthStore();
+  const nombreUsuario = usuario ? `${usuario.nombre} ${usuario.apellidos}` : '';
+  const [form, setForm] = useState<RequisicionForm>(() => ({ ...emptyForm(), quienSolicita: nombreUsuario }));
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [exito, setExito] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -344,7 +335,7 @@ export function NuevaRequisicionModal({ isOpen, onClose, onSuccess }: Props) {
       onSuccess?.();
       setTimeout(() => {
         setExito(false);
-        setForm(emptyForm());
+        setForm({ ...emptyForm(), quienSolicita: nombreUsuario });
         setErrors({});
         setApiError(null);
         onClose();
@@ -358,7 +349,7 @@ export function NuevaRequisicionModal({ isOpen, onClose, onSuccess }: Props) {
   };
 
   const handleClose = () => {
-    setForm(emptyForm());
+    setForm({ ...emptyForm(), quienSolicita: nombreUsuario });
     setErrors({});
     setExito(false);
     setApiError(null);
@@ -528,8 +519,11 @@ export function NuevaRequisicionModal({ isOpen, onClose, onSuccess }: Props) {
             </div>
             <div>
               <label style={sLabel}>Quién Solicita *</label>
-              <input placeholder="Nombre completo del solicitante" value={form.quienSolicita} onChange={e => setField('quienSolicita', e.target.value)} style={inp(!!errors.quienSolicita)} />
-              {errors.quienSolicita && <p style={sErrorMsg}>{errors.quienSolicita}</p>}
+              <input
+                value={form.quienSolicita}
+                readOnly
+                style={{ ...inp(), backgroundColor: '#f8fafc', color: '#475569', cursor: 'default' }}
+              />
             </div>
             <div>
               <label style={sLabel}>Responsable del Área *</label>
@@ -603,18 +597,21 @@ export function NuevaRequisicionModal({ isOpen, onClose, onSuccess }: Props) {
                       style={inp(!!errors[`art_${idx}_unidad`])}
                     >
                       <option value="">—</option>
-                      <option>Piezas</option>
-                      <option>Cajas</option>
-                      <option>Paquetes</option>
-                      <option>Litros</option>
-                      <option>Kilogramos</option>
-                      <option>Metros</option>
-                      <option>Rollos</option>
-                      <option>Frascos</option>
-                      <option>Ampollas</option>
-                      <option>Sobres</option>
-                      <option>Juegos</option>
-                      <option>Otro</option>
+                      <option value="PIEZAS">Piezas</option>
+                      <option value="CAJAS">Cajas</option>
+                      <option value="PAQUETES">Paquetes</option>
+                      <option value="LITROS">Litros</option>
+                      <option value="ML">Mililitros (ml)</option>
+                      <option value="KG">Kilogramos (kg)</option>
+                      <option value="GRAMOS">Gramos</option>
+                      <option value="METROS">Metros</option>
+                      <option value="ROLLOS">Rollos</option>
+                      <option value="FRASCOS">Frascos</option>
+                      <option value="AMPOLLAS">Ampollas</option>
+                      <option value="BOLSAS">Bolsas</option>
+                      <option value="SOBRES">Sobres</option>
+                      <option value="JUEGOS">Juegos</option>
+                      <option value="OTRO">Otro</option>
                     </select>
                     {errors[`art_${idx}_unidad`] && <p style={sErrorMsg}>{errors[`art_${idx}_unidad`]}</p>}
                   </div>

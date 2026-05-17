@@ -424,6 +424,30 @@ export interface RequisicionDetalleItem {
   observaciones: string | null;
 }
 
+export interface CotizacionExtraordinaria {
+  id: number;
+  requisicionDetalleId: number | null;
+  proveedorId: number;
+  proveedor: { id: number; nombre: string };
+  precio: number;
+  precioUnitario: number | null;
+  tiempoEntrega: string | null;
+  formaPago: string | null;
+  esMejorOpcion: boolean;
+  marca?: string | null;
+  modelo?: string | null;
+  observaciones?: string | null;
+  createdAt?: string;
+}
+
+export interface CompraRequisicionResumen {
+  id: number;
+  folio: string;
+  estado: string;
+  cotizaciones: CotizacionExtraordinaria[];
+  ordenes?: OrdenCompra[];
+}
+
 export interface RequisicionDept {
   id: number;
   folio: string;
@@ -431,6 +455,7 @@ export interface RequisicionDept {
   descripcion: string | null;
   justificacion: string;
   estado: EstadoRequisicion;
+  tipo: TipoCompra;
   createdAt: string;
   updatedAt: string;
   usuarioSolicita?: {
@@ -439,6 +464,7 @@ export interface RequisicionDept {
     apellidos: string;
   };
   detalles: RequisicionDetalleItem[];
+  compraRequisicion?: CompraRequisicionResumen | null;
 }
 
 export interface Requisicion {
@@ -450,6 +476,8 @@ export interface Requisicion {
   justificacion: string;
 
   presupuestoEstimado?: number;
+  totalFinal?: number;
+  esCompraMayor?: boolean;
   numeroCotizacionesRequeridas?: number;
 
   estado: EstadoCompra;

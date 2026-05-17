@@ -48,6 +48,15 @@ const puedeHacer = (rol: string | undefined, accion: string): boolean => {
 // ─────────────────────────────────────────────
 // COLORES DE ESTADO
 // ─────────────────────────────────────────────
+const FASES_FILTRO: { value: string; label: string; color: string; estados: string[] }[] = [
+  { value: '',            label: 'Todos',         color: '#6B7280', estados: [] },
+  { value: 'INICIO',      label: 'Inicio',         color: '#94A3B8', estados: ['REQUISICION_CREADA', 'EN_REVISION_RECURSOS', 'EN_REVISION_COMPRAS'] },
+  { value: 'COTIZACIONES',label: 'Cotizaciones',   color: '#2563EB', estados: ['EN_COMPRAS', 'COTIZACIONES_CARGADAS', 'DEVUELTA_A_COMPRAS', 'PROVEEDOR_SELECCIONADO', 'NEGOCIACION_COMPLETADA'] },
+  { value: 'AUTORIZACION',label: 'Autorización',   color: '#CA8A04', estados: ['EN_REVISION_ADMINISTRACION', 'EN_REVISION_DIRECCION', 'AUTORIZADA'] },
+  { value: 'EJECUCION',   label: 'Orden / Pago',   color: '#4338CA', estados: ['ORDEN_GENERADA', 'FACTURAS_RECIBIDAS', 'EXPEDIENTE_GENERADO', 'ENVIADA_A_FINANZAS', 'ORDEN_PAGO_GENERADA', 'PAGO_GENERADO'] },
+  { value: 'RECHAZADO',   label: 'Rechazado',      color: '#DC2626', estados: ['RECHAZADO'] },
+];
+
 const ESTADO_STYLES: Record<string, { bg: string; text: string; dot: string; border: string }> = {
   REQUISICION_CREADA:        { bg: '#F8FAFC', text: '#64748B', dot: '#94A3B8',  border: '#E2E8F0' },
   EN_COMPRAS:                { bg: '#EFF6FF', text: '#2563EB', dot: '#3B82F6',  border: '#BFDBFE' },
@@ -102,7 +111,11 @@ const DashboardCards = ({ requisiciones }: { requisiciones: Requisicion[] }) => 
   const autorizadas = requisiciones.filter(r => r.estado === 'AUTORIZADA').length;
   const finalizadas = requisiciones.filter(r => r.estado === 'FINALIZADO').length;
   const rechazadas  = requisiciones.filter(r => r.estado === 'RECHAZADO').length;
-  const montoTotal  = requisiciones.reduce((s, r) => s + (r.presupuestoEstimado ?? 0), 0);
+  const montoTotal  = requisiciones.reduce((s, r) => {
+    const montoOrdenes = (r.ordenes ?? []).reduce((acc, o) => acc + Number(o.total), 0);
+    const val = Number(r.presupuestoEstimado ?? r.totalFinal ?? (montoOrdenes > 0 ? montoOrdenes : 0));
+    return s + val;
+  }, 0);
 
   const cards = [
     { label: 'Total',       value: total,       icon: <ShoppingCart size={20}/>, color: '#2563EB', bg: '#EFF6FF' },
@@ -388,7 +401,15 @@ export function Compras() {
   const [facturaProveedorId, setFacturaProveedorId] = useState<number | null>(null);
   const [tabVista, setTabVista]           = useState<'activas' | 'finalizados'>('activas');
   const [expedienteDetalle, setExpedienteDetalle] = useState<Requisicion | null>(null);
+  const [expedienteCompleto, setExpedienteCompleto] = useState<Requisicion | null>(null);
   const [tabExpediente, setTabExpediente] = useState<'datos' | 'documentos' | 'historial'>('datos');
+
+  React.useEffect(() => {
+    if (!expedienteDetalle) { setExpedienteCompleto(null); return; }
+    apiClient.get(`/compras/${expedienteDetalle.id}`)
+      .then(res => setExpedienteCompleto(res.data.data as Requisicion))
+      .catch(() => {});
+  }, [expedienteDetalle?.id]);
   const fileRef      = useRef<HTMLInputElement>(null);
   const staticBase   = (apiClient.defaults.baseURL || '').replace(/\/api\/v1\/?$/, '');
   // Congela el estado del modal al abrirlo para que el cache refresh no cambie de bloque
@@ -419,8 +440,10 @@ export function Compras() {
 
   const reqFiltradas = requisiciones.filter(r => {
     if (r.estado === 'FINALIZADO') return false;
-    const coincideBusq   = r.folio.toLowerCase().includes(busqueda.toLowerCase()) || r.descripcion.toLowerCase().includes(busqueda.toLowerCase());
-    const coincideEstado = filtroEstado ? r.estado === filtroEstado : true;
+    const q = busqueda.toLowerCase();
+    const coincideBusq   = (r.folio ?? '').toLowerCase().includes(q) || (r.descripcion ?? '').toLowerCase().includes(q);
+    const fase = FASES_FILTRO.find(f => f.value === filtroEstado);
+    const coincideEstado = !filtroEstado || (fase ? fase.estados.includes(r.estado) : true);
     return coincideBusq && coincideEstado;
   });
 
@@ -446,7 +469,9 @@ export function Compras() {
             <div><strong>Área:</strong> {(req.requisicion?.areaSolicitante || req.areaSolicitante)}</div>
             <div><strong>Descripción:</strong> {req.descripcion}</div>
             <div><strong>Justificación:</strong> {req.requisicion?.justificacion ?? req.justificacion}</div>
-            <div><strong>Presupuesto:</strong> ${(req.presupuestoEstimado ?? 0).toLocaleString('es-MX')}</div>
+            {(req.presupuestoEstimado ?? req.totalFinal) && (
+              <div><strong>Presupuesto:</strong> ${Number(req.presupuestoEstimado ?? req.totalFinal).toLocaleString('es-MX', { minimumFractionDigits: 2 })}</div>
+            )}
           </div>
           <Btn
             icon={<CheckCircle size={15}/>}
@@ -513,7 +538,9 @@ export function Compras() {
           <div style={{ background: '#F9FAFB', borderRadius: 10, padding: 14, fontSize: 13, color: '#374151', display: 'flex', flexDirection: 'column', gap: 4 }}>
             <div><strong>Folio:</strong> {req.folio} · <strong>Área:</strong> {(req.requisicion?.areaSolicitante || req.areaSolicitante)}</div>
             <div><strong>Descripción:</strong> {req.descripcion}</div>
-            <div><strong>Presupuesto estimado:</strong> ${(req.presupuestoEstimado ?? 0).toLocaleString('es-MX')}</div>
+            {(req.presupuestoEstimado ?? req.totalFinal) && (
+              <div><strong>Presupuesto estimado:</strong> ${Number(req.presupuestoEstimado ?? req.totalFinal).toLocaleString('es-MX', { minimumFractionDigits: 2 })}</div>
+            )}
           </div>
           {/* ── Banner de progreso ── */}
           <div style={{
@@ -912,6 +939,35 @@ export function Compras() {
             </Btn>
           </div>
           {!formObs.trim() && <p style={{ margin: 0, fontSize: 12, color: '#9CA3AF' }}>* Para rechazar se requieren observaciones.</p>}
+        </Modal>
+      );
+    }
+
+    // ── GUARD: extraordinarias en estados de almacén no corresponden a compras ──
+    const ESTADOS_ALMACEN_EXTR_MODAL = ['EN_COMPRAS', 'COTIZACIONES_CARGADAS', 'DEVUELTA_A_COMPRAS'];
+    if (req.tipo === 'EXTRAORDINARIA' && ESTADOS_ALMACEN_EXTR_MODAL.includes(estadoModal)) {
+      return (
+        <Modal title="Compra Extraordinaria" onClose={() => setProceso(null)} width={540}>
+          <div style={{ background: '#FFFBEB', border: '1px solid #FDE68A', borderRadius: 12, padding: '18px 20px', display: 'flex', alignItems: 'flex-start', gap: 14 }}>
+            <AlertCircle size={22} color="#D97706" style={{ flexShrink: 0, marginTop: 1 }} />
+            <div>
+              <p style={{ margin: '0 0 6px', fontWeight: 700, fontSize: 14, color: '#92400E' }}>
+                Esta compra está siendo gestionada por almacén
+              </p>
+              <p style={{ margin: 0, fontSize: 13, color: '#B45309', lineHeight: 1.6 }}>
+                Las requisiciones de tipo <strong>extraordinaria</strong> son cotizadas directamente por el departamento de almacén.
+                El proceso llegará a compras una vez que almacén envíe las cotizaciones a revisión administrativa.
+              </p>
+              <div style={{ marginTop: 12, display: 'flex', gap: 8, flexWrap: 'wrap' as const }}>
+                <span style={{ background: 'white', border: '1px solid #FDE68A', borderRadius: 6, padding: '3px 10px', fontSize: 12, fontWeight: 600, color: '#92400E' }}>
+                  Folio: {req.folio}
+                </span>
+                <span style={{ background: 'white', border: '1px solid #FDE68A', borderRadius: 6, padding: '3px 10px', fontSize: 12, fontWeight: 600, color: '#92400E' }}>
+                  Estado actual: {estadoModal === 'DEVUELTA_A_COMPRAS' ? 'Devuelta a almacén' : 'En cotización (almacén)'}
+                </span>
+              </div>
+            </div>
+          </div>
         </Modal>
       );
     }
@@ -1416,7 +1472,9 @@ export function Compras() {
           <div style={{ background: '#F9FAFB', borderRadius: 10, padding: 14, fontSize: 13, color: '#374151', display: 'flex', flexDirection: 'column', gap: 4 }}>
             <div><strong>Folio:</strong> {req.folio} · <strong>Área:</strong> {(req.requisicion?.areaSolicitante || req.areaSolicitante)}</div>
             <div><strong>Descripción:</strong> {req.descripcion}</div>
-            <div><strong>Presupuesto estimado:</strong> ${(req.presupuestoEstimado ?? 0).toLocaleString('es-MX')}</div>
+            {(req.presupuestoEstimado ?? req.totalFinal) && (
+              <div><strong>Presupuesto estimado:</strong> ${Number(req.presupuestoEstimado ?? req.totalFinal).toLocaleString('es-MX', { minimumFractionDigits: 2 })}</div>
+            )}
             {cot && <div><strong>Proveedor negociado:</strong> {cot.proveedor} — ${Number(cot.precio).toLocaleString('es-MX', { minimumFractionDigits: 2 })}</div>}
           </div>
           <Textarea label="Observaciones de negociación (opcionales)" placeholder="Términos acordados, condiciones especiales..." value={formObs ?? ''} onChange={e => setFormObs(e.target.value)} />
@@ -1946,7 +2004,9 @@ export function Compras() {
             <div><strong>Requisición:</strong> {req.folio}</div>
             <div><strong>Área:</strong> {(req.requisicion?.areaSolicitante || req.areaSolicitante)}</div>
             <div><strong>Descripción:</strong> {req.descripcion}</div>
-            <div><strong>Presupuesto:</strong> ${(req.presupuestoEstimado ?? 0).toLocaleString('es-MX', { minimumFractionDigits: 2 })}</div>
+            {(req.presupuestoEstimado ?? req.totalFinal) && (
+              <div><strong>Presupuesto:</strong> ${Number(req.presupuestoEstimado ?? req.totalFinal).toLocaleString('es-MX', { minimumFractionDigits: 2 })}</div>
+            )}
           </div>
           <div style={{ display: 'flex', gap: 10 }}>
             <Btn
@@ -2073,7 +2133,9 @@ export function Compras() {
             <div><strong>Área:</strong> {(req.requisicion?.areaSolicitante || req.areaSolicitante)}</div>
             <div><strong>Tipo:</strong> {req.tipo}</div>
             <div><strong>Estado:</strong> {getEstadoCompraUI(req.estado).label}</div>
-            <div><strong>Presupuesto:</strong> ${req.presupuestoEstimado?.toLocaleString('es-MX')}</div>
+            {(req.presupuestoEstimado ?? req.totalFinal) && (
+              <div><strong>Presupuesto:</strong> ${Number(req.presupuestoEstimado ?? req.totalFinal).toLocaleString('es-MX', { minimumFractionDigits: 2 })}</div>
+            )}
           </div>
           <div style={{ background: '#F9FAFB', borderRadius: 10, padding: 16, fontSize: 13, color: '#374151', display: 'flex', flexDirection: 'column', gap: 6 }}>
             <div><strong>Solicitante:</strong> {req.usuario?.nombre} {req.usuario?.apellidos}</div>
@@ -2460,7 +2522,11 @@ export function Compras() {
   // ─── MODAL DETALLE EXPEDIENTE (read-only) ────────────────────────────────────
   const renderExpedienteDetalle = () => {
     if (!expedienteDetalle) return null;
-    const exp = requisiciones.find(r => r.id === expedienteDetalle.id) ?? expedienteDetalle;
+    const expBase = requisiciones.find(r => r.id === expedienteDetalle.id) ?? expedienteDetalle;
+    // Merge: use fetched full data for rich fields, fall back to list data for the rest
+    const exp: Requisicion = expedienteCompleto
+      ? { ...expBase, ...expedienteCompleto }
+      : expBase;
     const facturas = (exp as any).facturas ?? [];
     const historial = exp.historial ?? [];
     const totalFacturas = facturas.reduce((s: number, f: any) => s + Number(f.monto ?? 0), 0);
@@ -2474,6 +2540,7 @@ export function Compras() {
     const proveedores = [...new Set(proveedoresFactura.length > 0 ? proveedoresFactura : proveedoresOrdenes)];
     const cotizaciones = exp.cotizaciones ?? [];
     const montoOrdenesExp = (exp.ordenes ?? []).reduce((s, o) => s + Number(o.total), 0);
+    const cargando = !expedienteCompleto;
 
     const tabBtn = (id: 'datos' | 'documentos' | 'historial', label: string) => (
       <button
@@ -2505,7 +2572,7 @@ export function Compras() {
                 <span style={{ background: estadoStyle.bg, color: estadoStyle.text, border: `1px solid ${estadoStyle.border}`, padding: '4px 12px', borderRadius: 8, fontSize: 12, fontWeight: 700 }}>
                   {estadoLabel}
                 </span>
-                <button onClick={() => { setExpedienteDetalle(null); setTabExpediente('datos'); }} style={{ background: 'rgba(255,255,255,0.15)', border: 'none', borderRadius: 8, padding: '6px', cursor: 'pointer', color: 'white', display: 'flex' }}>
+                <button onClick={() => { setExpedienteDetalle(null); setExpedienteCompleto(null); setTabExpediente('datos'); }} style={{ background: 'rgba(255,255,255,0.15)', border: 'none', borderRadius: 8, padding: '6px', cursor: 'pointer', color: 'white', display: 'flex' }}>
                   <X size={18} />
                 </button>
               </div>
@@ -2520,20 +2587,45 @@ export function Compras() {
           {/* Contenido */}
           <div style={{ overflowY: 'auto', padding: 24, flex: 1, display: 'flex', flexDirection: 'column', gap: 14 }}>
 
+            {cargando && (
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10, padding: '2rem', color: '#9CA3AF', fontSize: 13 }}>
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ animation: 'spin 1s linear infinite' }}>
+                  <path d="M21 12a9 9 0 11-6.219-8.56" />
+                </svg>
+                Cargando expediente completo…
+              </div>
+            )}
+
             {tabExpediente === 'datos' && (
               <>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
                   <div style={{ background: '#F9FAFB', borderRadius: 10, padding: 14, display: 'flex', flexDirection: 'column', gap: 6 }}>
                     <div style={{ fontSize: 11, fontWeight: 700, color: '#6B7280', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 2 }}>Datos de la compra</div>
-                    <div style={{ fontSize: 13, color: '#374151' }}><strong>Folio:</strong> {exp.folio}</div>
-                    <div style={{ fontSize: 13, color: '#374151' }}><strong>Tipo:</strong> {exp.tipo}</div>
-                    <div style={{ fontSize: 13, color: '#374151' }}><strong>Área:</strong> {(exp.requisicion?.areaSolicitante || exp.areaSolicitante)}</div>
-                    <div style={{ fontSize: 13, color: '#374151' }}><strong>Descripción:</strong> {exp.requisicion?.descripcion ?? exp.descripcion}</div>
-                    <div style={{ fontSize: 13, color: '#374151' }}><strong>Justificación:</strong> {exp.requisicion?.justificacion ?? exp.justificacion}</div>
+                    <div style={{ fontSize: 13, color: '#374151' }}><strong>Folio compra:</strong> <span style={{ fontFamily: 'monospace', background: '#EDE9FE', color: '#5B21B6', padding: '1px 6px', borderRadius: 4 }}>{exp.folio}</span></div>
+                    {exp.requisicion && <div style={{ fontSize: 13, color: '#374151' }}><strong>Req. origen:</strong> <span style={{ fontFamily: 'monospace', background: '#EFF6FF', color: '#2563EB', padding: '1px 6px', borderRadius: 4 }}>{exp.requisicion.folio}</span></div>}
+                    <div style={{ fontSize: 13, color: '#374151' }}><strong>Tipo:</strong> {exp.tipo === 'EXTRAORDINARIA' ? 'Extraordinaria' : 'Ordinaria'}</div>
+                    <div style={{ fontSize: 13, color: '#374151' }}><strong>Área solicitante:</strong> {exp.requisicion?.areaSolicitante || exp.areaSolicitante}</div>
+                    {(exp.requisicion?.usuarioSolicita || exp.usuario) && (
+                      <div style={{ fontSize: 13, color: '#374151' }}>
+                        <strong>Solicitante:</strong>{' '}
+                        {exp.requisicion?.usuarioSolicita
+                          ? `${exp.requisicion.usuarioSolicita.nombre} ${exp.requisicion.usuarioSolicita.apellidos}`
+                          : `${exp.usuario?.nombre ?? ''} ${exp.usuario?.apellidos ?? ''}`.trim() || '—'}
+                      </div>
+                    )}
+                    <div style={{ fontSize: 13, color: '#374151' }}><strong>Fecha de creación:</strong> {new Date(exp.createdAt).toLocaleDateString('es-MX', { day: '2-digit', month: 'long', year: 'numeric' })}</div>
+                    {(exp.requisicion?.descripcion ?? exp.descripcion) && <div style={{ fontSize: 13, color: '#374151' }}><strong>Descripción:</strong> {exp.requisicion?.descripcion ?? exp.descripcion}</div>}
+                    {(exp.requisicion?.justificacion ?? exp.justificacion) && <div style={{ fontSize: 13, color: '#374151' }}><strong>Justificación:</strong> {exp.requisicion?.justificacion ?? exp.justificacion}</div>}
                   </div>
                   <div style={{ background: '#F9FAFB', borderRadius: 10, padding: 14, display: 'flex', flexDirection: 'column', gap: 6 }}>
                     <div style={{ fontSize: 11, fontWeight: 700, color: '#6B7280', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 2 }}>Finanzas</div>
-                    <div style={{ fontSize: 13, color: '#374151' }}><strong>Presupuesto estimado:</strong> ${(montoOrdenesExp > 0 ? montoOrdenesExp : ((exp as any).totalFinal ?? exp.presupuestoEstimado ?? 0)).toLocaleString('es-MX', { minimumFractionDigits: 2 })}</div>
+                    {(() => {
+                      const val = montoOrdenesExp > 0 ? montoOrdenesExp : (exp.totalFinal ?? exp.presupuestoEstimado ?? null);
+                      const lbl = exp.presupuestoEstimado ? 'Presupuesto estimado' : exp.totalFinal ? 'Total c/IVA' : montoOrdenesExp > 0 ? 'Total órdenes' : null;
+                      return val ? (
+                        <div style={{ fontSize: 13, color: '#374151' }}><strong>{lbl}:</strong> ${Number(val).toLocaleString('es-MX', { minimumFractionDigits: 2 })}</div>
+                      ) : null;
+                    })()}
                     <div style={{ fontSize: 22, fontWeight: 800, color: '#16A34A', marginTop: 4 }}>${totalFacturas.toLocaleString('es-MX', { minimumFractionDigits: 2 })}</div>
                     <div style={{ fontSize: 11, color: '#6B7280' }}>Total de facturas recibidas</div>
                     {exp.fechaEnvioFinanzas && (
@@ -2562,17 +2654,19 @@ export function Compras() {
                       <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
                         <thead>
                           <tr style={{ background: '#F3F4F6' }}>
-                            {['Artículo', 'Unidad', 'Cantidad'].map(h => (
-                              <th key={h} style={{ padding: '8px 12px', textAlign: 'left', fontWeight: 600, color: '#6B7280', fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.05em' }}>{h}</th>
+                            {['#', 'Artículo', 'Unidad', 'Cant.', 'Observaciones'].map((h, i) => (
+                              <th key={h} style={{ padding: '8px 12px', textAlign: i === 3 ? 'center' as const : 'left' as const, fontWeight: 600, color: '#6B7280', fontSize: 11, textTransform: 'uppercase' as const, letterSpacing: '0.05em' }}>{h}</th>
                             ))}
                           </tr>
                         </thead>
                         <tbody>
                           {(exp.requisicion?.detalles ?? []).map((d, i) => (
                             <tr key={i} style={{ borderTop: '1px solid #E8ECF0' }}>
-                              <td style={{ padding: '8px 12px' }}>{d.productoNombre ?? '—'}</td>
+                              <td style={{ padding: '8px 12px', color: '#9CA3AF', fontSize: 11, fontWeight: 700 }}>{d.numero ?? i + 1}</td>
+                              <td style={{ padding: '8px 12px', fontWeight: 600 }}>{d.productoNombre ?? '—'}</td>
                               <td style={{ padding: '8px 12px', color: '#6B7280' }}>{d.unidadLibre ?? '—'}</td>
-                              <td style={{ padding: '8px 12px', fontWeight: 600 }}>{d.cantidadSolicitada}</td>
+                              <td style={{ padding: '8px 12px', fontWeight: 700, textAlign: 'center' as const }}>{d.cantidadSolicitada}</td>
+                              <td style={{ padding: '8px 12px', color: '#9CA3AF', fontSize: 12 }}>{d.observaciones ?? '—'}</td>
                             </tr>
                           ))}
                         </tbody>
@@ -2658,30 +2752,153 @@ export function Compras() {
                 ) : (
                   <div style={{ color: '#6B7280', fontSize: 13, textAlign: 'center', padding: 24 }}>Sin facturas registradas</div>
                 )}
-                {(exp.ordenes ?? []).map(oc => (
-                  <div key={oc.id} style={{ background: '#F0FDF4', border: '1px solid #BBF7D0', borderRadius: 10, padding: 14, display: 'flex', flexDirection: 'column', gap: 4 }}>
-                    <div style={{ fontSize: 11, fontWeight: 700, color: '#166534', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 2 }}>Orden de Compra</div>
-                    <div style={{ fontSize: 13, color: '#374151' }}><strong>Folio OC:</strong> {oc.folio}</div>
-                    <div style={{ fontSize: 13, color: '#374151' }}><strong>Proveedor:</strong> {typeof oc.proveedor === 'object' && oc.proveedor !== null ? (oc.proveedor as any).nombre : String(oc.proveedor ?? '—')}</div>
-                    <div style={{ fontSize: 13, color: '#374151' }}><strong>Total OC:</strong> ${Number(oc.total).toLocaleString('es-MX', { minimumFractionDigits: 2 })}</div>
-                  </div>
-                ))}
-                {cotizaciones.length > 0 && (
+                {(exp.ordenes ?? []).length > 0 && (
                   <div>
-                    <div style={{ fontSize: 11, fontWeight: 700, color: '#6B7280', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 8 }}>Cotizaciones ({cotizaciones.length})</div>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                      {cotizaciones.map((c, i) => {
-                        const prov = getCotizacionProveedorNombre(c);
-                        return (
-                          <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#F9FAFB', border: '1px solid #E8ECF0', borderRadius: 8, padding: '8px 12px', fontSize: 13 }}>
-                            <span style={{ fontWeight: 600, color: '#374151' }}>{prov || '—'}</span>
-                            <span style={{ fontWeight: 700, color: '#374151' }}>${Number(c.precioUnitario ?? c.precio ?? 0).toLocaleString('es-MX', { minimumFractionDigits: 2 })}</span>
-                          </div>
-                        );
-                      })}
+                    <div style={{ fontSize: 11, fontWeight: 700, color: '#6B7280', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 8 }}>
+                      Órdenes de Compra ({(exp.ordenes ?? []).length})
+                    </div>
+                    <div style={{ border: '1px solid #E2E8F0', borderRadius: 10, overflow: 'hidden' }}>
+                      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+                        <thead>
+                          <tr style={{ background: '#F8FAFC' }}>
+                            {['Folio OC', 'Proveedor', 'Total', 'Elaboró', 'Revisó', 'Autorizó', 'Fecha'].map((h, i) => (
+                              <th key={h} style={{ padding: '8px 12px', textAlign: i === 2 ? 'right' as const : 'left' as const, fontWeight: 700, color: '#6B7280', fontSize: 11, textTransform: 'uppercase' as const, letterSpacing: '0.05em', whiteSpace: 'nowrap' as const }}>{h}</th>
+                            ))}
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {(exp.ordenes ?? []).map((oc, i) => {
+                            const ocProv = typeof oc.proveedor === 'object' && oc.proveedor !== null ? (oc.proveedor as any).nombre : String(oc.proveedor ?? '—');
+                            const elaboro = oc.elaboradoPor ? `${oc.elaboradoPor.nombre} ${oc.elaboradoPor.apellidos}` : '—';
+                            const reviso  = oc.revisadoPor  ? `${oc.revisadoPor.nombre} ${oc.revisadoPor.apellidos}` : '—';
+                            const autorizo = oc.autorizadoPor ? `${oc.autorizadoPor.nombre} ${oc.autorizadoPor.apellidos}` : '—';
+                            return (
+                              <tr key={oc.id} style={{ borderTop: '1px solid #F1F5F9' }}>
+                                <td style={{ padding: '9px 12px' }}>
+                                  <span style={{ fontFamily: 'monospace', background: '#F1F5F9', color: '#475569', border: '1px solid #E2E8F0', padding: '2px 7px', borderRadius: 4, fontSize: 12, fontWeight: 700, whiteSpace: 'nowrap' }}>{oc.folio}</span>
+                                </td>
+                                <td style={{ padding: '9px 12px', fontWeight: 600, color: '#111827' }}>{ocProv}</td>
+                                <td style={{ padding: '9px 12px', textAlign: 'right' as const, fontWeight: 800, color: '#111827' }}>${Number(oc.total).toLocaleString('es-MX', { minimumFractionDigits: 2 })}</td>
+                                <td style={{ padding: '9px 12px', color: '#6B7280', fontSize: 12 }}>{elaboro}</td>
+                                <td style={{ padding: '9px 12px', color: '#6B7280', fontSize: 12 }}>{reviso}</td>
+                                <td style={{ padding: '9px 12px', color: '#6B7280', fontSize: 12 }}>{autorizo}</td>
+                                <td style={{ padding: '9px 12px', color: '#6B7280', fontSize: 12, whiteSpace: 'nowrap' as const }}>
+                                  {oc.createdAt ? new Date(oc.createdAt).toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: 'numeric' }) : '—'}
+                                </td>
+                              </tr>
+                            );
+                          })}
+                          <tr style={{ borderTop: '1px solid #E2E8F0', background: '#F8FAFC' }}>
+                            <td colSpan={2} style={{ padding: '8px 12px', fontWeight: 700, color: '#374151' }}>Total órdenes</td>
+                            <td style={{ padding: '8px 12px', textAlign: 'right' as const, fontWeight: 800, color: '#111827' }}>
+                              ${(exp.ordenes ?? []).reduce((s, o) => s + Number(o.total), 0).toLocaleString('es-MX', { minimumFractionDigits: 2 })}
+                            </td>
+                            <td colSpan={4} />
+                          </tr>
+                        </tbody>
+                      </table>
                     </div>
                   </div>
                 )}
+                {cotizaciones.length > 0 && (() => {
+                  const detallesReq = exp.requisicion?.detalles ?? [];
+                  const byDetalle = cotizaciones.reduce<Record<number, typeof cotizaciones>>((acc, c) => {
+                    const key = c.requisicionDetalleId ?? -1;
+                    if (!acc[key]) acc[key] = [];
+                    acc[key].push(c);
+                    return acc;
+                  }, {});
+                  const hasGrouped = detallesReq.length > 0 && detallesReq.some(d => (byDetalle[d.id] ?? []).length > 0);
+                  const colStyle = (right = false): React.CSSProperties => ({ padding: '7px 10px', textAlign: right ? 'right' : 'left', fontWeight: 600, color: '#6B7280', fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.05em', whiteSpace: 'nowrap' });
+                  return (
+                    <div>
+                      <div style={{ fontSize: 11, fontWeight: 700, color: '#6B7280', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 8 }}>
+                        Cotizaciones ({cotizaciones.length})
+                      </div>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                        {hasGrouped ? detallesReq.map(det => {
+                          const cots = byDetalle[det.id] ?? [];
+                          if (cots.length === 0) return null;
+                          const ganadora = cots.find(c => c.esMejorOpcion);
+                          return (
+                            <div key={det.id} style={{ border: `1.5px solid ${ganadora ? '#BBF7D0' : '#E2E8F0'}`, borderRadius: 10, overflow: 'hidden' }}>
+                              <div style={{ padding: '8px 12px', background: ganadora ? '#F0FDF4' : '#F8FAFC', borderBottom: '1px solid #E2E8F0', display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' as const }}>
+                                <span style={{ background: '#1E293B', color: 'white', borderRadius: 5, padding: '1px 6px', fontSize: 10, fontWeight: 700 }}>#{det.numero}</span>
+                                <span style={{ fontWeight: 700, fontSize: 13, color: '#0F172A' }}>{det.productoNombre ?? '—'}</span>
+                                <span style={{ background: '#F1F5F9', borderRadius: 4, padding: '1px 6px', fontSize: 11, color: '#64748B' }}>{det.cantidadSolicitada} {det.unidadLibre ?? ''}</span>
+                                <span style={{ marginLeft: 'auto', fontSize: 11, color: '#64748B', fontWeight: 600 }}>{cots.length} cotización{cots.length !== 1 ? 'es' : ''}</span>
+                              </div>
+                              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+                                <thead>
+                                  <tr style={{ background: '#1E293B' }}>
+                                    <th style={colStyle()}>Proveedor</th>
+                                    <th style={colStyle(true)}>P. Unitario</th>
+                                    <th style={colStyle(true)}>Total</th>
+                                    <th style={colStyle()}>Entrega</th>
+                                    <th style={colStyle()}>Forma pago</th>
+                                    <th style={colStyle()}>Marca / Modelo</th>
+                                    <th style={{ ...colStyle(), textAlign: 'center' as const }}>Estado</th>
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  {cots.map(c => {
+                                    const prov = getCotizacionProveedorNombre(c);
+                                    const precio = Number(c.precioUnitario ?? c.precio ?? 0);
+                                    const total  = precio * det.cantidadSolicitada;
+                                    return (
+                                      <tr key={c.id} style={{ borderTop: '1px solid #F1F5F9', background: c.esMejorOpcion ? '#F0FDF4' : 'white', borderLeft: `3px solid ${c.esMejorOpcion ? '#22C55E' : 'transparent'}` }}>
+                                        <td style={{ padding: '7px 10px', fontWeight: 600, color: '#0F172A' }}>{prov}</td>
+                                        <td style={{ padding: '7px 10px', textAlign: 'right' as const, fontWeight: 700, color: '#16A34A' }}>${precio.toLocaleString('es-MX', { minimumFractionDigits: 2 })}</td>
+                                        <td style={{ padding: '7px 10px', textAlign: 'right' as const, fontWeight: 700, color: '#1E293B' }}>${total.toLocaleString('es-MX', { minimumFractionDigits: 2 })}</td>
+                                        <td style={{ padding: '7px 10px', color: '#64748B' }}>{c.tiempoEntrega ?? '—'}</td>
+                                        <td style={{ padding: '7px 10px', color: '#64748B' }}>{c.formaPago ?? '—'}</td>
+                                        <td style={{ padding: '7px 10px', color: '#64748B' }}>{[c.marca, c.modelo].filter(Boolean).join(' / ') || '—'}</td>
+                                        <td style={{ padding: '7px 10px', textAlign: 'center' as const }}>
+                                          {c.esMejorOpcion
+                                            ? <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3, background: '#F0FDF4', color: '#15803D', border: '1px solid #BBF7D0', borderRadius: 5, padding: '2px 8px', fontSize: 10, fontWeight: 800 }}>✓ Seleccionado</span>
+                                            : <span style={{ display: 'inline-flex', background: '#F1F5F9', color: '#64748B', border: '1px solid #E2E8F0', borderRadius: 5, padding: '2px 8px', fontSize: 10, fontWeight: 700 }}>No seleccionado</span>
+                                          }
+                                        </td>
+                                      </tr>
+                                    );
+                                  })}
+                                </tbody>
+                              </table>
+                            </div>
+                          );
+                        }) : (
+                          <div style={{ border: '1px solid #E8ECF0', borderRadius: 10, overflow: 'hidden' }}>
+                            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+                              <thead>
+                                <tr style={{ background: '#F3F4F6' }}>
+                                  {['Proveedor', 'Precio', 'Entrega', 'Forma pago', 'Estado'].map((h, i) => (
+                                    <th key={h} style={{ padding: '8px 12px', textAlign: 'left' as const, fontWeight: 600, color: '#6B7280', fontSize: 11, textTransform: 'uppercase' as const, letterSpacing: '0.05em' }}>{h}</th>
+                                  ))}
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {cotizaciones.map((c, i) => (
+                                  <tr key={i} style={{ borderTop: '1px solid #E8ECF0', background: c.esMejorOpcion ? '#F0FDF4' : 'white' }}>
+                                    <td style={{ padding: '8px 12px', fontWeight: 600 }}>{getCotizacionProveedorNombre(c) || '—'}</td>
+                                    <td style={{ padding: '8px 12px', fontWeight: 700, color: '#16A34A' }}>${Number(c.precioUnitario ?? c.precio ?? 0).toLocaleString('es-MX', { minimumFractionDigits: 2 })}</td>
+                                    <td style={{ padding: '8px 12px', color: '#6B7280' }}>{c.tiempoEntrega ?? '—'}</td>
+                                    <td style={{ padding: '8px 12px', color: '#6B7280' }}>{c.formaPago ?? '—'}</td>
+                                    <td style={{ padding: '8px 12px' }}>
+                                      {c.esMejorOpcion
+                                        ? <span style={{ background: '#F0FDF4', color: '#15803D', border: '1px solid #BBF7D0', borderRadius: 5, padding: '2px 8px', fontSize: 11, fontWeight: 700 }}>✓ Seleccionado</span>
+                                        : <span style={{ background: '#F1F5F9', color: '#64748B', border: '1px solid #E2E8F0', borderRadius: 5, padding: '2px 8px', fontSize: 11, fontWeight: 700 }}>No seleccionado</span>
+                                      }
+                                    </td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })()}
               </>
             )}
 
@@ -2982,28 +3199,39 @@ export function Compras() {
             <>
               {/* Filtros - solo en tab activas */}
               <div style={{
-                padding: '1.25rem 2rem', borderBottom: '1px solid #e2e8f0',
-                display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#fcfcfc',
+                padding: '1rem 2rem', borderBottom: '1px solid #e2e8f0',
+                display: 'flex', flexDirection: 'column', gap: 10, background: '#fcfcfc',
               }}>
-                <div style={{ position: 'relative', width: 400 }}>
-                  <Search size={16} color="#94a3b8" style={{ position: 'absolute', top: '50%', left: '1rem', transform: 'translateY(-50%)' }} />
-                  <input
-                    type="text" placeholder="Buscar por folio o descripción..."
-                    value={busqueda} onChange={e => setBusqueda(e.target.value)}
-                    style={{ width: '100%', padding: '0.7rem 1rem 0.7rem 2.75rem', borderRadius: 12, border: '1px solid #e2e8f0', outline: 'none', fontSize: 14, fontFamily: 'inherit', color: '#111827' }}
-                  />
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                  <div style={{ position: 'relative', flex: 1, maxWidth: 420 }}>
+                    <Search size={16} color="#94a3b8" style={{ position: 'absolute', top: '50%', left: '1rem', transform: 'translateY(-50%)' }} />
+                    <input
+                      type="text" placeholder="Buscar por folio o descripción..."
+                      value={busqueda} onChange={e => setBusqueda(e.target.value)}
+                      style={{ width: '100%', padding: '0.65rem 1rem 0.65rem 2.75rem', borderRadius: 12, border: '1px solid #e2e8f0', outline: 'none', fontSize: 14, fontFamily: 'inherit', color: '#111827' }}
+                    />
+                  </div>
                 </div>
-                <div style={{ position: 'relative' }}>
-                  <Filter size={14} color="#94a3b8" style={{ position: 'absolute', top: '50%', left: '0.8rem', transform: 'translateY(-50%)' }} />
-                  <select
-                    value={filtroEstado} onChange={e => setFiltroEstado(e.target.value)}
-                    style={{ padding: '0.7rem 1rem 0.7rem 2.25rem', borderRadius: 12, border: '1px solid #e2e8f0', fontSize: 14, background: 'white', outline: 'none', cursor: 'pointer', fontFamily: 'inherit', color: '#374151' }}
-                  >
-                    <option value="">Todos los estados</option>
-                    {Object.keys(ESTADO_STYLES).map(e => (
-                      <option key={e} value={e}>{getEstadoCompraUI(e as EstadoCompra).label}</option>
-                    ))}
-                  </select>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                  <Filter size={13} color="#94a3b8" style={{ flexShrink: 0, marginRight: 2 }} />
+                  {FASES_FILTRO.map(f => {
+                    const activo = filtroEstado === f.value;
+                    return (
+                      <button
+                        key={f.value}
+                        onClick={() => setFiltroEstado(f.value)}
+                        style={{
+                          padding: '4px 14px', borderRadius: 20, fontSize: 12, fontWeight: activo ? 700 : 500,
+                          cursor: 'pointer', fontFamily: 'inherit', transition: 'all 0.15s',
+                          background: activo ? f.color : 'white',
+                          color: activo ? 'white' : '#6B7280',
+                          border: `1.5px solid ${activo ? f.color : '#E2E8F0'}`,
+                        }}
+                      >
+                        {f.label}
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
             </>
@@ -3039,7 +3267,9 @@ export function Compras() {
                   </thead>
                   <tbody>
                     {reqFiltradas.map((req, idx) => {
-                      const canContinue = req.estado !== 'FINALIZADO' && req.estado !== 'RECHAZADO';
+                      const ESTADOS_ALMACEN_EXTR = ['EN_COMPRAS', 'COTIZACIONES_CARGADAS', 'DEVUELTA_A_COMPRAS'];
+                      const esAlmacenExtr = req.tipo === 'EXTRAORDINARIA' && ESTADOS_ALMACEN_EXTR.includes(req.estado);
+                      const canContinue = req.estado !== 'FINALIZADO' && req.estado !== 'RECHAZADO' && !esAlmacenExtr;
                       return (
                         <tr
                           key={req.id}
@@ -3081,7 +3311,14 @@ export function Compras() {
                         )}
                       </td>
                       <td style={{ padding: '1.25rem 1.5rem', verticalAlign: 'middle', whiteSpace: 'nowrap' }}>
-                        <EstadoBadge estado={req.estado} />
+                        {esAlmacenExtr ? (
+                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: '#FFFBEB', color: '#92400E', border: '1px solid #FDE68A', padding: '4px 12px', borderRadius: 8, fontSize: 12, fontWeight: 600 }}>
+                            <span style={{ width: 7, height: 7, borderRadius: '50%', background: '#F59E0B', flexShrink: 0 }} />
+                            {req.estado === 'DEVUELTA_A_COMPRAS' ? 'Devuelta a almacén' : 'En cotización (almacén)'}
+                          </span>
+                        ) : (
+                          <EstadoBadge estado={req.estado} />
+                        )}
                       </td>
                       <td style={{ padding: '1.25rem 1.5rem', verticalAlign: 'middle' }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
@@ -3090,12 +3327,20 @@ export function Compras() {
                         </div>
                       </td>
                       <td style={{ padding: '1.25rem 1.5rem', verticalAlign: 'middle', whiteSpace: 'nowrap' }}>
-                        <span style={{ fontSize: 14, color: '#374151', fontWeight: 600 }}>
-                          {req.presupuestoEstimado ? `$${req.presupuestoEstimado.toLocaleString('es-MX')}` : '—'}
-                        </span>
+                        {(() => {
+                          const montoOrdenes = (req.ordenes ?? []).reduce((s, o) => s + Number(o.total), 0);
+                          const valor = req.presupuestoEstimado ?? req.totalFinal ?? (montoOrdenes > 0 ? montoOrdenes : null);
+                          const label = req.presupuestoEstimado ? 'Presupuesto' : req.totalFinal ? 'Total c/IVA' : montoOrdenes > 0 ? 'Total órdenes' : null;
+                          return valor ? (
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+                              <span style={{ fontSize: 14, color: '#374151', fontWeight: 600 }}>${Number(valor).toLocaleString('es-MX', { minimumFractionDigits: 2 })}</span>
+                              {label && <span style={{ fontSize: 10, color: '#9CA3AF', textTransform: 'uppercase', letterSpacing: '0.04em' }}>{label}</span>}
+                            </div>
+                          ) : <span style={{ fontSize: 14, color: '#9CA3AF' }}>—</span>;
+                        })()}
                       </td>
-                      <td style={{ padding: '1rem 1rem', verticalAlign: 'middle' }}>
-                        <div style={{ display: 'flex', gap: 4, justifyContent: 'flex-end', flexWrap: 'wrap' }}>
+                      <td style={{ padding: '1rem 1rem', verticalAlign: 'middle', whiteSpace: 'nowrap' }}>
+                        <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end', alignItems: 'center', flexWrap: 'nowrap' }}>
                           {(req.ordenes?.length || (req as any).ordenPago) && (
                             <button
                               onClick={() => { setTabOrdenes(req.ordenes?.length ? 'compra' : 'pago'); setSelectedOrdenIdx(0); setOrdenesDetalle(req); }}

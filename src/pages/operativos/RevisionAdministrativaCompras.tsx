@@ -144,6 +144,7 @@ function ModalDetalle({
   const [motivo, setMotivo] = useState('');
   const [accion, setAccion] = useState<'aprobar' | 'devolver' | null>(null);
 
+  const esExtraordinaria = compra.tipo === 'EXTRAORDINARIA';
   const todasCots   = compra.cotizaciones ?? [];
   const detallesReq = compra.requisicion?.detalles ?? [];
   const cotsLegacy  = todasCots.filter(c => !c.requisicionDetalleId);
@@ -195,9 +196,12 @@ function ModalDetalle({
       {tab === 'cotizaciones' && (
         <>
           {/* Banner instrucción */}
-          <div style={{ background: '#FEFCE8', border: '1px solid #FEF08A', borderRadius: 10, padding: '10px 14px', fontSize: 13, color: '#854D0E', display: 'flex', alignItems: 'center', gap: 8 }}>
+          <div style={{ background: esExtraordinaria ? '#EFF6FF' : '#FEFCE8', border: `1px solid ${esExtraordinaria ? '#BFDBFE' : '#FEF08A'}`, borderRadius: 10, padding: '10px 14px', fontSize: 13, color: esExtraordinaria ? '#1D4ED8' : '#854D0E', display: 'flex', alignItems: 'center', gap: 8 }}>
             <AlertCircle size={15} style={{ flexShrink: 0 }} />
-            Selecciona el proveedor ganador para cada artículo. Cuando todos estén elegidos podrás aprobar y enviar a Dirección General.
+            {esExtraordinaria
+              ? 'Compra extraordinaria — el proveedor fue seleccionado por almacén. Verifica la información y aprueba o devuelve a compras.'
+              : 'Selecciona el proveedor ganador para cada artículo. Cuando todos estén elegidos podrás aprobar y enviar a Dirección General.'
+            }
           </div>
 
           {/* Sección por artículo */}
@@ -216,7 +220,9 @@ function ModalDetalle({
                       ? <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, background: '#F0FDF4', border: '1px solid #BBF7D0', borderRadius: 6, padding: '3px 10px', fontSize: 11, fontWeight: 700, color: '#15803D' }}>
                           <CheckCircle size={11} /> {getCotizacionProveedorNombre(ganadora)}
                         </span>
-                      : <span style={{ fontSize: 11, color: '#D97706', fontWeight: 600 }}>⚠ Selecciona el proveedor ganador</span>
+                      : esExtraordinaria
+                        ? <span style={{ fontSize: 11, color: '#94A3B8' }}>Sin selección registrada</span>
+                        : <span style={{ fontSize: 11, color: '#D97706', fontWeight: 600 }}>⚠ Selecciona el proveedor ganador</span>
                     }
                   </div>
                 </div>
@@ -227,7 +233,7 @@ function ModalDetalle({
                     <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
                       <thead>
                         <tr style={{ background: '#1E293B' }}>
-                          {['Proveedor', 'P. Unitario', 'Total', 'Entrega', 'Forma pago', 'Garantía', 'Marca / Modelo', 'Indicadores', 'Elegir'].map((h, i) => (
+                          {(['Proveedor', 'P. Unitario', 'Total', 'Entrega', 'Forma pago', 'Garantía', 'Marca / Modelo', 'Indicadores'] as string[]).concat(esExtraordinaria ? [] : ['Elegir']).map((h, i) => (
                             <th key={i} style={{ padding: '7px 10px', textAlign: (i === 1 || i === 2) ? 'right' as const : 'left' as const, fontWeight: 600, color: '#94A3B8', fontSize: 10, textTransform: 'uppercase' as const, letterSpacing: '0.05em', whiteSpace: 'nowrap' as const }}>{h}</th>
                           ))}
                         </tr>
@@ -258,16 +264,18 @@ function ModalDetalle({
                                   {badges.creditoDisponible && <span style={{ background: '#F5F3FF', color: '#7C3AED', border: '1px solid #DDD6FE', borderRadius: 4, padding: '1px 6px', fontSize: 10, fontWeight: 700, whiteSpace: 'nowrap' as const }}>💳 Crédito</span>}
                                 </div>
                               </td>
-                              <td style={{ padding: '8px 10px', textAlign: 'center' as const }}>
-                                <input
-                                  type="radio"
-                                  name={`ganador-${d.id}`}
-                                  checked={esGan}
-                                  disabled={selectingGanador}
-                                  onChange={() => onSelectGanador(compra.id, c.id)}
-                                  style={{ cursor: selectingGanador ? 'not-allowed' : 'pointer', accentColor: '#16A34A', width: 16, height: 16 }}
-                                />
-                              </td>
+                              {!esExtraordinaria && (
+                                <td style={{ padding: '8px 10px', textAlign: 'center' as const }}>
+                                  <input
+                                    type="radio"
+                                    name={`ganador-${d.id}`}
+                                    checked={esGan}
+                                    disabled={selectingGanador}
+                                    onChange={() => onSelectGanador(compra.id, c.id)}
+                                    style={{ cursor: selectingGanador ? 'not-allowed' : 'pointer', accentColor: '#16A34A', width: 16, height: 16 }}
+                                  />
+                                </td>
+                              )}
                             </tr>
                           );
                         })}
@@ -415,7 +423,7 @@ function ModalDetalle({
           <Btn variant="danger" icon={<RotateCcw size={15} />} onClick={() => setAccion('devolver')}>
             Devolver a Compras
           </Btn>
-          {!todoListo && detallesReq.length > 0 && (
+          {!todoListo && detallesReq.length > 0 && !esExtraordinaria && (
             <span style={{ fontSize: 11, color: '#F59E0B', display: 'flex', alignItems: 'center', gap: 4 }}>
               <AlertCircle size={12} /> Selecciona el proveedor ganador en cada artículo
             </span>
